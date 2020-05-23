@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F
 import re
 import contractions
+import pandas as pd
+import jsonlines
 
 
 def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
@@ -42,3 +44,11 @@ def clean_text(text):
     text = re.sub('<a[^>]+>(.*)</a>', replace_link, text)
     text = re.sub('<.*?>', EMPTY, text)
     return text
+
+
+def read_json_lines_into_df(file):
+    lines = []
+    with jsonlines.open(file) as reader:
+        for obj in reader:
+            lines.append(obj)
+    return pd.DataFrame.from_records(lines)
