@@ -13,7 +13,7 @@ mv *.png img
 ```
 
 ```bash
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions
 ```
 
 # TODO
@@ -57,12 +57,15 @@ pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill fl
 - Sentiment classification datasets
 - Image Captioning Datasets
 - Avoid Embedding matrices, use bert base / bert large embeddings of tokens
+- Composing Models using self-attention
+- show training and prediction time for each model
 
 - Features
     - YOLOv4 objects and their relative sizes as features
     - P(Hateful | Word) for each word using bayes theorem and assumption of independence
 
 - Models: Combine multiple Trained Models as ensembles (Text-only, Image-only, Multi-modal models)
+    - Text Models can use back translation augmentation
     - Fasttext pretrained word embeddings + Multi-head attention
     - Bert pretrained word embeddings + Multi-head attention
     - Bidirectional Text GRU model
@@ -72,8 +75,10 @@ pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill fl
     - VL-Bert pretrained then fine tuned with Text and image augmentations
     - VisualBert pretrained then fine tuned with text and image augmentations
     - Faster RCNN / YOLOv4 based image features model
+    - MMBT by Facebook
     - Plain Resnet based classifier? 
     - Disentangeled VAE with self-attention based model
+    
     
 - Training
     - Build Robustness into the network and more generalisation capability by planning Adversarial attacks on it.
