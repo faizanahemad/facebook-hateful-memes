@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-setup(name='facebook-hateful-memes',
+setup(name='facebook_hateful_memes',
       version='0.0.1',
       description='',
       url='https://github.com/faizanahemad/facebook-hateful-memes',
