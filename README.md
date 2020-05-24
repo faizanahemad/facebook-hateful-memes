@@ -14,6 +14,8 @@ mv *.png img
 
 ```bash
 pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions
+pip install git+https://github.com/myint/language-check.git 
+pip install pycontractions
 ```
 
 # TODO
@@ -27,6 +29,7 @@ pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill fl
 - Image augmentation
     - Use some crazy image augmentation networks 
     - http://raywzy.com/Old_Photo/
+    - Ricap and cutout
 - Text Augmentation (Data Aug by Back translatiob)
 - Try 
     - image captioned text as another part of model input

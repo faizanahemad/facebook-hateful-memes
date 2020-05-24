@@ -30,11 +30,11 @@ def init_fc(layer, initializer, nonlinearity, nonlinearity_param=None):
 def clean_text(text):
     EMPTY = ' '
     assert text is not None
-    assert type(text) == str
+
     text = text.lower()
     text = contractions.fix(text)
     text = text.replace("'", " ").replace('"', " ")
-    text = text.replace("\n", " ").replace("(", " ").replace(")", " ").replace("\r", " ").replace("\t", " ").lower()
+    text = text.replace("\n", " ").replace("(", " ").replace(")", " ").replace("\r", " ").replace("\t", " ")
     text = re.sub('<pre><code>.*?</code></pre>', EMPTY, text)
     text = re.sub('<code>.*?</code>', EMPTY, text)
 
