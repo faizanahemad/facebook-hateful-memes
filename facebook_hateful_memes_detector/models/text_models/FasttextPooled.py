@@ -5,7 +5,8 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import fasttext
-from ..utils import init_fc, clean_text
+
+from ... import init_fc, clean_text
 
 
 class FasttextPooledModel(nn.Module):
