@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 setup(name='facebook_hateful_memes',
-      version='0.0.1',
+      version='0.0.2',
       description='',
       url='https://github.com/faizanahemad/facebook-hateful-memes',
       author='Faizan Ahemad',
@@ -12,8 +12,8 @@ setup(name='facebook_hateful_memes',
             'dill', 'seaborn','gensim', 'nltk',
             'joblib', 'opencv-python',
       ],
-      keywords=['Pandas','numpy','data-science','IPython', 'Jupyter','ML','Machine Learning'],
+      keywords=[],
       packages=find_packages(),
       test_suite='nose.collector',
       tests_require=['nose'],
-      zip_safe=False)
+      zip_safe=True)
