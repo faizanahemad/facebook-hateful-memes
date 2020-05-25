@@ -49,5 +49,15 @@ class FasttextPooledModel(nn.Module):
         logits = self.classifier(vectors)
         return logits
 
+    @staticmethod
+    def build(**kwargs):
+        in_dims=kwargs["in_dims"]
+        hidden_dims=kwargs["hidden_dims"]
+        num_classes=kwargs["num_classes"]
+        fasttext_file=kwargs["fasttext_file"] if "fasttext_file" in kwargs else None
+        fasttext_model=kwargs["fasttext_model"] if "fasttext_model" in kwargs else None
+        return FasttextPooledModel(in_dims, hidden_dims, num_classes, fasttext_file, fasttext_model)
+
+
 
 
