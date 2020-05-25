@@ -10,6 +10,7 @@ import re
 import contractions
 import pandas as pd
 import jsonlines
+from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 
 
 def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
@@ -27,25 +28,6 @@ def init_fc(layer, initializer, nonlinearity, nonlinearity_param=None):
         init_bias(layer.bias)
     except AttributeError:
         pass
-
-
-def clean_text(text):
-    EMPTY = ' '
-    assert text is not None
-
-    text = text.lower()
-    text = contractions.fix(text)
-    text = text.replace("'", " ").replace('"', " ")
-    text = text.replace("\n", " ").replace("(", " ").replace(")", " ").replace("\r", " ").replace("\t", " ")
-    text = re.sub('<pre><code>.*?</code></pre>', EMPTY, text)
-    text = re.sub('<code>.*?</code>', EMPTY, text)
-
-    def replace_link(match):
-        return EMPTY if re.match('[a-z]+://', match.group(1)) else match.group(1)
-
-    text = re.sub('<a[^>]+>(.*)</a>', replace_link, text)
-    text = re.sub('<.*?>', EMPTY, text)
-    return text
 
 
 def read_json_lines_into_df(file):
@@ -93,4 +75,48 @@ def in_notebook():
         return False
     return True
 
+
+def pad_tensor(tensor, length, padding_index=DEFAULT_PADDING_INDEX):
+    """ Pad a ``tensor`` to ``length`` with ``padding_index``.
+
+    Args:
+        tensor (torch.Tensor [n, ...]): Tensor to pad.
+        length (int): Pad the ``tensor`` up to ``length``.
+        padding_index (int, optional): Index to pad tensor with.
+
+    Returns
+        (torch.Tensor [length, ...]) Padded Tensor.
+    """
+    n_padding = length - tensor.shape[0]
+    if n_padding < 0:
+        return tensor[:length]
+    if n_padding == 0:
+        return tensor
+    padding = tensor.new(n_padding, *tensor.shape[1:]).fill_(padding_index)
+    return torch.cat((tensor, padding), dim=0)
+
+
+def stack_and_pad_tensors(batch, max_len=None, padding_index=DEFAULT_PADDING_INDEX, dim=0):
+    """ Pad a :class:`list` of ``tensors`` (``batch``) with ``padding_index``.
+    Modified from ``https://pytorchnlp.readthedocs.io/en/latest/_modules/torchnlp/encoders/text/text_encoder.html``
+
+    Args:
+        batch (:class:`list` of :class:`torch.Tensor`): Batch of tensors to pad.
+        max_len (int, optional): Length of padding for each sentence.
+        padding_index (int, optional): Index to pad tensors with.
+        dim (int, optional): Dimension on to which to concatenate the batch of tensors.
+
+    Returns
+        BatchedSequences(torch.Tensor, torch.Tensor): Padded tensors and original lengths of
+            tensors.
+            :param max_len:
+    """
+    lengths = [tensor.shape[0] for tensor in batch]
+    max_len = max(lengths) if max_len is None else max_len
+    padded = [pad_tensor(tensor, max_len, padding_index) for tensor in batch]
+    lengths = torch.tensor(lengths, dtype=torch.long)
+    padded = torch.stack(padded, dim=dim).contiguous()
+    for _ in range(dim):
+        lengths = lengths.unsqueeze(0)
+    return padded
 

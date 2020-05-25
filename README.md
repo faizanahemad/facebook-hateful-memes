@@ -13,7 +13,8 @@ mv *.png img
 ```
 
 ```bash
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions
+conda install -y -c anaconda openjdk
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions pytorch-nlp
 pip install git+https://github.com/myint/language-check.git 
 pip install pycontractions
 ```
@@ -50,6 +51,7 @@ pip install pycontractions
     - answer this: where should I look and which detector pipeline (what lens should I use to look) should I use to look at that point
     - This problem is more around image understanding rather than recognition. As such disentangled feature extraction from images can help.
 - analyse performance of different networks against adversarial attacks
+- Sarcasm detection pretrain
 
 - Pretrain
     - MLM with COCO

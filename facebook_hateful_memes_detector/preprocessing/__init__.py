@@ -10,11 +10,35 @@ import jsonlines
 import abc
 from typing import List, Tuple, Dict, Set, Union
 from PIL import Image
-from ..utils import clean_text, read_json_lines_into_df
+from ..utils import read_json_lines_into_df
 
 import torch as th
 import math
 import os
+import re
+import contractions
+from pycontractions import Contractions
+
+
+def clean_text(text):
+    EMPTY = ' '
+    assert text is not None
+
+    text = text.lower()
+    text = contractions.fix(text)
+
+    text = text.replace("'", " ").replace('"', " ")
+    text = text.replace("\n", " ").replace("(", " ").replace(")", " ").replace("\r", " ").replace("\t", " ")
+
+    text = re.sub('<pre><code>.*?</code></pre>', EMPTY, text)
+    text = re.sub('<code>.*?</code>', EMPTY, text)
+
+    def replace_link(match):
+        return EMPTY if re.match('[a-z]+://', match.group(1)) else match.group(1)
+
+    text = re.sub('<a[^>]+>(.*)</a>', replace_link, text)
+    text = re.sub('<.*?>', EMPTY, text)
+    return text
 
 
 def get_basic_image_transforms():
@@ -37,7 +61,8 @@ def my_collate(batch):
 
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
-                 cache_images: bool = True, use_images: bool = True):
+                 cache_images: bool = True, use_images: bool = True, dev: bool = False):
+    use_dev = dev
     from functools import partial
     joiner = partial(os.path.join, data_dir)
     dev = read_json_lines_into_df(joiner('dev.jsonl'))
@@ -63,7 +88,8 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     test_img = np.array(test_img)
     dev_img = np.array(dev_img)
 
-    dataset = TextImageDataset(train_text, train_img, train_labels,
+    ts = (dev_text, dev_img, dev_labels) if use_dev else (train_text, train_img, train_labels)
+    dataset = TextImageDataset(*ts,
                                text_transform=train_text_transform,
                                image_transform=train_image_transform,
                                cache_images=cache_images, use_images=use_images)
@@ -125,7 +151,7 @@ class StratifiedSampler(torch.utils.data.Sampler):
 class TextImageDataset(Dataset):
     def __init__(self, texts: List[str], image_locations: List[str], labels: torch.Tensor=None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True):
-        self.texts = texts
+        self.texts = [clean_text(text) for text in texts]
         self.image_locations = image_locations
         if use_images:
             self.images = {l: Image.open(l).convert('RGB') for l in image_locations} if cache_images else dict()
@@ -136,7 +162,6 @@ class TextImageDataset(Dataset):
 
     def __getitem__(self, item):
         text = self.texts[item]
-        text = clean_text(text)
         label = self.labels[item] if self.labels is not None else 0
         text = self.text_transform(text) if self.text_transform is not None else text
         if self.use_images:
@@ -144,7 +169,7 @@ class TextImageDataset(Dataset):
             image = self.images.get(l)
             if image is None:
                 image = Image.open(l).convert('RGB')
-            image = self.image_transform(image.copy()) if self.image_transform is not None else image
+            image = self.image_transform(image) if self.image_transform is not None else image
             return text, image, label
         else:
             return text, torch.tensor(0), label
