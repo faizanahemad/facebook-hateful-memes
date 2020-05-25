@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 import fasttext
 
-from ...utils import init_fc, clean_text
+from ...utils import init_fc, clean_text, GaussianNoise
 
 
 class FasttextPooledModel(nn.Module):
@@ -17,9 +17,10 @@ class FasttextPooledModel(nn.Module):
             self.text_model = fasttext.load_model(fasttext_file)
         else:
             self.text_model = fasttext_model
-        layers = [nn.Linear(in_dims, hidden_dims, bias=True), nn.LeakyReLU(), nn.Linear(hidden_dims, num_classes)]
-        init_fc(layers[0], 'xavier_uniform_', "leaky_relu")
-        init_fc(layers[2], 'xavier_uniform_', "linear")
+        layers = [GaussianNoise(0.1), nn.Linear(in_dims, hidden_dims, bias=True),
+                  nn.LeakyReLU(), nn.Linear(hidden_dims, num_classes)]
+        init_fc(layers[1], 'xavier_uniform_', "leaky_relu")
+        init_fc(layers[3], 'xavier_uniform_', "linear")
         self.classifier = nn.Sequential(*layers)
         self.loss = nn.CrossEntropyLoss()
         self.num_classes = num_classes
@@ -34,7 +35,6 @@ class FasttextPooledModel(nn.Module):
     def forward(self, texts: List[str], img=None, labels=None):
         logits = self.predict_proba(texts, img)
         if labels is not None and labels[0] is not None:
-            labels = torch.tensor(labels)
             loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
             return logits, loss
         else:
