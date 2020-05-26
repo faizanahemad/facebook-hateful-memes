@@ -17,6 +17,8 @@ conda install -y -c anaconda openjdk
 pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions pytorch-nlp
 pip install git+https://github.com/myint/language-check.git 
 pip install pycontractions
+python -m spacy download en_core_news_sm
+pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
 ```
 
 # TODO
@@ -92,3 +94,11 @@ pip install pycontractions
     
 - Inference
     - Try multi-inference and then soft vote, by doing NLP and image augmentations
+    
+    
+## Possible Pretrained Models List
+    - https://github.com/Holmeyoung/crnn-pytorch
+    - https://github.com/OpenNMT/OpenNMT-py
+    - https://github.com/CSAILVision/semantic-segmentation-pytorch
+    - https://github.com/clovaai/CRAFT-pytorch
+    - https://github.com/clovaai/deep-text-recognition-benchmark

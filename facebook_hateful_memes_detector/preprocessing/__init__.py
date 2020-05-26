@@ -104,7 +104,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
                                image_transform=train_image_transform,
                                cache_images=cache_images, use_images=use_images)
 
-    rd = dict(train=dataset, test=test_ds, dev=deve_ds, test_df=test)
+    rd = dict(train=dataset, test=test_ds, dev=deve_ds, test_df=test, dev_df=dev, train_df=train)
     return rd
 
 

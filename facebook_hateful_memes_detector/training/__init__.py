@@ -33,7 +33,7 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
                 with tqdm(train_loader) as data_batch:
                     for texts, images, labels in data_batch:
                         optimizer.zero_grad()
-                        logits, loss = model.forward(texts, images, labels)
+                        _, _, _, loss = model(texts, images, labels)
                         loss.backward()
                         optimizer.step()
                         if scheduler is not None:
@@ -41,6 +41,10 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
                         train_loss = loss.item() * labels.size(0)
                         train_losses.append(loss.item())
                         learning_rates.append(optimizer.param_groups[0]['lr'])
+                    data_batch.clear()
+                    data_batch.close()
+        epo.clear()
+        epo.close()
 
     except (KeyboardInterrupt, Exception) as e:
         epo.close()
@@ -96,9 +100,7 @@ def generate_predictions(model, batch_size, dataset):
                              shuffle=False, num_workers=32, pin_memory=True)
     with torch.no_grad():
         for texts, images, labels in test_loader:
-            logits, valloss = model.forward(texts, images, labels)
-            logits = torch.softmax(logits, dim=1)
-            top_p, top_class = logits.topk(1, dim=1)
+            logits, top_class, _, _ = model(texts, images, labels)
             labels = labels.tolist()
             labels_list.extend(labels)
             top_class = top_class.flatten().tolist()
@@ -112,7 +114,7 @@ def model_builder(model_class, model_params,
                   optimiser_class=torch.optim.Adam, optimiser_params=dict(lr=0.001, weight_decay=1e-5),
                   scheduler_class=None, scheduler_params=None):
     def builder():
-        model = model_class.build(**model_params)
+        model = model_class(**model_params)
         optimizer = optimiser_class(model.parameters(), **optimiser_params)
         scheduler = None
         if scheduler_class is not None:
@@ -128,19 +130,21 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs):
     else:
         from tqdm import tqdm as tqdm, trange
     results_list = []
-    for _ in trange(n_tests):
-        dataset = data["train"]
-        size = len(dataset)
-        training_fold_dataset, testing_fold_dataset = torch.utils.data.random_split(dataset, [int(size * 0.9),
-                                                                                              size - int(size * 0.9)])
-        model, optimizer, scheduler = model_fn()
-        train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, training_fold_dataset)
+    with trange(n_tests) as nt:
+        for _ in nt:
+            dataset = data["train"]
+            size = len(dataset)
+            training_fold_dataset, testing_fold_dataset = torch.utils.data.random_split(dataset, [int(size * 0.8),
+                                                                                                  size - int(size * 0.8)])
+            model, optimizer, scheduler = model_fn()
+            train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, training_fold_dataset)
 
-        validation_scores = validate(model, batch_size, testing_fold_dataset)
-        train_scores = validate(model, batch_size, training_fold_dataset)
-        index = ["f1_micro", "f1_macro", "f1_weighted", "auc"]
-        rdf = pd.DataFrame(data=dict(train=train_scores, val=validation_scores), index=index)
-        results_list.append(rdf)
+            validation_scores = validate(model, batch_size, testing_fold_dataset)
+            train_scores = validate(model, batch_size, training_fold_dataset)
+            index = ["f1_micro", "f1_macro", "f1_weighted", "auc"]
+            rdf = pd.DataFrame(data=dict(train=train_scores, val=validation_scores), index=index)
+            results_list.append(rdf)
+    nt.close()
     results = np.stack(results_list, axis=0)
     means = results.mean(0)
     stds = results.std(0)
