@@ -41,7 +41,9 @@ class FasttextPooledModel(nn.Module):
         self.classifier = nn.Sequential(*layers)
         self.loss = nn.CrossEntropyLoss()
         self.num_classes = num_classes
+        self.binary = num_classes == 2
         self.use_as_submodel = use_as_submodel
+        self.eps = 1e-7
 
     def get_sentence_vector(self, texts: List[str]):
         tm = self.text_model
@@ -93,6 +95,36 @@ class FasttextPooledModel(nn.Module):
             loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
             preds = logits.max(dim=1).indices
             logits = torch.softmax(logits, dim=1)
+            if self.binary and self.training:
+                # Projection aug loss
+                pos_projections = projections[labels == 1]
+                neg_projections = projections[labels == 0]
+                pos_randomized = pos_projections[torch.randperm(pos_projections.size(0))]
+                neg_randomized = neg_projections[torch.randperm(neg_projections.size(0))]
+                pos_cos = (F.cosine_similarity(pos_projections, pos_randomized) + 1)/2
+                neg_cos = (F.cosine_similarity(neg_projections, neg_randomized) + 1)/2
+                min_len = min(pos_projections.size(0), neg_projections.size(0))
+                pos_neg_cos = (F.cosine_similarity(pos_projections[:min_len], neg_projections[:min_len]) + 1)/2
+
+                pl = ((pos_cos - 1)**2).mean()
+                nl = ((neg_cos - 1)**2).mean()
+                pnl = (pos_neg_cos**2).mean()
+                projection_loss = (pl + nl + pnl)/3.0
+
+                # aucroc loss
+                #
+                probas = logits[:, 1]
+                pos_probas = labels * probas
+                neg_probas = (1-labels) * probas
+                pos_probas = pos_probas[pos_probas > self.eps]
+                pos_probas_min = pos_probas.min()
+                neg_probas_max = neg_probas.max() # torch.topk(neg_probas, 5, 0).values
+                loss_1 = F.relu(neg_probas - pos_probas_min).mean()
+                loss_2 = F.relu(neg_probas_max - pos_probas).mean()
+                auc_loss = (loss_1 + loss_2)/2
+
+                loss = 1.0 * loss + 0.0 * auc_loss + 0.0 * projection_loss # 0.1, 0.9 weights
+
         return logits, preds, projections, vectors, loss
 
     def __get_scores__(self, texts: List[str], img):

@@ -4,12 +4,13 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
+
 import torchvision.models as models
 
 
 class Albert(nn.Module):
     def __init__(self, max_length=128, output_length=16):
+        from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
         super(Albert, self).__init__()
         assert max_length % output_length == 0
         assert output_length % 2 == 0

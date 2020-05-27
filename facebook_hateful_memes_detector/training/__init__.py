@@ -9,8 +9,10 @@ import contractions
 import pandas as pd
 
 from ..utils import in_notebook
-from ..preprocessing import StratifiedSampler, my_collate
+from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
+from torch.utils.data.sampler import WeightedRandomSampler
+from torch.utils.data import Subset
 
 
 def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
@@ -19,9 +21,18 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
     else:
         from tqdm import tqdm as tqdm, trange
 
+    if isinstance(dataset, TextImageDataset):
+        pass
+    elif isinstance(dataset, Subset):
+        pass
+    else:
+        raise NotImplementedError()
+
+
     _ = model.train()
     training_fold_labels = torch.tensor([dataset[i][2] for i in range(len(dataset))])
-    sampler = StratifiedSampler(training_fold_labels, batch_size)
+    weights = make_weights_for_balanced_classes(training_fold_labels)
+    sampler = WeightedRandomSampler(weights, len(weights))
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                               shuffle=False, num_workers=32, pin_memory=True, sampler=sampler)
     train_losses = []
@@ -112,8 +123,10 @@ def generate_predictions(model, batch_size, dataset):
 def model_builder(model_class, model_params,
                   optimiser_class=torch.optim.Adam, optimiser_params=dict(lr=0.001, weight_decay=1e-5),
                   scheduler_class=None, scheduler_params=None):
-    def builder():
-        model = model_class(**model_params)
+    def builder(**kwargs):
+        prams = dict(model_params)
+        prams.update(kwargs)
+        model = model_class(**prams)
         optimizer = optimiser_class(model.parameters(), **optimiser_params)
         scheduler = None
         if scheduler_class is not None:

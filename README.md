@@ -19,6 +19,8 @@ pip install git+https://github.com/myint/language-check.git
 pip install pycontractions
 python -m spacy download en_core_news_sm
 pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
+pip install stanza
+python -c "import nltk;nltk.download('tagsets')"
 ```
 
 # TODO
@@ -104,3 +106,6 @@ pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
     - https://github.com/clovaai/deep-text-recognition-benchmark
     - https://github.com/facebookresearch/detectron2
     - https://github.com/thunlp/ERNIE : Wikipedia Knowledge base
+    
+## Other References
+    - https://gist.github.com/jerheff/8cf06fe1df0695806456

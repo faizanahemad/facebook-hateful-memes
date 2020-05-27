@@ -13,11 +13,142 @@ import jsonlines
 from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 
 
+def get_universal_deps_indices():
+    """
+    See `https://spacy.io/api/annotation#dependency-parsing` for the list
+
+    :return:
+    """
+    tags = ["acl", "advcl", "advmod", "amod", "appos", "aux", "case",
+            "cc", "ccomp", "clf", "compound", "conj", "cop", "csubj",
+            "dep", "det", "discourse", "dislocated", "expl", "fixed", "flat",
+            "goeswith", "iobj", "list", "mark", "nmod", "nsubj", "nummod",
+            "obj", "obl", "orphan", "parataxis", "punct", "reparandum",
+            "root", "vocative", "xcomp"]
+    spacy_deps = ['',
+                  'ROOT',
+                  'acl',
+                  'acomp',
+                  'advcl',
+                  'advmod',
+                  'agent',
+                  'amod',
+                  'appos',
+                  'attr',
+                  'aux',
+                  'auxpass',
+                  'case',
+                  'cc',
+                  'ccomp',
+                  'compound',
+                  'conj',
+                  'csubj',
+                  'csubjpass',
+                  'dative',
+                  'dep',
+                  'det',
+                  'dobj',
+                  'expl',
+                  'intj',
+                  'mark',
+                  'meta',
+                  'neg',
+                  'nmod',
+                  'npadvmod',
+                  'nsubj',
+                  'nsubjpass',
+                  'nummod',
+                  'oprd',
+                  'parataxis',
+                  'pcomp',
+                  'pobj',
+                  'poss',
+                  'preconj',
+                  'predet',
+                  'prep',
+                  'prt',
+                  'punct',
+                  'quantmod',
+                  'relcl',
+                  'xcomp']
+    tags = tags + spacy_deps
+    tags = list(map(lambda x: x.upper(), tags)) + list(map(lambda x: x.lower(), tags))
+    tags = list(set(tags))
+    return dict(zip(tags, range(len(tags))))
+
+
+def get_penn_treebank_pos_tag_indices():
+    """
+    See `nltk.help.upenn_tagset()` or `https://www.ling.upenn.edu/courses/Fall_2003/ling001/penn_treebank_pos.html`
+
+    :return: dict of all nltk pos tags from penn tree bank as dict(str->index)
+    """
+    pos_tags = ["CC", "CD", "DT", "EX", "FW", "IN", "JJ", "JJR",
+                "JJS", "LS", "MD", "NN", "NNS", "NNP", "NNPS",
+                "PDT", "POS", "PRP", "PRP$", "RB", "RBR", "RBS",
+                "RP", "SYM", "TO", "UH", "VB", "VBD", "VBG",
+                "VBN", "VBP", "VBZ", "WDT", "WP", "WP$", "WRB",
+                "$", "''", "(", ")", ",", "--", ".", "::",
+                "_SP", "HYPH", 'NFP', ':', 'XX', '-LRB-', '-RRB-', '',
+                'ADD', 'AFX']
+    spacy_list = ['$',
+                  "''",
+                  ',',
+                  '-LRB-',
+                  '-RRB-',
+                  '.',
+                  ':',
+                  'ADD',
+                  'AFX',
+                  'CC',
+                  'CD',
+                  'DT',
+                  'EX',
+                  'FW',
+                  'HYPH',
+                  'IN',
+                  'JJ',
+                  'JJR',
+                  'JJS',
+                  'LS',
+                  'MD',
+                  'NFP',
+                  'NN',
+                  'NNP',
+                  'NNPS',
+                  'NNS',
+                  'PDT',
+                  'POS',
+                  'PRP',
+                  'PRP$',
+                  'RB',
+                  'RBR',
+                  'RBS',
+                  'RP',
+                  'SYM',
+                  'TO',
+                  'UH',
+                  'VB',
+                  'VBD',
+                  'VBG',
+                  'VBN',
+                  'VBP',
+                  'VBZ',
+                  'WDT',
+                  'WP',
+                  'WP$',
+                  'WRB',
+                  'XX',
+                  '_SP']
+    pos_tags = list(set(pos_tags + spacy_list))
+    return dict(zip(pos_tags, range(len(pos_tags))))
+
+
 def get_pos_tag_indices():
     pos_tags = ["ADJ", "ADP", "ADV", "AUX", "CONJ", "CCONJ", "DET",
                 "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN",
                 "PUNCT", "SCONJ", "SYM", "VERB", "X", "SPACE"]
-    return dict(zip(pos_tags, range(1, len(pos_tags)+1)))
+    return dict(zip(pos_tags, range(len(pos_tags))))
 
 
 def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
