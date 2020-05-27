@@ -15,7 +15,8 @@ from ...preprocessing import clean_text
 
 class FasttextPooledModel(nn.Module):
     def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False,
+                 gaussian_noise=0.0, dropout=0.0,
+                 use_as_submodel=False, use_as_super=False,
                  **kwargs):
         super(FasttextPooledModel, self).__init__()
         fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else None
@@ -92,7 +93,7 @@ class FasttextPooledModel(nn.Module):
             loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
             preds = logits.max(dim=1).indices
             logits = torch.softmax(logits, dim=1)
-        return logits, preds, vectors, loss
+        return logits, preds, projections, vectors, loss
 
     def __get_scores__(self, texts: List[str], img):
         projections = self.projection(self.get_sentence_vector(texts))

@@ -13,6 +13,13 @@ import jsonlines
 from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 
 
+def get_pos_tag_indices():
+    pos_tags = ["ADJ", "ADP", "ADV", "AUX", "CONJ", "CCONJ", "DET",
+                "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN",
+                "PUNCT", "SCONJ", "SYM", "VERB", "X", "SPACE"]
+    return dict(zip(pos_tags, range(1, len(pos_tags)+1)))
+
+
 def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
     initializer = getattr(nn.init, initializer)
     initializer(param, nn.init.calculate_gain(nonlinearity, nonlinearity_param))

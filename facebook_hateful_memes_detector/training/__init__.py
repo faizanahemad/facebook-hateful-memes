@@ -33,7 +33,7 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
                 with tqdm(train_loader) as data_batch:
                     for texts, images, labels in data_batch:
                         optimizer.zero_grad()
-                        _, _, _, loss = model(texts, images, labels)
+                        _, _, _, _, loss = model(texts, images, labels)
                         loss.backward()
                         optimizer.step()
                         if scheduler is not None:
@@ -78,17 +78,16 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
 
 
 def validate(model, batch_size, dataset):
-    from sklearn.metrics import roc_auc_score
-    from sklearn.metrics import classification_report, precision_recall_fscore_support
+    from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
+    from sklearn.metrics import precision_recall_fscore_support, accuracy_score
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset)
     auc = roc_auc_score(labels_list, proba_list)
     p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="micro")
-    p_macro, r_macro, f1_macro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="macro")
-    p_weighted, r_weighted, f1_weighted, _ = precision_recall_fscore_support(labels_list, predictions_list,
-                                                                             average="weighted")
-    validation_scores = [f1_micro, f1_macro, f1_weighted, auc]
-    # Confusion matrix
-    return validation_scores
+    prfs = precision_recall_fscore_support(labels_list, predictions_list, average=None, labels=[0, 1])
+    map = average_precision_score(labels_list, proba_list)
+    acc = accuracy_score(labels_list, predictions_list)
+    validation_scores = [f1_micro, map, acc, auc]
+    return validation_scores, prfs
 
 
 def generate_predictions(model, batch_size, dataset):
@@ -100,7 +99,7 @@ def generate_predictions(model, batch_size, dataset):
                              shuffle=False, num_workers=32, pin_memory=True)
     with torch.no_grad():
         for texts, images, labels in test_loader:
-            logits, top_class, _, _ = model(texts, images, labels)
+            logits, top_class, _, _, _ = model(texts, images, labels)
             labels = labels.tolist()
             labels_list.extend(labels)
             top_class = top_class.flatten().tolist()
@@ -130,6 +129,8 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs):
     else:
         from tqdm import tqdm as tqdm, trange
     results_list = []
+    prfs_list = []
+    index = ["f1_micro", "map", "accuracy", "auc"]
     with trange(n_tests) as nt:
         for _ in nt:
             dataset = data["train"]
@@ -139,16 +140,31 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs):
             model, optimizer, scheduler = model_fn()
             train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, training_fold_dataset)
 
-            validation_scores = validate(model, batch_size, testing_fold_dataset)
-            train_scores = validate(model, batch_size, training_fold_dataset)
-            index = ["f1_micro", "f1_macro", "f1_weighted", "auc"]
-            rdf = pd.DataFrame(data=dict(train=train_scores, val=validation_scores), index=index)
+            validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset)
+            train_scores, prfs_train = validate(model, batch_size, training_fold_dataset)
+            prfs_list.append(prfs_train + prfs_val)
+            rdf = dict(train=train_scores, val=validation_scores)
+            rdf = pd.DataFrame(data=rdf, index=index)
             results_list.append(rdf)
     nt.close()
     results = np.stack(results_list, axis=0)
-    means = results.mean(0)
-    stds = results.std(0)
-    return means, stds
+    means = pd.DataFrame(results.mean(0), index=index)
+    stds = pd.DataFrame(results.std(0), index=index)
+    tuples = [('mean', 'f1_micro'),
+              ('mean', 'map'),
+              ('mean', 'accuracy'),
+              ('mean', 'auc'),
+              ('std', 'f1_micro'),
+              ('std', 'map'),
+              ('std', 'accuracy'),
+              ('std', 'auc')]
+    rowidx = pd.MultiIndex.from_tuples(tuples, names=['mean_or_std', 'metric'])
+    results = pd.concat([means, stds], axis=0)
+    results.index = rowidx
+    results.columns = ["train", "val"]
+    prfs_idx = pd.MultiIndex.from_product([["train", "val"], ["precision", "recall", "f1", "supoort"]])
+    prfs = pd.DataFrame(np.array(prfs_list).mean(0), columns=["neg", "pos"], index=prfs_idx).T
+    return results, prfs
 
 
 def train_and_predict(model_fn, data, batch_size, epochs):

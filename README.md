@@ -102,3 +102,5 @@ pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
     - https://github.com/CSAILVision/semantic-segmentation-pytorch
     - https://github.com/clovaai/CRAFT-pytorch
     - https://github.com/clovaai/deep-text-recognition-benchmark
+    - https://github.com/facebookresearch/detectron2
+    - https://github.com/thunlp/ERNIE : Wikipedia Knowledge base
