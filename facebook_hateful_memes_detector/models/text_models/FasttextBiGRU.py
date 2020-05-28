@@ -26,16 +26,12 @@ class FasttextBiGRUModel(FasttextPooledModel):
         init_fc(lin, "linear")
         self.projection = lin
         self.lstm = nn.Sequential(nn.GRU(500, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
-        init_fc(self.lstm, 'linear')
+        # init_fc(self.lstm, 'linear')
 
     def __get_scores__(self, texts: List[str], img=None):
         vectors = self.get_word_vectors(texts)
         lstm_output, _ = self.lstm(vectors)
         lstm_output = self.projection(lstm_output)
-        # lstm_output = lstm_output / lstm_output.norm(dim=2, keepdim=True).clamp(min=1e-5)
-        # mean_projection = lstm_output.mean(1)
-        mean_projection, _ = lstm_output.max(1)
-        # mean_projection = lstm_output[:, -1, :]
-        # mean_projection = mean_projection / mean_projection.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        mean_projection = lstm_output.mean(1)
         return mean_projection, lstm_output
 

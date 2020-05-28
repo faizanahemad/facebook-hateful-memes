@@ -29,8 +29,8 @@ def get_all_tags():
     snlp_list = ["NUMBER", "ORDINAL", "MONEY", "DATE", "TIME", "CAUSE_OF_DEATH", "CITY",
                  "COUNTRY", "CRIMINAL_CHARGE", "EMAIL", "HANDLE", "IDEOLOGY", "NATIONALITY", "RELIGION", "STATE_OR_PROVINCE", "TITLE", "URL"]
     all_list = deps + penn + upos + spacy_glossary + nltk_ner_tags + snlp_list
-    tags = list(map(lambda x: x.lower(), all_list))
-    return dict(zip(tags, range(len(tags))))
+    tags = list(set(list(map(lambda x: x.lower(), all_list))))
+    return dict(zip(tags, range(1, len(tags)+1)))
 
 
 def get_universal_deps_indices():
@@ -91,7 +91,8 @@ def get_universal_deps_indices():
                   'quantmod',
                   'relcl',
                   'xcomp']
-    tags = tags + spacy_deps
+    snlp_deps = ['compound:prt', 'nmod:poss', 'tmod', 'pass', 'O']
+    tags = tags + spacy_deps + snlp_deps
     tags = list(map(lambda x: x.lower(), tags))
     tags = list(set(tags))
     return tags
@@ -196,7 +197,7 @@ def init_fc(layer, nonlinearity, nonlinearity_param=None):
         if 'bias' in name:
             nn.init.normal_(param, 0.0001)
         elif 'weight' in name:
-            nn.init.xavier_normal(param, gain)
+            nn.init.xavier_uniform(param, gain)
 
 
 def read_json_lines_into_df(file):

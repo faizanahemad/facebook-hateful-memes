@@ -22,6 +22,10 @@ pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
 pip install stanza
 python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords')"
 python -m spacy download en_trf_distilbertbaseuncased_lg
+git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install -e . && python scripts/download_weights.py
+pip install -U maxfw
+# edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
+# look at: https://github.com/huggingface/torchMoji/blob/master/examples/score_texts_emojis.py
 ```
 
 # TODO
@@ -107,6 +111,18 @@ python -m spacy download en_trf_distilbertbaseuncased_lg
     - https://github.com/clovaai/deep-text-recognition-benchmark
     - https://github.com/facebookresearch/detectron2
     - https://github.com/thunlp/ERNIE : Wikipedia Knowledge base
+    
+## Possible Extra Datasets
+    - Sarcasm
+        - https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge
+        - https://github.com/MirunaPislar/Sarcasm-Detection
+        - https://www.kaggle.com/rmisra/news-headlines-dataset-for-sarcasm-detection/home
+        - https://github.com/ef2020/SarcasmAmazonReviewsCorpus/wiki
+        - https://github.com/rishabhmisra/News-Headlines-Dataset-For-Sarcasm-Detection
+        - https://github.com/sahilswami96/SarcasmDetection_CodeMixed
+        
+    - Emoji
+        
     
 ## Other References
     - https://gist.github.com/jerheff/8cf06fe1df0695806456

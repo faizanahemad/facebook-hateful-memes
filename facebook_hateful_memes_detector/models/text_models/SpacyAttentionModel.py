@@ -11,7 +11,8 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 import spacy
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, get_penn_treebank_pos_tag_indices
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
+    get_penn_treebank_pos_tag_indices, get_all_tags
 from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
 
@@ -25,49 +26,44 @@ class SpacyAttentionModel(FasttextPooledModel):
         gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
         gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims/2)
         lin = nn.Linear(gru_dims * 2, classifer_dims)
-        init_fc(lin, "xavier_uniform_", "linear")
+        init_fc(lin, "linear")
 
         self.projection = lin
-        self.lstm = nn.Sequential(nn.GRU(128, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
+        self.lstm = nn.Sequential(nn.GRU(136, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
+        # init_fc(self.lstm, 'linear')
         self.nlp = spacy.load("en_core_web_lg", disable=["ner"])
-        self.pdict = get_pos_tag_indices()
-        self.tbdict = get_penn_treebank_pos_tag_indices()
-        self.depdict = get_universal_deps_indices()
+        self.pdict = get_all_tags()
         embedding_dim = 8
-        self.tag_em = nn.Embedding(len(self.tbdict), embedding_dim)
+        self.tag_em = nn.Embedding(len(self.pdict)+1, embedding_dim)
+        # init_fc(self.tag_em, "linear")
         nn.init.normal_(self.tag_em.weight, std=1 / embedding_dim)
-
-        self.dep_em = nn.Embedding(len(self.depdict), embedding_dim)
-        nn.init.normal_(self.dep_em.weight, std=1 / embedding_dim)
-
-        self.embeds = nn.Embedding(len(self.pdict), embedding_dim)
-        nn.init.normal_(self.embeds.weight, std=1 / embedding_dim)
 
         self.sw_em = nn.Embedding(2, embedding_dim)
         nn.init.normal_(self.sw_em.weight, std=1 / embedding_dim)
 
     def get_word_vectors(self, texts: List[str]):
         pdict = self.pdict
-        tbdict = self.tbdict
-        depdict = self.depdict
         nlp = self.nlp
         texts = list(nlp.pipe(texts, n_process=4))
         text_tensors = list(map(lambda x: torch.tensor(x.tensor), texts))
         text_tensors = stack_and_pad_tensors(text_tensors, 64)
-
-        pos = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.pos_] for token in x]), texts)), 64)
-        pos_emb = self.embeds(pos)
+        pos = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.pos_.lower()] for token in x]), texts)), 64)
+        pos_emb = self.tag_em(pos)
         #
-        tag = stack_and_pad_tensors(list(map(lambda x: torch.tensor([tbdict[token.tag_] for token in x]), texts)), 64)
+        tag = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.tag_.lower()] for token in x]), texts)), 64)
         tag_emb = self.tag_em(tag)
 
-        dep = stack_and_pad_tensors(list(map(lambda x: torch.tensor([depdict[token.dep_] for token in x]), texts)), 64)
-        dep_emb = self.dep_em(dep)
+        dep = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.dep_.lower()] for token in x]), texts)), 64)
+        dep_emb = self.tag_em(dep)
 
         sw = stack_and_pad_tensors(list(map(lambda x: torch.tensor([int(token.is_stop) for token in x]), texts)), 64)
         sw_emb = self.sw_em(sw)
 
-        result = torch.cat([text_tensors, pos_emb, tag_emb, dep_emb, sw_emb], 2)
+        ner = stack_and_pad_tensors(
+            list(map(lambda x: torch.tensor([pdict[token.ent_type_.lower()] for token in x]), texts)), 64)
+        ner_emb = self.tag_em(ner)
+
+        result = torch.cat([text_tensors, pos_emb, tag_emb, dep_emb, sw_emb, ner_emb], 2)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result
 

@@ -28,7 +28,6 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
     else:
         raise NotImplementedError()
 
-
     _ = model.train()
     training_fold_labels = torch.tensor([dataset[i][2] for i in range(len(dataset))])
     weights = make_weights_for_balanced_classes(training_fold_labels)
@@ -39,7 +38,7 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
     learning_rates = []
     try:
         with trange(epochs) as epo:
-            for epoch in epo:
+            for _ in epo:
                 _ = gc.collect()
                 with tqdm(train_loader) as data_batch:
                     for texts, images, labels in data_batch:

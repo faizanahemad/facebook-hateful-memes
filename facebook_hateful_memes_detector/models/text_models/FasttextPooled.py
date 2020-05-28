@@ -21,7 +21,7 @@ class FasttextPooledModel(nn.Module):
         super(FasttextPooledModel, self).__init__()
         fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else None
         fasttext_model = kwargs["fasttext_model"] if "fasttext_model" in kwargs else None
-        assert fasttext_file is not None or fasttext_model is not None
+        assert fasttext_file is not None or fasttext_model is not None or use_as_super
         if fasttext_file is not None:
             self.text_model = fasttext.load_model(fasttext_file)
         else:
