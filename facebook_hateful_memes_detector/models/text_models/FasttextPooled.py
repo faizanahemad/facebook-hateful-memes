@@ -29,21 +29,22 @@ class FasttextPooledModel(nn.Module):
 
         projection = [nn.Linear(500, classifer_dims * 2), nn.LeakyReLU(),
                       nn.Linear(classifer_dims * 2, classifer_dims)]
-        init_fc(projection[0], 'xavier_uniform_', "leaky_relu")
-        init_fc(projection[2], 'xavier_uniform_', "linear")
+        init_fc(projection[0], "leaky_relu")
+        init_fc(projection[2], "linear")
         self.projection = nn.Sequential(*projection)
         layers = [GaussianNoise(gaussian_noise), nn.Linear(classifer_dims, classifer_dims, bias=True),
                   nn.LeakyReLU(), nn.Dropout(dropout), nn.Linear(classifer_dims, num_classes)]
         self.bpe = BPEmb(dim=100)
         self.cngram = CharNGram()
-        init_fc(layers[1], 'xavier_uniform_', "leaky_relu")
-        init_fc(layers[4], 'xavier_uniform_', "linear")
+        init_fc(layers[1], "leaky_relu")
+        init_fc(layers[4], "linear")
         self.classifier = nn.Sequential(*layers)
         self.loss = nn.CrossEntropyLoss()
         self.num_classes = num_classes
         self.binary = num_classes == 2
         self.use_as_submodel = use_as_submodel
         self.eps = 1e-7
+        self.auc_loss = False
 
     def get_sentence_vector(self, texts: List[str]):
         tm = self.text_model
@@ -95,7 +96,7 @@ class FasttextPooledModel(nn.Module):
             loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
             preds = logits.max(dim=1).indices
             logits = torch.softmax(logits, dim=1)
-            if self.binary and self.training:
+            if self.binary and self.training and self.auc_loss:
                 # Projection aug loss
                 pos_projections = projections[labels == 1]
                 neg_projections = projections[labels == 0]

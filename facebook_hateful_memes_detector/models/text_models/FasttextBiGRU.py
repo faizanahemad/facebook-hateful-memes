@@ -23,16 +23,19 @@ class FasttextBiGRUModel(FasttextPooledModel):
         gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
         gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims/2)
         lin = nn.Linear(gru_dims * 2, classifer_dims)
-        init_fc(lin, "xavier_uniform_", "linear")
+        init_fc(lin, "linear")
         self.projection = lin
         self.lstm = nn.Sequential(nn.GRU(500, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
+        init_fc(self.lstm, 'linear')
 
     def __get_scores__(self, texts: List[str], img=None):
         vectors = self.get_word_vectors(texts)
         lstm_output, _ = self.lstm(vectors)
         lstm_output = self.projection(lstm_output)
         # lstm_output = lstm_output / lstm_output.norm(dim=2, keepdim=True).clamp(min=1e-5)
-        mean_projection = lstm_output.mean(1)
+        # mean_projection = lstm_output.mean(1)
+        mean_projection, _ = lstm_output.max(1)
+        # mean_projection = lstm_output[:, -1, :]
         # mean_projection = mean_projection / mean_projection.norm(dim=1, keepdim=True).clamp(min=1e-5)
         return mean_projection, lstm_output
 

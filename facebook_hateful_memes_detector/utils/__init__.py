@@ -11,6 +11,26 @@ import contractions
 import pandas as pd
 import jsonlines
 from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
+from spacy import glossary
+
+
+def get_all_tags():
+
+    # https://github.com/explosion/spaCy/blob/master/spacy/glossary.py
+    # https://github.com/nltk/nltk/blob/4e59677df364841c1a23dabfde0317388997aa6d/nltk/sem/relextract.py#L31
+    deps = get_universal_deps_indices()
+    penn = get_penn_treebank_pos_tag_indices()
+    upos = get_pos_tag_indices()
+    spacy_glossary = list(glossary.GLOSSARY.keys())
+
+    nltk_ner_tags = ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
+            'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE'] + ['LOC', 'PER', 'ORG'] + ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
+            'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE', 'FACILITY', 'GPE', 'O']
+    snlp_list = ["NUMBER", "ORDINAL", "MONEY", "DATE", "TIME", "CAUSE_OF_DEATH", "CITY",
+                 "COUNTRY", "CRIMINAL_CHARGE", "EMAIL", "HANDLE", "IDEOLOGY", "NATIONALITY", "RELIGION", "STATE_OR_PROVINCE", "TITLE", "URL"]
+    all_list = deps + penn + upos + spacy_glossary + nltk_ner_tags + snlp_list
+    tags = list(map(lambda x: x.lower(), all_list))
+    return dict(zip(tags, range(len(tags))))
 
 
 def get_universal_deps_indices():
@@ -72,9 +92,9 @@ def get_universal_deps_indices():
                   'relcl',
                   'xcomp']
     tags = tags + spacy_deps
-    tags = list(map(lambda x: x.upper(), tags)) + list(map(lambda x: x.lower(), tags))
+    tags = list(map(lambda x: x.lower(), tags))
     tags = list(set(tags))
-    return dict(zip(tags, range(len(tags))))
+    return tags
 
 
 def get_penn_treebank_pos_tag_indices():
@@ -141,31 +161,42 @@ def get_penn_treebank_pos_tag_indices():
                   'XX',
                   '_SP']
     pos_tags = list(set(pos_tags + spacy_list))
-    return dict(zip(pos_tags, range(len(pos_tags))))
+    pos_tags = list(map(lambda x: x.lower(), pos_tags))
+    return pos_tags
 
 
 def get_pos_tag_indices():
     pos_tags = ["ADJ", "ADP", "ADV", "AUX", "CONJ", "CCONJ", "DET",
                 "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN",
                 "PUNCT", "SCONJ", "SYM", "VERB", "X", "SPACE"]
-    return dict(zip(pos_tags, range(len(pos_tags))))
+    pos_tags = list(map(lambda x: x.lower(), pos_tags))
+    return pos_tags
 
 
-def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
-    initializer = getattr(nn.init, initializer)
-    initializer(param, nn.init.calculate_gain(nonlinearity, nonlinearity_param))
+# def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
+#     initializer = getattr(nn.init, initializer)
+#     initializer(param, nn.init.calculate_gain(nonlinearity, nonlinearity_param))
+#
+#
+# def init_bias(param):
+#     nn.init.normal_(param, 0, 0.001)
+#
+#
+# def init_fc(layer, initializer, nonlinearity, nonlinearity_param=None):
+#     init_weight(layer.weight, initializer, nonlinearity, nonlinearity_param)
+#     try:
+#         init_bias(layer.bias)
+#     except AttributeError:
+#         pass
 
 
-def init_bias(param):
-    nn.init.normal_(param, 0, 0.001)
-
-
-def init_fc(layer, initializer, nonlinearity, nonlinearity_param=None):
-    init_weight(layer.weight, initializer, nonlinearity, nonlinearity_param)
-    try:
-        init_bias(layer.bias)
-    except AttributeError:
-        pass
+def init_fc(layer, nonlinearity, nonlinearity_param=None):
+    gain = nn.init.calculate_gain(nonlinearity, nonlinearity_param)
+    for name, param in layer.named_parameters():
+        if 'bias' in name:
+            nn.init.normal_(param, 0.0001)
+        elif 'weight' in name:
+            nn.init.xavier_normal(param, gain)
 
 
 def read_json_lines_into_df(file):

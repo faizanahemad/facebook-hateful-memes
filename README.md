@@ -14,13 +14,14 @@ mv *.png img
 
 ```bash
 conda install -y -c anaconda openjdk
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions pytorch-nlp
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions pytorch-nlp spacy-transformers stanza
 pip install git+https://github.com/myint/language-check.git 
 pip install pycontractions
-python -m spacy download en_core_news_sm
+python -m spacy download en_core_news_sm en_core_news_md en_core_news_lg
 pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
 pip install stanza
-python -c "import nltk;nltk.download('tagsets')"
+python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords')"
+python -m spacy download en_trf_distilbertbaseuncased_lg
 ```
 
 # TODO
@@ -109,3 +110,8 @@ python -c "import nltk;nltk.download('tagsets')"
     
 ## Other References
     - https://gist.github.com/jerheff/8cf06fe1df0695806456
+    - LSTM
+        - https://stackoverflow.com/questions/53010465/bidirectional-lstm-output-question-in-pytorch
+        - https://stackoverflow.com/questions/48302810/whats-the-difference-between-hidden-and-output-in-pytorch-lstm
+        - https://discuss.pytorch.org/t/rnn-output-vs-hidden-state-dont-match-up-my-misunderstanding/43280
+        
