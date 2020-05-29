@@ -17,11 +17,11 @@ from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
 
 
-class SpacyAttentionModel(FasttextPooledModel):
+class SpacyBiGRUModel(FasttextPooledModel):
     def __init__(self, classifer_dims, num_classes,
                  gaussian_noise=0.0, dropout=0.0, use_as_submodel=False,
                  **kwargs):
-        super(SpacyAttentionModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
+        super(SpacyBiGRUModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
         gru_layers = kwargs["gru_layers"] if "gru_layers" in kwargs else 2
         gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
         gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims/2)

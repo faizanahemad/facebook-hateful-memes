@@ -12,6 +12,7 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors
 from .FasttextPooled import FasttextPooledModel
+from .WordChannelReducer import WordChannelReducer
 
 
 class FasttextBiGRUModel(FasttextPooledModel):
@@ -28,6 +29,7 @@ class FasttextBiGRUModel(FasttextPooledModel):
         init_fc(lin2, "linear")
         self.projection = nn.Sequential(nn.Dropout(dropout), lin1, nn.LeakyReLU(), lin2)
         self.lstm = nn.Sequential(nn.GRU(500, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
+        self.projection = WordChannelReducer(gru_dims * 2, classifer_dims, 4)
         # init_fc(self.lstm, 'linear')
 
     def __get_scores__(self, texts: List[str], img=None):

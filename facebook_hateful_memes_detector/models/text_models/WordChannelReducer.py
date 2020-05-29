@@ -3,8 +3,7 @@ from abc import ABC
 from typing import List, Tuple, Dict, Set, Union
 import numpy as np
 import torch.nn as nn
-
-from facebook_hateful_memes_detector import init_fc
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors
 
 
 class Squeeze(nn.Module):

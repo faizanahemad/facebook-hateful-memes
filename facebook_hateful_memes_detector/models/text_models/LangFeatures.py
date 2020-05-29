@@ -117,8 +117,6 @@ class LangFeaturesModel(FasttextPooledModel):
             list(map(lambda x: torch.tensor([token["head"] / 100.0 for token in x]), docs)),
             64)
 
-
-
         spacy_texts = list(nlp.pipe(texts, n_process=4))
         wl = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([len(token) - 1 for token in x]).clamp(0, 15), spacy_texts)), 64)

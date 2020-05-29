@@ -17,11 +17,11 @@ from .WordChannelReducer import Squeeze, Transpose
 
 class Fasttext1DCNNModel(FasttextPooledModel):
     def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False, cnn_dims=512,
+                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False, embedding_dims=500, cnn_dims=512, use_as_super=False,
                  **kwargs):
-        super(Fasttext1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, **kwargs)
+        super(Fasttext1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
 
-        conv1 = nn.Conv1d(500, cnn_dims, 3, 1, padding=1, groups=4, bias=False)
+        conv1 = nn.Conv1d(embedding_dims, cnn_dims, 3, 1, padding=1, groups=4, bias=False)
         init_fc(conv1, "leaky_relu")
         mp = nn.MaxPool1d(2)
         conv2 = nn.Conv1d(cnn_dims, cnn_dims * 2, 3, 1, padding=1, groups=4, bias=False)
@@ -30,7 +30,8 @@ class Fasttext1DCNNModel(FasttextPooledModel):
         init_fc(conv3, "leaky_relu")
         relu = nn.LeakyReLU()
         dropout = nn.Dropout(dropout)
-        self.conv = nn.Sequential(Transpose(), conv1, relu, dropout, mp,
+        gn = GaussianNoise(gaussian_noise)
+        self.conv = nn.Sequential(gn, Transpose(), conv1, relu, dropout, mp,
                                   conv2, relu, dropout, mp,
                                   conv3, relu, dropout, mp,
                                   Transpose())
