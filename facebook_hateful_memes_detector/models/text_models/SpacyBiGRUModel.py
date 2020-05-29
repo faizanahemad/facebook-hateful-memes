@@ -15,6 +15,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_
     get_penn_treebank_pos_tag_indices, get_all_tags
 from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
+from .WordChannelReducer import WordChannelReducer
 
 
 class SpacyBiGRUModel(FasttextPooledModel):
@@ -42,6 +43,7 @@ class SpacyBiGRUModel(FasttextPooledModel):
 
         self.sw_em = nn.Embedding(2, embedding_dim)
         nn.init.normal_(self.sw_em.weight, std=1 / embedding_dim)
+        self.projection = WordChannelReducer(gru_dims * 2, classifer_dims, 4)
 
     def get_word_vectors(self, texts: List[str]):
         pdict = self.pdict
@@ -73,7 +75,5 @@ class SpacyBiGRUModel(FasttextPooledModel):
         vectors = self.get_word_vectors(texts)
         lstm_output, _ = self.lstm(vectors)
         lstm_output = self.projection(lstm_output)
-        # lstm_output = lstm_output / lstm_output.norm(dim=2, keepdim=True).clamp(min=1e-5)
         mean_projection = lstm_output.mean(1)
-        # mean_projection = mean_projection / mean_projection.norm(dim=1, keepdim=True).clamp(min=1e-5)
         return mean_projection, lstm_output

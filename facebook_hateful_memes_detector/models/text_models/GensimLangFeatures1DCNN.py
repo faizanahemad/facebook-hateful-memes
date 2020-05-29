@@ -32,16 +32,17 @@ from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
 from ..ibm_max import ModelWrapper
 import gensim.downloader as api
+from .WordChannelReducer import Transpose, Squeeze
 
 
 class GensimLangFeatures1DCNNModel(LangFeaturesModel):
     def __init__(self, classifer_dims, num_classes,
                  gaussian_noise=0.0, dropout=0.0, use_as_submodel=False, embedding_dims=500, cnn_dims=512, use_as_super=False,
                  **kwargs):
-        super(LangFeaturesModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
+        super(GensimLangFeatures1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
         models = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
                   api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
-        self.models = models
+        self.models = dict(zip(range(len(models)), models))
         self.spacy = spacy.load("en_core_web_lg", disable=["tagger", "parser", "ner"])
         conv1 = nn.Conv1d(embedding_dims, cnn_dims, 3, 1, padding=1, groups=4, bias=False)
         init_fc(conv1, "leaky_relu")
@@ -81,19 +82,17 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
 
         return logits, preds, projections, vectors, loss
 
-    def get_one_sentence_vector(self, tm, sentence):
-        tokens = fasttext.tokenize(sentence)
-        result = tm[tokens]
+    def get_one_sentence_vector(self, i, m, sentence):
+        result = [m[t] if t in m else np.zeros(m.vector_size) for t in sentence]
         return torch.tensor(result)
 
     def get_word_vectors(self, texts: List[str]):
-        wv1 = LangFeaturesModel.get_word_vectors(self, texts)
+        wv1 = super().get_word_vectors(texts)
         texts = list(self.spacy.pipe(texts, n_process=4))
-        text_tensors = list(map(lambda x: torch.tensor(x.tensor), texts))
         texts = list(map(lambda x: list(map(str, x)), texts))
         result = [wv1]
-        for m in self.models:
-            r = stack_and_pad_tensors([self.get_one_sentence_vector(m, text) for text in texts], 64)
+        for i, m in self.models.items():
+            r = stack_and_pad_tensors([self.get_one_sentence_vector(i, m, text) for text in texts], 64)
             result.append(r)
 
         result = torch.cat(result, 2)
