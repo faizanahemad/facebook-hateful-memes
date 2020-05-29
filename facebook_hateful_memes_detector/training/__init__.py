@@ -30,7 +30,7 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
 
     _ = model.train()
     training_fold_labels = torch.tensor([dataset[i][2] for i in range(len(dataset))])
-    weights = make_weights_for_balanced_classes(training_fold_labels)
+    weights = make_weights_for_balanced_classes(training_fold_labels, {0: 1, 1: 1.8}) # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
     sampler = WeightedRandomSampler(weights, len(weights))
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                               shuffle=False, num_workers=32, pin_memory=True, sampler=sampler)
@@ -149,7 +149,7 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs):
             size = len(dataset)
             training_fold_dataset, testing_fold_dataset = torch.utils.data.random_split(dataset, [int(size * 0.8),
                                                                                                   size - int(size * 0.8)])
-            model, optimizer, scheduler = model_fn()
+            model, optimizer, scheduler = model_fn(dataset=training_fold_dataset)
             train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, training_fold_dataset)
 
             validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset)
@@ -181,7 +181,7 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs):
 
 def train_and_predict(model_fn, data, batch_size, epochs):
     dataset = data["train"]
-    model, optimizer, scheduler = model_fn()
+    model, optimizer, scheduler = model_fn(dataset=dataset)
     train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=True)
     test_dataset = data["test"]
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset)

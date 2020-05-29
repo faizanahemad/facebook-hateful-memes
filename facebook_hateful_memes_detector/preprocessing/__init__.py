@@ -109,12 +109,13 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     return rd
 
 
-def make_weights_for_balanced_classes(labels):
+def make_weights_for_balanced_classes(labels, weight_per_class: Dict = None):
     labels = labels.numpy()
     from collections import Counter
     count = Counter(labels)
     N = len(labels)
-    weight_per_class = {clas: N / float(occ) for clas, occ in count.items()}
+    if weight_per_class is None:
+        weight_per_class = {clas: N / float(occ) for clas, occ in count.items()}
     weight = [weight_per_class[label] for label in labels]
     return torch.DoubleTensor(weight)
 

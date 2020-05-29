@@ -23,9 +23,9 @@ pip install stanza
 python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords')"
 python -m spacy download en_trf_distilbertbaseuncased_lg
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install -e . && python scripts/download_weights.py
-pip install -U maxfw
 # edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
 # look at: https://github.com/huggingface/torchMoji/blob/master/examples/score_texts_emojis.py
+pip install -U maxfw
 ```
 
 # TODO
@@ -122,6 +122,7 @@ pip install -U maxfw
         - https://github.com/sahilswami96/SarcasmDetection_CodeMixed
         
     - Emoji
+    - General NLP: https://pytorchnlp.readthedocs.io/en/latest/source/torchnlp.datasets.html
         
     
 ## Other References

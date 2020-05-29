@@ -39,13 +39,15 @@ class LangFeaturesModel(FasttextPooledModel):
         gru_layers = kwargs["gru_layers"] if "gru_layers" in kwargs else 2
         gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
         gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims/2)
-        lin = nn.Linear(gru_dims * 2, classifer_dims)
-        init_fc(lin, "linear")
+        lin1 = nn.Linear(gru_dims * 2, gru_dims * 2)
+        init_fc(lin1, "leaky_relu")
+        lin2 = nn.Linear(gru_dims * 2, classifer_dims)
+        init_fc(lin2, "linear")
+        self.projection = nn.Sequential(nn.Dropout(dropout), lin1, nn.LeakyReLU(), lin2)
 
-        self.projection = lin
-        self.lstm = nn.Sequential(nn.GRU(128, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
-        init_fc(self.lstm, 'linear')
-        self.nlp = spacy.load("en_core_web_lg", disable=["ner"])
+        self.lstm = nn.Sequential(nn.GRU(166, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
+        # init_fc(self.lstm, 'linear')
+        self.nlp = spacy.load("en_core_web_lg", disable=[])
         self.pdict = get_all_tags()
         embedding_dim = 8
 
@@ -55,6 +57,12 @@ class LangFeaturesModel(FasttextPooledModel):
 
         self.sw_em = nn.Embedding(2, embedding_dim)
         nn.init.normal_(self.sw_em.weight, std=1 / embedding_dim)
+
+        self.w_len = nn.Embedding(16, embedding_dim)
+        nn.init.normal_(self.w_len.weight, std=1 / embedding_dim)
+
+        self.wc_emb = nn.Embedding(8, embedding_dim)
+        nn.init.normal_(self.wc_emb.weight, std=1 / embedding_dim)
 
         with open(VOCAB_PATH, 'r') as f:
             maxlen = 64
@@ -68,10 +76,7 @@ class LangFeaturesModel(FasttextPooledModel):
     def get_torchmoji_probas(self,  texts: List[str]):
         tokenized, _, _ = self.st.tokenize_sentences(texts)
         prob = self.tmoji(tokenized)
-        return prob
-
-    def get_torchmoji_embeddings(self, texts: List[str]):
-        raise NotImplementedError()
+        return torch.tensor(prob)
 
     def get_word_and_text_lengths(self):
         pass
@@ -80,7 +85,7 @@ class LangFeaturesModel(FasttextPooledModel):
         pdict = self.pdict
         nlp = self.nlp
         snlp = self.snlp
-        docs = [list(filter(lambda x:len(x["text"]) > 1, map(lambda x:dict(**x.to_dict()[0], ner=x.ner), snlp(doc).iter_tokens()))) for doc in texts]
+        docs = [list(map(lambda x:dict(**x.to_dict()[0], ner=x.ner), snlp(doc).iter_tokens())) for doc in texts]
 
         upos = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token["upos"].lower()] for token in x]), docs)), 64)
         upos_emb = self.tag_em(upos)
@@ -108,19 +113,25 @@ class LangFeaturesModel(FasttextPooledModel):
 
 
 
-        texts = list(nlp.pipe(texts, n_process=4))
-        pos = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.pos_.lower()] for token in x]), texts)), 64)
+        spacy_texts = list(nlp.pipe(texts, n_process=4))
+        wl = stack_and_pad_tensors(
+            list(map(lambda x: torch.tensor([len(token) - 1 for token in x]).clamp(0, 15), spacy_texts)), 64)
+        wl_emb = self.w_len(wl)
+        wc = (torch.tensor(list(map(len, spacy_texts)))/10).long().unsqueeze(1).expand(len(texts), 64)
+        wc_emb = self.wc_emb(wc)
+
+        pos = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.pos_.lower()] for token in x]), spacy_texts)), 64)
         pos_emb = self.tag_em(pos)
-        tag = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.tag_.lower()] for token in x]), texts)), 64)
+        tag = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.tag_.lower()] for token in x]), spacy_texts)), 64)
         tag_emb = self.tag_em(tag)
-        dep = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.dep_.lower()] for token in x]), texts)), 64)
+        dep = stack_and_pad_tensors(list(map(lambda x: torch.tensor([pdict[token.dep_.lower()] for token in x]), spacy_texts)), 64)
         dep_emb = self.tag_em(dep)
-        sw = stack_and_pad_tensors(list(map(lambda x: torch.tensor([int(token.is_stop) for token in x]), texts)), 64)
+        sw = stack_and_pad_tensors(list(map(lambda x: torch.tensor([int(token.is_stop) for token in x]), spacy_texts)), 64)
         sw_emb = self.sw_em(sw)
         ner = stack_and_pad_tensors(
-            list(map(lambda x: torch.tensor([pdict[token.ent_type_.lower()] for token in x]), texts)), 64)
+            list(map(lambda x: torch.tensor([pdict[token.ent_type_.lower()] for token in x]), spacy_texts)), 64)
         ner_emb = self.tag_em(ner)
-        result = torch.cat([pos_emb, tag_emb, dep_emb, sw_emb, ner_emb, upos_emb, xpos_emb, deprel_emb, sner_emb, deprel_emb2], 2)
+        result = torch.cat([pos_emb, tag_emb, dep_emb, sw_emb, ner_emb, upos_emb, xpos_emb, deprel_emb, sner_emb, deprel_emb2, wl_emb, wc_emb], 2)
 
         tm_probas = self.get_torchmoji_probas(texts)
         ibm_max = self.ibm_max.predict(texts)

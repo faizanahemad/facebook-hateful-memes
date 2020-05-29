@@ -174,30 +174,30 @@ def get_pos_tag_indices():
     return pos_tags
 
 
-# def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
-#     initializer = getattr(nn.init, initializer)
-#     initializer(param, nn.init.calculate_gain(nonlinearity, nonlinearity_param))
-#
-#
-# def init_bias(param):
-#     nn.init.normal_(param, 0, 0.001)
-#
-#
-# def init_fc(layer, initializer, nonlinearity, nonlinearity_param=None):
-#     init_weight(layer.weight, initializer, nonlinearity, nonlinearity_param)
-#     try:
-#         init_bias(layer.bias)
-#     except AttributeError:
-#         pass
+def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
+    initializer = getattr(nn.init, initializer)
+    initializer(param, nn.init.calculate_gain(nonlinearity, nonlinearity_param))
+
+
+def init_bias(param):
+    nn.init.normal_(param, 0, 0.001)
 
 
 def init_fc(layer, nonlinearity, nonlinearity_param=None):
-    gain = nn.init.calculate_gain(nonlinearity, nonlinearity_param)
-    for name, param in layer.named_parameters():
-        if 'bias' in name:
-            nn.init.normal_(param, 0.0001)
-        elif 'weight' in name:
-            nn.init.xavier_uniform(param, gain)
+    init_weight(layer.weight, "xavier_uniform_", nonlinearity, nonlinearity_param)
+    try:
+        init_bias(layer.bias)
+    except AttributeError:
+        pass
+
+
+# def init_fc(layer, nonlinearity, nonlinearity_param=None):
+#     gain = nn.init.calculate_gain(nonlinearity, nonlinearity_param)
+#     for name, param in layer.named_parameters():
+#         if 'bias' in name:
+#             nn.init.normal_(param, 0.0001)
+#         elif 'weight' in name:
+#             nn.init.xavier_uniform(param, gain)
 
 
 def read_json_lines_into_df(file):
