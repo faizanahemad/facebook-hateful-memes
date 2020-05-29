@@ -25,9 +25,9 @@ class SpacyAttentionModel(FasttextPooledModel):
         gru_layers = kwargs["gru_layers"] if "gru_layers" in kwargs else 2
         gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
         gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims/2)
-        lin1 = nn.Linear(gru_dims * 2, gru_dims * 2)
+        lin1 = nn.Linear(gru_dims * 2, gru_dims * 4)
         init_fc(lin1, "leaky_relu")
-        lin2 = nn.Linear(gru_dims * 2, classifer_dims)
+        lin2 = nn.Linear(gru_dims * 4, classifer_dims)
         init_fc(lin2, "linear")
 
         self.projection = nn.Sequential(nn.Dropout(dropout), lin1, nn.LeakyReLU(), lin2)

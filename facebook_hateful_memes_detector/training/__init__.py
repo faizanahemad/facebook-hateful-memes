@@ -65,6 +65,7 @@ def train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=False):
     import matplotlib.pyplot as plt
 
     if plot:
+        print(model)
         t = list(range(len(train_losses)))
 
         fig, ax1 = plt.subplots()

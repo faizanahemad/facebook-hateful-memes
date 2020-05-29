@@ -33,21 +33,17 @@ from ..ibm_max import ModelWrapper
 
 class LangFeaturesModel(FasttextPooledModel):
     def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False,
+                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False, use_as_super=False,
                  **kwargs):
         super(LangFeaturesModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
+        extrafeats = kwargs["extrafeats"] if "extrafeats" in kwargs else False
+        self.extrafeats = extrafeats
         gru_layers = kwargs["gru_layers"] if "gru_layers" in kwargs else 2
         gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
-        gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims/2)
-        lin1 = nn.Linear(gru_dims * 2, gru_dims * 2)
-        init_fc(lin1, "leaky_relu")
-        lin2 = nn.Linear(gru_dims * 2, classifer_dims)
-        init_fc(lin2, "linear")
-        self.projection = nn.Sequential(nn.Dropout(dropout), lin1, nn.LeakyReLU(), lin2)
 
-        self.lstm = nn.Sequential(nn.GRU(166, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
-        # init_fc(self.lstm, 'linear')
         self.nlp = spacy.load("en_core_web_lg", disable=[])
+        self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=True,
+                                    pos_batch_size=3000)
         self.pdict = get_all_tags()
         embedding_dim = 8
 
@@ -64,14 +60,24 @@ class LangFeaturesModel(FasttextPooledModel):
         self.wc_emb = nn.Embedding(8, embedding_dim)
         nn.init.normal_(self.wc_emb.weight, std=1 / embedding_dim)
 
-        with open(VOCAB_PATH, 'r') as f:
-            maxlen = 64
-            self.vocabulary = json.load(f)
-            self.st = SentenceTokenizer(self.vocabulary, maxlen)
-            self.tmoji = torchmoji_emojis(PRETRAINED_PATH)
+        gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims / 2)
+        if not use_as_super:
+            lin1 = nn.Linear(gru_dims * 2, gru_dims * 4)
+            init_fc(lin1, "leaky_relu")
+            lin2 = nn.Linear(gru_dims * 4, classifer_dims)
+            init_fc(lin2, "linear")
+            self.projection = nn.Sequential(nn.Dropout(dropout), lin1, nn.LeakyReLU(), lin2)
 
-        self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=True, pos_batch_size=3000)
-        self.ibm_max = ModelWrapper()
+            self.lstm = nn.Sequential(
+                nn.GRU(166, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
+
+        if self.extrafeats:
+            self.ibm_max = ModelWrapper()
+            with open(VOCAB_PATH, 'r') as f:
+                maxlen = 64
+                self.vocabulary = json.load(f)
+                self.st = SentenceTokenizer(self.vocabulary, maxlen)
+                self.tmoji = torchmoji_emojis(PRETRAINED_PATH)
 
     def get_torchmoji_probas(self,  texts: List[str]):
         tokenized, _, _ = self.st.tokenize_sentences(texts)
@@ -133,11 +139,12 @@ class LangFeaturesModel(FasttextPooledModel):
         ner_emb = self.tag_em(ner)
         result = torch.cat([pos_emb, tag_emb, dep_emb, sw_emb, ner_emb, upos_emb, xpos_emb, deprel_emb, sner_emb, deprel_emb2, wl_emb, wc_emb], 2)
 
-        tm_probas = self.get_torchmoji_probas(texts)
-        ibm_max = self.ibm_max.predict(texts)
-        tm_probas = tm_probas.unsqueeze(1).expand(len(texts), 64, tm_probas.size(1))
-        ibm_max = ibm_max.unsqueeze(1).expand(len(texts), 64, ibm_max.size(1))
-        result = torch.cat([result, tm_probas, ibm_max], 2)
+        if self.extrafeats:
+            tm_probas = self.get_torchmoji_probas(texts)
+            ibm_max = self.ibm_max.predict(texts)
+            tm_probas = tm_probas.unsqueeze(1).expand(len(texts), 64, tm_probas.size(1))
+            ibm_max = ibm_max.unsqueeze(1).expand(len(texts), 64, ibm_max.size(1))
+            result = torch.cat([result, tm_probas, ibm_max], 2)
 
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result
