@@ -30,9 +30,8 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_
     get_penn_treebank_pos_tag_indices, get_all_tags
 from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
-from ..ibm_max import ModelWrapper
 import gensim.downloader as api
-from .WordChannelReducer import Transpose, Squeeze
+from ...utils import WordChannelReducer, Transpose, Squeeze
 
 
 class GensimLangFeatures1DCNNModel(LangFeaturesModel):
@@ -58,7 +57,7 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
                                   conv2, relu, dropout, mp,
                                   conv3, relu, dropout, mp,
                                   Transpose())
-        self.classifier = nn.Sequential(Transpose(), nn.Conv1d(cnn_dims, 2, 8, 1, padding=0, groups=1, bias=False),
+        self.classifier = nn.Sequential(Transpose(), nn.Conv1d(cnn_dims, num_classes, 8, 1, padding=0, groups=1, bias=False),
                                         Squeeze())
         # init_fc(self.lstm, 'linear')
 
@@ -84,7 +83,7 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
 
     def get_one_sentence_vector(self, i, m, sentence):
         result = [m[t] if t in m else np.zeros(m.vector_size) for t in sentence]
-        return torch.tensor(result)
+        return torch.tensor(result, dtype=float)
 
     def get_word_vectors(self, texts: List[str]):
         wv1 = super().get_word_vectors(texts)
@@ -94,7 +93,7 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
         for i, m in self.models.items():
             r = stack_and_pad_tensors([self.get_one_sentence_vector(i, m, text) for text in texts], 64)
             result.append(r)
-
+        result = [r.float() for r in result]
         result = torch.cat(result, 2)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result

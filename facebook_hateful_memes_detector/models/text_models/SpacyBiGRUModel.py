@@ -15,7 +15,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_
     get_penn_treebank_pos_tag_indices, get_all_tags
 from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
-from .WordChannelReducer import WordChannelReducer
+from ...utils import WordChannelReducer
 
 
 class SpacyBiGRUModel(FasttextPooledModel):
