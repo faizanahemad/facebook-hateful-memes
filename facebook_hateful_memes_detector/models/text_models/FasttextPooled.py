@@ -16,7 +16,7 @@ from ...preprocessing import clean_text
 class FasttextPooledModel(nn.Module):
     def __init__(self, classifer_dims, num_classes,
                  gaussian_noise=0.0, dropout=0.0,
-                 use_as_submodel=False, use_as_super=False,
+                use_as_super=False,
                  **kwargs):
         super(FasttextPooledModel, self).__init__()
         fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else None
@@ -42,7 +42,6 @@ class FasttextPooledModel(nn.Module):
         self.loss = nn.CrossEntropyLoss()
         self.num_classes = num_classes
         self.binary = num_classes == 2
-        self.use_as_submodel = use_as_submodel
         self.eps = 1e-7
         self.auc_loss = False
 
@@ -88,15 +87,11 @@ class FasttextPooledModel(nn.Module):
 
     def forward(self, texts: List[str], img, labels):
         projections, vectors = self.__get_scores__(texts, img)
-        if self.use_as_submodel:
-            loss = None
-            preds = None
-        else:
-            logits = self.classifier(projections) if not self.use_as_submodel else None
-            loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
-            preds = logits.max(dim=1).indices
-            logits = torch.softmax(logits, dim=1)
-            if self.binary and self.training and self.auc_loss:
+        logits = self.classifier(projections)
+        loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
+        preds = logits.max(dim=1).indices
+        logits = torch.softmax(logits, dim=1)
+        if self.binary and self.training and self.auc_loss:
                 # Projection aug loss
                 pos_projections = projections[labels == 1]
                 neg_projections = projections[labels == 0]

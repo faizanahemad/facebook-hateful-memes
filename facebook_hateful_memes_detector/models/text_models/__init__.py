@@ -1,5 +1,4 @@
 from .FasttextPooled import FasttextPooledModel
-from .FasttextBiGRU import FasttextBiGRUModel
 from .SpacyBiGRUModel import SpacyBiGRUModel
 from .LangFeatures import LangFeaturesModel
 from .Albert import Albert

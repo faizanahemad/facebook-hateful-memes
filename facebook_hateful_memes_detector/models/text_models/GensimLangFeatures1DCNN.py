@@ -32,54 +32,32 @@ from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
 import gensim.downloader as api
 from ...utils import WordChannelReducer, Transpose, Squeeze
+from ..classifiers import CNN1DClassifier, GRUClassifier
+
 
 
 class GensimLangFeatures1DCNNModel(LangFeaturesModel):
     def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False, embedding_dims=500, cnn_dims=512, use_as_super=False,
+                 gaussian_noise=0.0, dropout=0.0, embedding_dims=796,
+                 internal_dims=512, n_layers=2,
+                 classifier="cnn",
+                 use_as_super=False,
                  **kwargs):
-        super(GensimLangFeatures1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
+        super(GensimLangFeatures1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, True, **kwargs)
         models = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
                   api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
         self.models = dict(zip(range(len(models)), models))
         self.spacy = spacy.load("en_core_web_lg", disable=["tagger", "parser", "ner"])
-        conv1 = nn.Conv1d(embedding_dims, cnn_dims, 3, 1, padding=1, groups=4, bias=False)
-        init_fc(conv1, "leaky_relu")
-        mp = nn.MaxPool1d(2)
-        conv2 = nn.Conv1d(cnn_dims, cnn_dims * 2, 3, 1, padding=1, groups=4, bias=False)
-        init_fc(conv2, "leaky_relu")
-        conv3 = nn.Conv1d(cnn_dims * 2, cnn_dims, 3, 1, padding=1, groups=4, bias=False)
-        init_fc(conv3, "leaky_relu")
-        relu = nn.LeakyReLU()
-        dropout = nn.Dropout(dropout)
-        gn = GaussianNoise(gaussian_noise)
-        self.conv = nn.Sequential(gn, Transpose(), conv1, relu, dropout, mp,
-                                  conv2, relu, dropout, mp,
-                                  conv3, relu, dropout, mp,
-                                  Transpose())
-        self.classifier = nn.Sequential(Transpose(), nn.Conv1d(cnn_dims, num_classes, 8, 1, padding=0, groups=1, bias=False),
-                                        Squeeze())
+        embedding_dims = self.all_dims + 700
+        if not use_as_super:
+            if classifier == "cnn":
+                self.classifier = CNN1DClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, None, gaussian_noise, dropout)
+            elif classifier == "gru":
+                self.classifier = GRUClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
+            else:
+                raise NotImplementedError()
+
         # init_fc(self.lstm, 'linear')
-
-    def __get_scores__(self, texts: List[str], img=None):
-        vectors = self.get_word_vectors(texts)
-        conv_out = self.conv(vectors)
-        mean_projection = conv_out.mean(1)
-        return mean_projection, conv_out
-
-    def forward(self, texts: List[str], img, labels):
-        projections, vectors = self.__get_scores__(texts, img)
-        if self.use_as_submodel:
-            loss = None
-            preds = None
-            logits = None
-        else:
-            logits = self.classifier(vectors) if not self.use_as_submodel else None
-            loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
-            preds = logits.max(dim=1).indices
-            logits = torch.softmax(logits, dim=1)
-
-        return logits, preds, projections, vectors, loss
 
     def get_one_sentence_vector(self, i, m, sentence):
         result = [m[t] if t in m else np.zeros(m.vector_size) for t in sentence]

@@ -15,24 +15,28 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_
     get_penn_treebank_pos_tag_indices, get_all_tags
 from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
+from .Fasttext1DCNN import Fasttext1DCNNModel
 from ...utils import WordChannelReducer
+from ..classifiers import CNN1DClassifier, GRUClassifier
 
 
-class SpacyBiGRUModel(FasttextPooledModel):
+class SpacyBiGRUModel(Fasttext1DCNNModel):
     def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False,
+                 gaussian_noise=0.0, dropout=0.0,
+                 embedding_dims=136,
+                 internal_dims=512, n_layers=2,
+                 classifier="gru",
+                 use_as_super=False,
                  **kwargs):
-        super(SpacyBiGRUModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
-        gru_layers = kwargs["gru_layers"] if "gru_layers" in kwargs else 2
-        gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
+        super(SpacyBiGRUModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, True, **kwargs)
         gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims/2)
-        lin1 = nn.Linear(gru_dims * 2, gru_dims * 4)
-        init_fc(lin1, "leaky_relu")
-        lin2 = nn.Linear(gru_dims * 4, classifer_dims)
-        init_fc(lin2, "linear")
-
-        self.projection = nn.Sequential(nn.Dropout(dropout), lin1, nn.LeakyReLU(), lin2)
-        self.lstm = nn.Sequential(nn.GRU(136, gru_dims, gru_layers, batch_first=True, bidirectional=True, dropout=gru_dropout))
+        if not use_as_super:
+            if classifier == "cnn":
+                self.classifier = CNN1DClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, None, gaussian_noise, dropout)
+            elif classifier == "gru":
+                self.classifier = GRUClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
+            else:
+                raise NotImplementedError()
         # init_fc(self.lstm, 'linear')
         self.nlp = spacy.load("en_core_web_lg", disable=["ner"])
         self.pdict = get_all_tags()
@@ -70,10 +74,3 @@ class SpacyBiGRUModel(FasttextPooledModel):
         result = torch.cat([text_tensors, pos_emb, tag_emb, dep_emb, sw_emb, ner_emb], 2)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result
-
-    def __get_scores__(self, texts: List[str], img=None):
-        vectors = self.get_word_vectors(texts)
-        lstm_output, _ = self.lstm(vectors)
-        lstm_output = self.projection(lstm_output)
-        mean_projection = lstm_output.mean(1)
-        return mean_projection, lstm_output

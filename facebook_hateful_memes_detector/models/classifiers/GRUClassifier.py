@@ -18,8 +18,7 @@ class GRUClassifier(BaseClassifier):
         lstm = nn.Sequential(
             nn.GRU(n_channels_in, n_internal_dims, n_layers, batch_first=True, bidirectional=True, dropout=dropout))
         projection = WordChannelReducer(n_internal_dims * 2, n_channels_out, self.num_pooling)
-        self.featurizer == nn.Sequential(lstm, GaussianNoise(gaussian_noise), projection)
-
+        self.featurizer = nn.Sequential(lstm, GaussianNoise(gaussian_noise), projection)
         self.c1 = nn.Conv1d(n_channels_out, num_classes, n_tokens_out, 1, padding=0, groups=1, bias=False)
         init_fc(self.c1, "linear")
         self.avp = nn.AdaptiveAvgPool1d(1)

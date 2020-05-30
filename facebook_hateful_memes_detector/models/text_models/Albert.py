@@ -4,7 +4,8 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-
+from ..classifiers import CNN1DClassifier, GRUClassifier
+from .Fasttext1DCNN import Fasttext1DCNNModel
 import torchvision.models as models
 
 

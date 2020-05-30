@@ -30,27 +30,35 @@ from ...utils import get_universal_deps_indices
 from .FasttextPooled import FasttextPooledModel
 from ..external import ModelWrapper
 from ...utils import WordChannelReducer
+from ..classifiers import CNN1DClassifier, GRUClassifier
+from .Fasttext1DCNN import Fasttext1DCNNModel
 
 
-class LangFeaturesModel(FasttextPooledModel):
+class LangFeaturesModel(Fasttext1DCNNModel):
     def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, use_as_submodel=False, use_as_super=False,
+                 gaussian_noise=0.0, dropout=0.0,
+                 embedding_dims=500,
+                 internal_dims=512, n_layers=2,
+                 classifier="cnn",
+                 use_as_super=False,
                  **kwargs):
-        super(LangFeaturesModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, use_as_submodel, True, **kwargs)
+        super(LangFeaturesModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, True, **kwargs)
         capabilities = kwargs["capabilities"] if "capabilities" in kwargs else ["spacy"]
         self.capabilities = capabilities
 
         gru_layers = kwargs["gru_layers"] if "gru_layers" in kwargs else 2
         gru_dropout = kwargs["gru_dropout"] if "gru_dropout" in kwargs else 0.1
 
-        self.nlp = spacy.load("en_core_web_lg", disable=[])
-        self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=True,
+        if "spacy" in capabilities:
+            self.nlp = spacy.load("en_core_web_lg", disable=[])
+        if "snlp" in capabilities:
+            self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=True,
                                     pos_batch_size=3000)
         self.pdict = get_all_tags()
         embedding_dim = 8
         cap_to_dim_map = {"spacy": embedding_dim * 7, "snlp": embedding_dim * 5, "tmoji": 64, "ibm_max": 7}
         all_dims = sum([cap_to_dim_map[c] for c in capabilities])
-
+        self.all_dims = all_dims
         self.tag_em = nn.Embedding(len(self.pdict)+1, embedding_dim)
         # nn.init.normal_(self.embeds.weight, std=1 / embedding_dim)
         init_fc(self.tag_em, "linear")
@@ -63,6 +71,13 @@ class LangFeaturesModel(FasttextPooledModel):
 
         self.wc_emb = nn.Embedding(8, embedding_dim)
         nn.init.normal_(self.wc_emb.weight, std=1 / embedding_dim)
+        if not use_as_super:
+            if classifier == "cnn":
+                self.classifier = CNN1DClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, None, gaussian_noise, dropout)
+            elif classifier == "gru":
+                self.classifier = GRUClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
+            else:
+                raise NotImplementedError()
 
         gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims / 2)
         if not use_as_super:
@@ -177,11 +192,3 @@ class LangFeaturesModel(FasttextPooledModel):
         result = torch.cat(results, 2)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result
-
-    def __get_scores__(self, texts: List[str], img=None):
-        vectors = self.get_word_vectors(texts)
-        lstm_output, _ = self.lstm(vectors)
-        lstm_output = self.projection(lstm_output)
-        mean_projection = lstm_output.mean(1)
-        # mean_projection = torch.cat([mean_projection, tm_probas], 1)
-        return mean_projection, lstm_output

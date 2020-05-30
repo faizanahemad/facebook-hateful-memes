@@ -29,7 +29,7 @@ class Residual1DConv(nn.Module):
         self.r3 = r3
 
         self.channel_sizer = None
-        mul = 6 if pool else 2
+        mul = 1
         if in_channels * mul != out_channels:
             self.channel_sizer = nn.Conv1d(in_channels * mul, out_channels, 1, 1, padding=0, groups=1, bias=False) # dont change groups here
             init_fc(self.channel_sizer, "linear")
@@ -43,15 +43,11 @@ class Residual1DConv(nn.Module):
         r2 = self.r2(r1)
         residual = self.r3(torch.cat([r1, r2], 1))
         x = x + residual
-        pooled_x = torch.cat([self.pooling(x), self.pooling2(x)], 2)
-        x = torch.cat([x, pooled_x], 1)
 
         if self.pool:
-            x1, x2 = torch.split(x, int(x.size(2)/2), dim=2)
-            pooled = self.pooling(x)
-            x = torch.cat([x1, pooled, x2], 1)
+            x = self.pooling(x)
 
-        x = self.channel_sizer(x)
+        x = self.channel_sizer(x) if self.channel_sizer is not None else x
         return x
 
 
@@ -66,7 +62,9 @@ class CNN1DClassifier(BaseClassifier):
 
         l1 = nn.Conv1d(n_channels_in, n_internal_dims, 5, 1, padding=2, groups=1, bias=False)
         init_fc(l1, "leaky_relu")
-        layers = [l1, nn.LeakyReLU(), Residual1DConv(n_internal_dims, n_internal_dims, False, gaussian_noise, dropout)]
+        l2 = nn.Conv1d(n_internal_dims, n_internal_dims, 3, 1, padding=1, groups=1, bias=False)
+        init_fc(l2, "linear")
+        layers = [l1, nn.LeakyReLU(), l2, Residual1DConv(n_internal_dims, n_internal_dims, False, gaussian_noise, dropout)]
         for _ in range(int(math.log2(self.num_pooling))):
             layers.append(Residual1DConv(n_internal_dims, n_internal_dims, True, gaussian_noise, dropout))
         layers.append(Residual1DConv(n_internal_dims, n_channels_out, False, gaussian_noise, dropout))
