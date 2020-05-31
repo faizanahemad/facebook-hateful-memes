@@ -222,16 +222,15 @@ class GaussianNoise(nn.Module):
             network to generate vectors with smaller values.
     """
 
-    def __init__(self, sigma=0.1, is_relative_detach=True):
+    def __init__(self, sigma=0.1):
         super().__init__()
         self.sigma = sigma
-        self.is_relative_detach = is_relative_detach
         self.noise = torch.tensor(0.0)
 
     def forward(self, x):
         if self.training and self.sigma != 0:
-            sigma = self.sigma * 1.0/x.size(-1)
-            scale = sigma * x.detach() if self.is_relative_detach else self.sigma * x
+            sigma = self.sigma * 1.0/np.sqrt(x.size(-1))
+            scale = sigma * x.detach()
             sampled_noise = self.noise.repeat(*x.size()).normal_() * scale
             x = x + sampled_noise
         return x

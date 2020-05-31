@@ -16,6 +16,7 @@ from ...preprocessing import clean_text
 class FasttextPooledModel(nn.Module):
     def __init__(self, classifer_dims, num_classes,
                  gaussian_noise=0.0, dropout=0.0,
+                 n_tokens_in=64, n_tokens_out=16,
                 use_as_super=False,
                  **kwargs):
         super(FasttextPooledModel, self).__init__()
@@ -44,6 +45,8 @@ class FasttextPooledModel(nn.Module):
         self.binary = num_classes == 2
         self.eps = 1e-7
         self.auc_loss = False
+        self.n_tokens_in = n_tokens_in
+        self.n_tokens_out = n_tokens_out
 
     def get_sentence_vector(self, texts: List[str]):
         tm = self.text_model
@@ -75,11 +78,12 @@ class FasttextPooledModel(nn.Module):
         bpe = self.bpe
         cngram = self.cngram
         tm = self.text_model
-        result = stack_and_pad_tensors([self.get_one_sentence_vector(tm, text) for text in texts], 64)
+        n_tokens_in = self.n_tokens_in
+        result = stack_and_pad_tensors([self.get_one_sentence_vector(tm, text) for text in texts], n_tokens_in)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
-        res2 = stack_and_pad_tensors([self.get_one_sentence_vector(bpe, text) for text in texts], 64)
+        res2 = stack_and_pad_tensors([self.get_one_sentence_vector(bpe, text) for text in texts], n_tokens_in)
         res2 = res2 / res2.norm(dim=2, keepdim=True).clamp(min=1e-5)
-        res3 = stack_and_pad_tensors([self.get_one_sentence_vector(cngram, text) for text in texts], 64)
+        res3 = stack_and_pad_tensors([self.get_one_sentence_vector(cngram, text) for text in texts], n_tokens_in)
         res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
         result = torch.cat([result, res2, res3], 2)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension

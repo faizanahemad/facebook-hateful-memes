@@ -37,13 +37,18 @@ from ..classifiers import CNN1DClassifier, GRUClassifier
 
 
 class GensimLangFeatures1DCNNModel(LangFeaturesModel):
-    def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, embedding_dims=796,
+    def __init__(self, classifer_dims, num_classes, embedding_dims,
+                 gaussian_noise=0.0, dropout=0.0,
                  internal_dims=512, n_layers=2,
                  classifier="cnn",
+                 n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False,
                  **kwargs):
-        super(GensimLangFeatures1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, True, **kwargs)
+        super(GensimLangFeatures1DCNNModel, self).__init__(classifer_dims, num_classes, embedding_dims, gaussian_noise, dropout,
+                                                           internal_dims, n_layers,
+                                                           classifier,
+                                                           n_tokens_in, n_tokens_out,
+                                                           True, **kwargs)
         models = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
                   api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
         self.models = dict(zip(range(len(models)), models))
@@ -51,9 +56,9 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
         embedding_dims = self.all_dims + 700
         if not use_as_super:
             if classifier == "cnn":
-                self.classifier = CNN1DClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, None, gaussian_noise, dropout)
+                self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
             elif classifier == "gru":
-                self.classifier = GRUClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
+                self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 
@@ -64,12 +69,13 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
         return torch.tensor(result, dtype=float)
 
     def get_word_vectors(self, texts: List[str]):
+        n_tokens_in = self.n_tokens_in
         wv1 = super().get_word_vectors(texts)
         texts = list(self.spacy.pipe(texts, n_process=4))
         texts = list(map(lambda x: list(map(str, x)), texts))
         result = [wv1]
         for i, m in self.models.items():
-            r = stack_and_pad_tensors([self.get_one_sentence_vector(i, m, text) for text in texts], 64)
+            r = stack_and_pad_tensors([self.get_one_sentence_vector(i, m, text) for text in texts], n_tokens_in)
             result.append(r)
         result = [r.float() for r in result]
         result = torch.cat(result, 2)

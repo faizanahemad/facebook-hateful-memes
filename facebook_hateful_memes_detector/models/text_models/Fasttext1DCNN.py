@@ -16,19 +16,21 @@ from ..classifiers import CNN1DClassifier, GRUClassifier
 
 
 class Fasttext1DCNNModel(FasttextPooledModel):
-    def __init__(self, classifer_dims, num_classes,
-                 gaussian_noise=0.0, dropout=0.0, embedding_dims=500,
+    def __init__(self, classifer_dims, num_classes, embedding_dims,
+                 gaussian_noise=0.0, dropout=0.0,
                  internal_dims=512, n_layers=2,
                  classifier="cnn",
+                 n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False,
                  **kwargs):
-        super(Fasttext1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout, True, **kwargs)
+        super(Fasttext1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout,
+                                                 n_tokens_in, n_tokens_out, True, **kwargs)
 
         if not use_as_super:
             if classifier == "cnn":
-                self.classifier = CNN1DClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, None, gaussian_noise, dropout)
+                self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
             elif classifier == "gru":
-                self.classifier = GRUClassifier(num_classes, 64, embedding_dims, 16, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
+                self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 

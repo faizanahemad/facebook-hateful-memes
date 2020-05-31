@@ -26,6 +26,8 @@ git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip in
 # edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
 # look at: https://github.com/huggingface/torchMoji/blob/master/examples/score_texts_emojis.py
 pip install -U maxfw
+pip install pytextrank
+pip install git+https://github.com/LIAAD/yake
 ```
 
 # TODO
