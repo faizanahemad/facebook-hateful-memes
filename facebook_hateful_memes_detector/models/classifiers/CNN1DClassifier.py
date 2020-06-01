@@ -61,14 +61,14 @@ class CNN1DClassifier(BaseClassifier):
                                               n_internal_dims, n_layers, gaussian_noise, dropout)
         assert math.log2(self.num_pooling).is_integer()
 
-        l1 = nn.Conv1d(n_channels_in, n_internal_dims, 5, 2, padding=2, groups=4, bias=False)
+        l1 = nn.Conv1d(n_channels_in, n_internal_dims, 5, 1, padding=2, groups=4, bias=False)
         init_fc(l1, "leaky_relu")
         l2 = nn.Conv1d(n_internal_dims, n_internal_dims, 3, 1, padding=1, groups=4, bias=False)
         init_fc(l2, "linear")
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
         layers = [l1, nn.LeakyReLU(), gn, l2, dp]
-        for _ in range(int(math.log2(self.num_pooling)) - 1):
+        for _ in range(int(math.log2(self.num_pooling))):
             layers.append(Residual1DConv(n_internal_dims, n_internal_dims, True, gaussian_noise, dropout))
             layers.append(gn)
         layers.append(Residual1DConv(n_internal_dims, n_channels_out, False, gaussian_noise, dropout))
