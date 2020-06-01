@@ -20,14 +20,17 @@ pip install pycontractions
 python -m spacy download en_core_news_sm en_core_news_md en_core_news_lg
 pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
 pip install stanza
-python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords')"
+python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon')"
 python -m spacy download en_trf_distilbertbaseuncased_lg
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install -e . && python scripts/download_weights.py
 # edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
 # look at: https://github.com/huggingface/torchMoji/blob/master/examples/score_texts_emojis.py
 pip install -U maxfw
-pip install pytextrank
+pip install pytextrank # https://github.com/DerwenAI/pytextrank
 pip install git+https://github.com/LIAAD/yake
+pip install multi-rake # CFLAGS="-Wno-narrowing" pip install cld2-cffi
+pip install textblob
+pip install rake-nltk
 ```
 
 # TODO

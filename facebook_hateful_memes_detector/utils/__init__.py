@@ -229,7 +229,7 @@ class GaussianNoise(nn.Module):
 
     def forward(self, x):
         if self.training and self.sigma != 0:
-            sigma = self.sigma * 1.0/np.sqrt(x.size(-1))
+            sigma = self.sigma # * 1.0/np.sqrt(x.size(-1))
             scale = sigma * x.detach()
             sampled_noise = self.noise.repeat(*x.size()).normal_() * scale
             x = x + sampled_noise

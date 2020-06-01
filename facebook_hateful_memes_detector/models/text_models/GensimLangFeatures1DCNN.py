@@ -35,8 +35,7 @@ from ...utils import WordChannelReducer, Transpose, Squeeze
 from ..classifiers import CNN1DClassifier, GRUClassifier
 
 
-
-class GensimLangFeatures1DCNNModel(LangFeaturesModel):
+class GensimLangFeatures1DCNNModel(Fasttext1DCNNModel):
     def __init__(self, classifer_dims, num_classes, embedding_dims,
                  gaussian_noise=0.0, dropout=0.0,
                  internal_dims=512, n_layers=2,
@@ -53,7 +52,7 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
                   api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
         self.models = dict(zip(range(len(models)), models))
         self.spacy = spacy.load("en_core_web_lg", disable=["tagger", "parser", "ner"])
-        embedding_dims = self.all_dims + 700
+        embedding_dims = 700
         if not use_as_super:
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
@@ -70,10 +69,10 @@ class GensimLangFeatures1DCNNModel(LangFeaturesModel):
 
     def get_word_vectors(self, texts: List[str]):
         n_tokens_in = self.n_tokens_in
-        wv1 = super().get_word_vectors(texts)
+        # wv1 = super().get_word_vectors(texts)
         texts = list(self.spacy.pipe(texts, n_process=4))
         texts = list(map(lambda x: list(map(str, x)), texts))
-        result = [wv1]
+        result = []
         for i, m in self.models.items():
             r = stack_and_pad_tensors([self.get_one_sentence_vector(i, m, text) for text in texts], n_tokens_in)
             result.append(r)

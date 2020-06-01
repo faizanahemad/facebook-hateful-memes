@@ -24,6 +24,8 @@ class AlbertClassifer(Fasttext1DCNNModel):
         assert n_tokens_in % n_tokens_out == 0
         self.tokenizer = AlbertTokenizer.from_pretrained('albert-base-v2')
         self.model = AlbertModel.from_pretrained('albert-base-v2')
+        for p in self.model.parameters():
+            p.requires_grad = False
         if not use_as_super:
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
