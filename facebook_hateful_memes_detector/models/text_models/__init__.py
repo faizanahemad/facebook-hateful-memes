@@ -1,3 +1,5 @@
 from .FasttextPooled import FasttextPooledModel
-from .FasttextBiGRU import FasttextBiGRUModel
-from .Albert import Albert
+from .LangFeatures import LangFeaturesModel
+from .Albert import AlbertClassifer
+from .Fasttext1DCNN import Fasttext1DCNNModel
+from .GensimLangFeatures1DCNN import GensimLangFeatures1DCNNModel

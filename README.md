@@ -14,9 +14,23 @@ mv *.png img
 
 ```bash
 conda install -y -c anaconda openjdk
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions pytorch-nlp
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions pytorch-nlp spacy-transformers stanza
 pip install git+https://github.com/myint/language-check.git 
 pip install pycontractions
+python -m spacy download en_core_news_sm en_core_news_md en_core_news_lg
+pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
+pip install stanza
+python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon')"
+python -m spacy download en_trf_distilbertbaseuncased_lg
+git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install -e . && python scripts/download_weights.py
+# edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
+# look at: https://github.com/huggingface/torchMoji/blob/master/examples/score_texts_emojis.py
+pip install -U maxfw
+pip install pytextrank # https://github.com/DerwenAI/pytextrank
+pip install git+https://github.com/LIAAD/yake
+pip install multi-rake # CFLAGS="-Wno-narrowing" pip install cld2-cffi
+pip install textblob
+pip install rake-nltk
 ```
 
 # TODO
@@ -92,3 +106,34 @@ pip install pycontractions
     
 - Inference
     - Try multi-inference and then soft vote, by doing NLP and image augmentations
+    
+    
+## Possible Pretrained Models List
+    - https://github.com/Holmeyoung/crnn-pytorch
+    - https://github.com/OpenNMT/OpenNMT-py
+    - https://github.com/CSAILVision/semantic-segmentation-pytorch
+    - https://github.com/clovaai/CRAFT-pytorch
+    - https://github.com/clovaai/deep-text-recognition-benchmark
+    - https://github.com/facebookresearch/detectron2
+    - https://github.com/thunlp/ERNIE : Wikipedia Knowledge base
+    
+## Possible Extra Datasets
+    - Sarcasm
+        - https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge
+        - https://github.com/MirunaPislar/Sarcasm-Detection
+        - https://www.kaggle.com/rmisra/news-headlines-dataset-for-sarcasm-detection/home
+        - https://github.com/ef2020/SarcasmAmazonReviewsCorpus/wiki
+        - https://github.com/rishabhmisra/News-Headlines-Dataset-For-Sarcasm-Detection
+        - https://github.com/sahilswami96/SarcasmDetection_CodeMixed
+        
+    - Emoji
+    - General NLP: https://pytorchnlp.readthedocs.io/en/latest/source/torchnlp.datasets.html
+        
+    
+## Other References
+    - https://gist.github.com/jerheff/8cf06fe1df0695806456
+    - LSTM
+        - https://stackoverflow.com/questions/53010465/bidirectional-lstm-output-question-in-pytorch
+        - https://stackoverflow.com/questions/48302810/whats-the-difference-between-hidden-and-output-in-pytorch-lstm
+        - https://discuss.pytorch.org/t/rnn-output-vs-hidden-state-dont-match-up-my-misunderstanding/43280
+        
