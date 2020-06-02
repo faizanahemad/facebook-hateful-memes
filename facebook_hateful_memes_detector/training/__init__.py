@@ -106,6 +106,7 @@ def generate_predictions(model, batch_size, dataset):
     proba_list = []
     predictions_list = []
     labels_list = []
+    dataset.dataset.is_transform = False
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                              shuffle=False, num_workers=32, pin_memory=True)
     with torch.no_grad():
@@ -147,6 +148,7 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs):
     with trange(n_tests) as nt:
         for _ in nt:
             dataset = data["train"]
+            dataset.is_transform = True
             size = len(dataset)
             training_fold_dataset, testing_fold_dataset = torch.utils.data.random_split(dataset, [int(size * 0.8),
                                                                                                   size - int(size * 0.8)])
@@ -182,9 +184,11 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs):
 
 def train_and_predict(model_fn, data, batch_size, epochs):
     dataset = data["train"]
+    dataset.is_transform = True
     model, optimizer, scheduler = model_fn(dataset=dataset)
     train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, dataset, plot=True)
     test_dataset = data["test"]
+    test_dataset.is_transform = False
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset)
     test = data["test_df"]
     submission = pd.DataFrame(dict(id=test.id, proba=proba_list, label=predictions_list),

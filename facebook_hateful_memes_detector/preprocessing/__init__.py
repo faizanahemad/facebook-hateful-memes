@@ -22,11 +22,15 @@ from torch.utils.data.sampler import WeightedRandomSampler
 
 
 def clean_text(text):
+    # https://stackoverflow.com/questions/6202549/word-tokenization-using-python-regular-expressions
+    # https://stackoverflow.com/questions/44263446/python-regex-to-add-space-after-dot-or-comma/44263500
     EMPTY = ' '
     assert text is not None
 
-    text = text.lower()
+    text = re.sub(r'([A-Z][a-z]+(?=[A-Z]))', r'\1 ', text)
+    text = re.sub(r'(?<=[.,;])(?=[^\s0-9])', ' ', text)
     text = contractions.fix(text)
+    text = text.lower()
 
     text = text.replace("'", " ").replace('"', " ")
     text = text.replace("\n", " ").replace("(", " ").replace(")", " ").replace("\r", " ").replace("\t", " ")
@@ -39,7 +43,51 @@ def clean_text(text):
 
     text = re.sub('<a[^>]+>(.*)</a>', replace_link, text)
     text = re.sub('<.*?>', EMPTY, text)
+    text = re.sub(r"[^A-Za-z0-9.!$\'? ]+", '', text)
+    text = " ".join([t.strip() for t in text.split()])
     return text
+
+import os
+import random
+
+
+class TextAugment:
+    def __init__(self, proba, choice_probas, count=1):
+        self.proba = proba
+
+        self.count = count
+        import nlpaug.augmenter.char as nac
+        import nlpaug.augmenter.word as naw
+        import nlpaug.augmenter.sentence as nas
+        import nlpaug.flow as naf
+        from nlpaug.util import Action
+        self.keyboard_aug = nac.KeyboardAug(aug_char_min=1, aug_char_max=3, aug_word_min=1, aug_word_max=3, include_special_char=False, include_numeric=False, include_upper_case=False)
+        self.ocr_aug = nac.OcrAug(aug_char_min=1, aug_char_max=3, aug_word_min=1, aug_word_max=3)
+        self.char_insert = nac.RandomCharAug(action="insert", aug_char_min=1, aug_char_max=3, aug_word_min=1, aug_word_max=3, include_numeric=False, include_upper_case=False)
+        self.char_substitute = nac.RandomCharAug(action="substitute", aug_char_min=1, aug_char_max=3, aug_word_min=1,
+                                             aug_word_max=3, include_numeric=False, include_upper_case=False)
+        self.char_swap = nac.RandomCharAug(action="swap", aug_char_min=1, aug_char_max=3, aug_word_min=1,
+                                             aug_word_max=3, include_numeric=False, include_upper_case=False)
+        self.char_delete = nac.RandomCharAug(action="delete", aug_char_min=1, aug_char_max=3, aug_word_min=1,
+                                             aug_word_max=3, include_numeric=False, include_upper_case=False)
+        self.word_insert = naw.ContextualWordEmbsAug(model_path='distilbert-base-uncased', action='insert', temperature=0.5, top_k=20, aug_min=1, aug_max=3, optimize=True)
+        self.word_substitute = naw.ContextualWordEmbsAug(model_path='distilbert-base-uncased', action='substitute', temperature=0.5, top_k=20, aug_min=1, aug_max=3, optimize=True)
+        self.augments = {"keyboard": self.keyboard_aug, "ocr": self.ocr_aug, "char_insert": self.char_insert, "char_substitute": self.char_substitute,
+                         "char_swap": self.char_swap, "char_delete": self.char_delete, "word_insert": self.word_insert, "word_substitute": self.word_substitute}
+        self.augs = ["keyboard", "ocr", "char_insert", "char_substitute", "char_swap", "char_delete", "word_insert", "word_substitute"]
+        self.choice_probas = np.array([choice_probas[c] if c in choice_probas else 0.0 for c in self.augs])
+        self.choice_probas = self.choice_probas / np.linalg.norm(self.choice_probas, ord=1)
+
+    def __call__(self, text):
+        if random.random() < self.proba:
+            augs = np.random.choice(self.augs, self.count, replace=False, p=self.choice_probas)
+            for aug in augs:
+                text = self.augments[aug].augment(text)
+        return text
+
+
+
+
 
 
 def get_basic_image_transforms():
@@ -125,6 +173,7 @@ class TextImageDataset(Dataset):
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True):
         self.texts = [clean_text(text) for text in texts]
         self.image_locations = image_locations
+        self.is_transform = False
         if use_images:
             self.images = {l: Image.open(l).convert('RGB') for l in image_locations} if cache_images else dict()
         self.labels = labels
@@ -135,7 +184,8 @@ class TextImageDataset(Dataset):
     def __getitem__(self, item):
         text = self.texts[item]
         label = self.labels[item] if self.labels is not None else 0
-        text = self.text_transform(text) if self.text_transform is not None else text
+        if self.text_transform is not None and self.is_transform:
+            text = self.text_transform(text)
         if self.use_images:
             l = self.image_locations[item]
             image = self.images.get(l)

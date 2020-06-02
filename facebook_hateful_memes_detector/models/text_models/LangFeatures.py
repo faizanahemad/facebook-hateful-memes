@@ -25,7 +25,7 @@ from scipy.special import softmax
 from multi_rake import Rake
 from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
-from nltk.chunk import  ne_chunk
+from nltk.chunk import ne_chunk
 import rake_nltk
 from textblob import TextBlob
 
@@ -34,7 +34,7 @@ import spacy
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
     get_penn_treebank_pos_tag_indices, get_all_tags
-from ...utils import get_universal_deps_indices
+from ...utils import get_universal_deps_indices, has_digits
 from .FasttextPooled import FasttextPooledModel
 from ..external import ModelWrapper, get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
 from ...utils import WordChannelReducer
@@ -59,20 +59,21 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         super(LangFeaturesModel, self).__init__(classifer_dims, num_classes, embedding_dims, gaussian_noise, dropout,
                                                 internal_dims, n_layers,
                                                 classifier,
-                                                n_tokens_in, n_tokens_out, True, **kwargs)
+                                                n_tokens_in, n_tokens_out, use_as_super=True, **kwargs)
         capabilities = kwargs["capabilities"] if "capabilities" in kwargs else ["spacy"]
         self.capabilities = capabilities
         embedding_dim = 8
-        cap_to_dim_map = {"spacy": 128, "snlp": embedding_dim * 5,
+        cap_to_dim_map = {"spacy": 160, "snlp": embedding_dim * 5,
                           "key_phrases": 64, "nltk": 192, "full_view": 128,
                           "tmoji": 32, "ibm_max": 16}
         all_dims = sum([cap_to_dim_map[c] for c in capabilities])
+        self.cap_to_dim_map = cap_to_dim_map
         self.all_dims = all_dims
 
         tr = pytextrank.TextRank(token_lookback=7)
         self.nlp = spacy.load("en_core_web_lg", disable=[])
         self.nlp.add_pipe(tr.PipelineComponent, name="textrank", last=True)
-        spacy_in_dims = 96 + 7 * embedding_dims
+        spacy_in_dims = (96*2) + (11 * embedding_dim) + 2
         spacy_nn1 = nn.Linear(spacy_in_dims, spacy_in_dims * 2)
         init_fc(spacy_nn1, "leaky_relu")
         spacy_nn2 = nn.Linear(spacy_in_dims * 2, 128)
@@ -83,12 +84,12 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             full_sent_in_dims = 300
             full_sent_nn1 = nn.Linear(full_sent_in_dims, full_sent_in_dims * 2)
             init_fc(full_sent_nn1, "leaky_relu")
-            full_sent_nn2 = nn.Linear(full_sent_in_dims * 2, 128)
+            full_sent_nn2 = nn.Linear(full_sent_in_dims * 2, 160)
             init_fc(full_sent_nn2, "linear")
             self.full_sent_nn = nn.Sequential(nn.Dropout(dropout), full_sent_nn1, nn.LeakyReLU(), nn.Dropout(dropout), full_sent_nn2)
 
         if "snlp" in capabilities:
-            self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,ner', use_gpu=False,
+            self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=False,
                                     pos_batch_size=2048)
         if "key_phrases" in capabilities:
             self.kw_extractor = yake.KeywordExtractor(lan="en", n=3, dedupLim=0.9,
@@ -101,6 +102,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             nn.init.normal_(self.key_wc_pytextrank.weight, std=1 / embedding_dim)
 
             yake_dims = kwargs["yake_dims"] if "yake_dims" in kwargs else 32
+            self.yake_dims = yake_dims
             yk1 = nn.Linear(300, yake_dims * 2, bias=False)
             init_fc(yk1, "leaky_relu")
             yk2 = nn.Linear(yake_dims * 2, yake_dims, bias=False)
@@ -108,14 +110,15 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.yake_nn = nn.Sequential(yk1, nn.LeakyReLU(), yk2)
 
             rake_dims = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
+            self.rake_dims = rake_dims
             rk1 = nn.Linear(300, rake_dims * 2, bias=False)
             init_fc(rk1, "leaky_relu")
             rk2 = nn.Linear(rake_dims * 2, rake_dims, bias=False)
             init_fc(rk2, "linear")
             self.rake_nn = nn.Sequential(rk1, nn.LeakyReLU(), rk2)
-            self.rake = Rake()
+            self.rake = Rake(language_code="en")
 
-            keyphrases_dim = 2*embedding_dims + rake_dims + yake_dims
+            keyphrases_dim = 2*embedding_dim + rake_dims + yake_dims
             kp1 = nn.Linear(keyphrases_dim, keyphrases_dim * 2, bias=False)
             init_fc(kp1, "leaky_relu")
             kp2 = nn.Linear(keyphrases_dim * 2, 64, bias=False)
@@ -134,28 +137,30 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
         self.pdict = get_all_tags()
         self.tag_em = nn.Embedding(len(self.pdict)+1, embedding_dim)
-        # nn.init.normal_(self.embeds.weight, std=1 / embedding_dim)
         nn.init.normal_(self.tag_em.weight, std=1 / embedding_dim)
 
         self.sw_em = nn.Embedding(2, embedding_dim)
         nn.init.normal_(self.sw_em.weight, std=1 / embedding_dim)
 
+        self.sent_start_em = nn.Embedding(2, embedding_dim)
+        nn.init.normal_(self.sent_start_em.weight, std=1 / embedding_dim)
+
+        self.is_oov_em = nn.Embedding(2, embedding_dim)
+        nn.init.normal_(self.is_oov_em.weight, std=1 / embedding_dim)
+
+
+
+        self.has_digit_em = nn.Embedding(2, embedding_dim)
+        nn.init.normal_(self.has_digit_em.weight, std=1 / embedding_dim)
+
+        self.is_mask_em = nn.Embedding(2, embedding_dim)
+        nn.init.normal_(self.is_mask_em.weight, std=1 / embedding_dim)
+
         self.w_len = nn.Embedding(16, embedding_dim)
         nn.init.normal_(self.w_len.weight, std=1 / embedding_dim)
 
-        self.wc_emb = nn.Embedding(8, embedding_dim)
+        self.wc_emb = nn.Embedding(16, embedding_dim)
         nn.init.normal_(self.wc_emb.weight, std=1 / embedding_dim)
-        if not use_as_super:
-            if classifier == "cnn":
-                self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
-            elif classifier == "gru":
-                self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
-            else:
-                raise NotImplementedError()
-
-        gru_dims = kwargs["gru_dims"] if "gru_dims" in kwargs else int(classifer_dims / 2)
-        if not use_as_super:
-            self.projection = WordChannelReducer(gru_dims * 2, classifer_dims, 4)
 
         if "nltk" in capabilities:
             self.stop_words = set(stopwords.words('english'))
@@ -163,7 +168,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.key_wc_rake_nltk = nn.Embedding(4, embedding_dim)
             nn.init.normal_(self.key_wc_rake_nltk.weight, std=1 / embedding_dim)
             self.nltk_sid = SentimentIntensityAnalyzer()
-            in_dims = 328
+            in_dims = 306 + 5 * embedding_dim
             nltk_nn1 = nn.Linear(in_dims, in_dims * 2)
             init_fc(nltk_nn1, "leaky_relu")
             nltk_nn2 = nn.Linear(in_dims * 2, 192)
@@ -175,7 +180,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             for p in self.ibm_max.model.parameters():
                 p.requires_grad = False
 
-            ibm_nn1 = nn.Linear(7, 32)
+            ibm_nn1 = nn.Linear(6, 32)
             init_fc(ibm_nn1, "leaky_relu")
             ibm_nn2 = nn.Linear(32, 16)
             init_fc(ibm_nn2, "linear")
@@ -218,17 +223,25 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         rake = self.rake_nltk
         nltk_texts = [word_tokenize(text) for text in texts]
         textblob_sentiments = [[sentiment.polarity, sentiment.subjectivity] for sentiment in [TextBlob(text).sentiment for text in texts]]
-        textblob_sentiments = torch.tensor(textblob_sentiments).expand(len(texts), n_tokens_in, 2)
+        textblob_sentiments = torch.tensor(textblob_sentiments).unsqueeze(1).expand(len(texts), n_tokens_in, 2)
+
+        mask = stack_and_pad_tensors(list(map(lambda x: torch.ones(len(x), dtype=int), nltk_texts)), n_tokens_in)
+        mask = self.is_mask_em(mask)
+        has_digit = stack_and_pad_tensors(
+            list(map(lambda x: torch.tensor([has_digits(str(t)) for t in x]), nltk_texts)), n_tokens_in)
+        has_digit = self.has_digit_em(has_digit)
+
         m = self.text_model
-        nltk_emb = torch.tensor([[m[t] for t in sent] for sent in nltk_texts])  # if t in m else np.zeros(m.vector_size)
+        nltk_emb = stack_and_pad_tensors([torch.tensor([m[t] for t in sent]) for sent in nltk_texts], n_tokens_in) # if t in m else np.zeros(m.vector_size)
         sid_vec = torch.tensor([list(sid.polarity_scores(t).values()) for t in texts])
         sid_vec = sid_vec.unsqueeze(1).expand(len(texts), n_tokens_in, sid_vec.size(1))
+        conlltags = [[ptags for ptags in nltk.tree2conlltags(ne_chunk(pos_tag(x)))] for x in nltk_texts]
 
         pos = stack_and_pad_tensors(
-            list(map(lambda x: torch.tensor([pdict[tag.lower()] for token, tag in pos_tag(x)]), texts)), n_tokens_in)
+            list(map(lambda x: torch.tensor([pdict[tag.lower()] for token, tag, ne in x]), conlltags)), n_tokens_in)
         pos_emb = self.tag_em(pos)
         ner = stack_and_pad_tensors(
-            list(map(lambda x: torch.tensor([pdict[tag.lower()] for token, tag in ne_chunk(x)]), texts)), n_tokens_in)
+            list(map(lambda x: torch.tensor([pdict[ne.lower().split("-")[-1]] for token, tag, ne in x]), conlltags)), n_tokens_in)
         ner_emb = self.tag_em(ner)
 
         phrases = [get_rake_nltk_phrases(rake, t) for t in texts]
@@ -237,7 +250,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         key_wc_rake_nltk = stack_and_pad_tensors(key_wc_rake_nltk, self.n_tokens_in)
         nltk_rake_vectors = self.key_wc_rake_nltk(key_wc_rake_nltk)
 
-        result = torch.cat([nltk_emb, textblob_sentiments, pos_emb, ner_emb, nltk_rake_vectors, sid_vec], 2)
+        result = torch.cat([nltk_emb, textblob_sentiments, pos_emb, ner_emb, nltk_rake_vectors, sid_vec, mask, has_digit], 2)
         result = self.nltk_nn(result)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)
         return result
@@ -292,14 +305,20 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         nlp = self.nlp
         n_tokens_in = self.n_tokens_in
         with torch.no_grad():
-            spacy_texts = list(nlp.pipe(texts, n_process=4))
+            spacy_texts = list(nlp.pipe(texts, n_process=1))
             text_tensors = list(map(lambda x: torch.tensor(x.tensor), spacy_texts))
             text_tensors = stack_and_pad_tensors(text_tensors, n_tokens_in)
+            head_tensors = stack_and_pad_tensors(list(map(lambda x: torch.tensor([t.head.tensor for t in x]), spacy_texts)), n_tokens_in)
         wl = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([len(token) - 1 for token in x]).clamp(0, 15), spacy_texts)), n_tokens_in)
         wl_emb = self.w_len(wl)
         wc = (torch.tensor(list(map(len, spacy_texts))) / 10).long().unsqueeze(1).expand(len(texts), n_tokens_in)
         wc_emb = self.wc_emb(wc)
+
+        mask = stack_and_pad_tensors(list(map(lambda x: torch.ones(len(x), dtype=int), spacy_texts)), n_tokens_in)
+        mask = self.is_mask_em(mask)
+        has_digit = stack_and_pad_tensors(list(map(lambda x: torch.tensor([has_digits(str(t)) for t in x]), spacy_texts)), n_tokens_in)
+        has_digit = self.has_digit_em(has_digit)
 
         pos = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[token.pos_.lower()] for token in x]), spacy_texts)), n_tokens_in)
@@ -316,9 +335,26 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         ner = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[token.ent_type_.lower()] for token in x]), spacy_texts)), n_tokens_in)
         ner_emb = self.tag_em(ner)
+
+        is_oov = stack_and_pad_tensors(
+            list(map(lambda x: torch.tensor([int(token.is_oov) for token in x]), spacy_texts)),
+            n_tokens_in)
+        is_oov_em = self.is_oov_em(is_oov)
+
+        sent_start = stack_and_pad_tensors(
+            list(map(lambda x: torch.tensor([int(token.sent_start) for token in x]), spacy_texts)),
+            n_tokens_in)
+        sent_start_em = self.sent_start_em(sent_start)
+
+        head_dist = stack_and_pad_tensors(
+            list(map(lambda x: torch.tensor([float(token.idx - token.head.idx) for token in x]), spacy_texts)),
+            n_tokens_in)
+        head_dist = head_dist.unsqueeze(2).expand(len(texts), n_tokens_in, 2)
+
+
         result = torch.cat(
             [text_tensors, pos_emb, tag_emb, dep_emb, sw_emb, ner_emb, wl_emb,
-             wc_emb], 2)
+             wc_emb, mask, has_digit, is_oov_em, sent_start_em, head_dist, head_tensors], 2)
         result = self.spacy_nn(result)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result, spacy_texts
@@ -350,21 +386,20 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
         yake_ke = self.kw_extractor
         yake_embs = [np.array([tm.get_sentence_vector(s) for s in map(itemgetter(0), yake_ke.extract_keywords(t))]) for t in texts]
-        yake_embs = torch.tensor([np.average(yk, axis=0, weights=softmax(list(range(len(yk), 0, -1)))) for yk in yake_embs])
-        yake_embs = self.yake_nn(yake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, yake_embs.size(1))
+        yake_embs = torch.tensor([np.average(yk, axis=0, weights=softmax(list(range(len(yk), 0, -1)))).astype(np.float32) if len(yk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for yk in yake_embs])
+        yake_embs = self.yake_nn(yake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.yake_dims)
 
         rake_ke = self.rake
         rake_embs = [np.array([tm.get_sentence_vector(s) for s in map(itemgetter(0), rake_ke.apply(t))]) for
                      t in texts]
         rake_embs = torch.tensor(
-            [np.average(rk, axis=0, weights=softmax(list(range(len(rk), 0, -1)))) for rk in rake_embs])
-        rake_embs = self.rake_nn(rake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, rake_embs.size(1))
+            [np.average(rk, axis=0, weights=softmax(list(range(len(rk), 0, -1)))).astype(np.float32) if len(rk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for rk in rake_embs])
+        rake_embs = self.rake_nn(rake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.rake_dims)
 
         result = torch.cat([pytextrank_vectors, yake_embs, rake_embs], 2)
         result = self.keyphrase_nn(result)
         result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result
-
 
     def get_word_vectors(self, texts: List[str]):
         cap_method = {"snlp": self.get_stanford_nlp_vectors, "full_view": self.get_sentence_vector,
@@ -374,10 +409,12 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         if "spacy" in self.capabilities or "key_phrases" in self.capabilities:
             r, spt = self.get_spacy_nlp_vectors(texts)
             results.append(r)
-        if "key_phrases" in self.capabilities:
+        if "key_phrases" in self.capabilities and "spacy" in self.capabilities:
             r = self.get_keyphrases(texts, spt)
             results.append(r)
         for c in self.capabilities:
+            if c == "spacy" or c == "key_phrases":
+                continue
             r = cap_method[c](texts)
             results.append(r)
 

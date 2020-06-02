@@ -20,7 +20,7 @@ pip install pycontractions
 python -m spacy download en_core_news_sm en_core_news_md en_core_news_lg
 pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
 pip install stanza
-python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon')"
+python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon');nltk.download('treebank')"
 python -m spacy download en_trf_distilbertbaseuncased_lg
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install -e . && python scripts/download_weights.py
 # edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
@@ -31,6 +31,23 @@ pip install git+https://github.com/LIAAD/yake
 pip install multi-rake # CFLAGS="-Wno-narrowing" pip install cld2-cffi
 pip install textblob
 pip install rake-nltk
+pip install nlpaug
+git lfs install
+
+```
+
+## Build Wikipedia TF-IDF
+```bash
+git clone https://github.com/marcocor/wikipedia-idf.git && cd wikipedia-idf/src
+wget https://dumps.wikimedia.your.org/enwikisource/20200520/enwikisource-20200520-pages-articles.xml.bz2
+mkdir enwiki
+# https://github.com/marcocor/wikipedia-idf
+wget https://raw.githubusercontent.com/attardi/wikiextractor/master/WikiExtractor.py
+python WikiExtractor.py -o enwiki --compress --json enwikisource-20200520-pages-articles.xml.bz2
+# Change Line 57 of src/wikipediaidf.py: stems, token_to_stem_mapping = stem(tokens) if stemmer else None, None => stems, token_to_stem_mapping = stem(tokens) if stemmer else (None, None)
+python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
+
+
 ```
 
 # TODO

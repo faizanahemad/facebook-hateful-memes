@@ -14,6 +14,14 @@ from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 from spacy import glossary
 
 
+RE_D = re.compile('\d')
+
+
+def has_digits(string):
+    res = RE_D.search(string)
+    return int(res is not None)
+
+
 def get_all_tags():
 
     # https://github.com/explosion/spaCy/blob/master/spacy/glossary.py
