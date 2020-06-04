@@ -34,7 +34,7 @@ class Fasttext1DCNNModel(FasttextPooledModel):
             else:
                 raise NotImplementedError()
 
-    def forward(self, texts: List[str], img, labels):
+    def forward(self, texts: List[str], img, labels, sample_weights=None):
         vectors = self.get_word_vectors(texts)
         logits, vectors = self.classifier(vectors)
 
