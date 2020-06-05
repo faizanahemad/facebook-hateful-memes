@@ -58,14 +58,39 @@ from nltk.corpus import stopwords
 
 
 class TextAugment:
-    def __init__(self, proba: float, choice_probas: Dict[str, int], fasttext_file: str = None, count=1):
-        self.proba = proba
+    def __init__(self, count_proba: List[float], choice_probas: Dict[str, int], fasttext_file: str = None):
+        self.count_proba = count_proba
+        assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
+        assert len(count_proba) >= 1
+        assert (len(count_proba) - 1) < sum([v > 0 for v in choice_probas.values()])
 
-        self.count = min(count, sum([v >0 for v in choice_probas.values()]))
         import nlpaug.augmenter.char as nac
         import nlpaug.augmenter.word as naw
         from gensim.similarities.index import AnnoyIndexer
-        sw = stopwords.words("english")
+
+        def one_third_cut(text):
+            words = text.split()
+            if len(words) <= 3:
+                return text
+            part = random.randint(0, 1)
+            psize = int(len(words)/3)
+            if bool(part):
+                words = words[psize:]
+            else:
+                words = words[:len(words) - psize]
+            return " ".join(words)
+
+        def half_cut(text):
+            words = text.split()
+            if len(words) <= 2:
+                return text
+            part = random.randint(0, 1)
+            psize = int(len(words)/2)
+            if bool(part):
+                words = words[psize:]
+            else:
+                words = words[:len(words) - psize]
+            return " ".join(words)
 
         def sentence_shuffle(text):
             sents = sent_tokenize(text)
@@ -111,7 +136,7 @@ class TextAugment:
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
                      "stopword_insert", "word_join", "word_cutout",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec",
-                     "synonym", "split", "sentence_shuffle",]
+                     "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
@@ -128,6 +153,10 @@ class TextAugment:
                 self.augments["text_rotate"] = text_rotate
             if k == "sentence_shuffle":
                 self.augments["sentence_shuffle"] = sentence_shuffle
+            if k == "one_third_cut":
+                self.augments["one_third_cut"] = one_third_cut
+            if k == "half_cut":
+                self.augments["half_cut"] = half_cut
             if k == "synonym":
                 self.augments["synonym"] = naw.SynonymAug(aug_src='ppdb', model_path='ppdb-2.0-s-all', aug_max=1)
             if k == "split":
@@ -229,17 +258,21 @@ class TextAugment:
         return " ".join(tokens)
 
     def __call__(self, text):
-        if random.random() < self.proba:
-            augs = np.random.choice(self.augs, self.count, replace=False, p=self.choice_probas)
-            for aug in augs:
+        count = np.random.choice(list(range(len(self.count_proba))), 1, replace=False, p=self.count_proba)[0]
+        augs = np.random.choice(self.augs, count, replace=False, p=self.choice_probas)
+        for aug in augs:
+            try:
                 if aug == "fasttext":
                     text = self.__fasttext_replace__(self.augments[aug], self.indexes[aug], text)
                 elif aug in ["glove_twitter", "glove_wiki", "word2vec"]:
                     text = self.__w2v_replace__(self.augments[aug], self.indexes[aug], text)
-                elif aug in ["sentence_shuffle", "text_rotate", "stopword_insert", "word_join", "word_cutout",]:
+                elif aug in ["sentence_shuffle", "text_rotate", "stopword_insert", "word_join", "word_cutout",
+                             "half_cut", "one_third_cut"]:
                     text = self.augments[aug](text)
                 else:
                     text = self.augments[aug].augment(text)
+            except Exception as e:
+                print("Exception for: ", aug, "|", text, "|", augs, e)
         return text
 
 

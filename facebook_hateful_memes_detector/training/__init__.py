@@ -207,6 +207,8 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
 def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
                           augmentation_weights: Dict[str, float],
                           multi_eval=False, kfold=False):
+    from tqdm import tqdm
+    getattr(tqdm, '_instances', {}).clear()
     if in_notebook():
         from tqdm.notebook import tqdm, trange
     else:

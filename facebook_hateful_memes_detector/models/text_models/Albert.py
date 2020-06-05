@@ -6,6 +6,9 @@ import torch
 import torch.nn.functional as F
 from ..classifiers import CNN1DClassifier, GRUClassifier
 from .Fasttext1DCNN import Fasttext1DCNNModel
+from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
+from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
+
 import torchvision.models as models
 
 
@@ -16,14 +19,14 @@ class AlbertClassifer(Fasttext1DCNNModel):
                  classifier="cnn",
                  n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False, **kwargs):
-        from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
         super(AlbertClassifer, self).__init__(classifer_dims, num_classes, embedding_dims, gaussian_noise, dropout,
                                               internal_dims, n_layers,
                                               classifier,
                                               n_tokens_in, n_tokens_out, True, **kwargs)
         assert n_tokens_in % n_tokens_out == 0
-        self.tokenizer = AlbertTokenizer.from_pretrained('albert-base-v2')
-        self.model = AlbertModel.from_pretrained('albert-base-v2')
+        model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
+        self.tokenizer = AutoTokenizer.from_pretrained('albert-base-v2')
+        self.model = AutoModel.from_pretrained('albert-base-v2')
         for p in self.model.parameters():
             p.requires_grad = False
         if not use_as_super:
