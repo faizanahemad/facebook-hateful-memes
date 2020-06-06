@@ -26,9 +26,16 @@ def clean_text(text):
     # https://stackoverflow.com/questions/44263446/python-regex-to-add-space-after-dot-or-comma/44263500
     EMPTY = ' '
     assert text is not None
-
     text = re.sub(r'([A-Z][a-z]+(?=[A-Z]))', r'\1 ', text)
     text = re.sub(r'(?<=[.,;!])(?=[^\s0-9])', ' ', text)
+    text = re.sub('[ ]+', ' ', text)
+
+    def replace_link(match):
+        return EMPTY if re.match('[a-z]+://', match.group(1)) else match.group(1)
+
+    text = re.sub('<a[^>]*>(.*)</a>', replace_link, text)
+    text = re.sub('<.*?>', EMPTY, text)
+    text = re.sub('\[.*?\]', EMPTY, text)
     text = contractions.fix(text)
     text = text.lower()
 
@@ -38,12 +45,7 @@ def clean_text(text):
     text = re.sub('<pre><code>.*?</code></pre>', EMPTY, text)
     text = re.sub('<code>.*?</code>', EMPTY, text)
 
-    def replace_link(match):
-        return EMPTY if re.match('[a-z]+://', match.group(1)) else match.group(1)
-
-    text = re.sub('<a[^>]+>(.*)</a>', replace_link, text)
-    text = re.sub('<.*?>', EMPTY, text)
-    text = re.sub(r"[^A-Za-z0-9.!$,;\'? ]+", '', text)
+    text = re.sub(r"[^A-Za-z0-9.!$,;\'? ]+", EMPTY, text)
     text = " ".join([t.strip() for t in text.split()])
     return text
 

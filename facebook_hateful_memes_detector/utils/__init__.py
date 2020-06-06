@@ -244,6 +244,13 @@ class GaussianNoise(nn.Module):
         return x
 
 
+def has_words(text):
+    text = re.sub('[ ]+', ' ', text)
+    text = re.sub(r"[^A-Za-z ]+", ' ', text)
+    tokens = [t for t in text.split() if len(t) >= 3]
+    return len(tokens) >= 2
+
+
 def in_notebook():
     try:
         from IPython import get_ipython

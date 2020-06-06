@@ -216,10 +216,15 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
     results_list = []
     prfs_list = []
     index = ["f1_micro", "map", "accuracy", "auc"]
+    model_stats_shown = False
     with trange(n_tests) as nt:
         for _ in nt:
             for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data, augmentation_weights, multi_eval=multi_eval):
                 model, optimizer, scheduler = model_fn(dataset=training_fold_dataset)
+                model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+                params = sum([np.prod(p.size()) for p in model_parameters])
+                if not model_stats_shown:
+                    print("Model Params = %s" % (params), "\n", model)
                 train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, training_fold_dataset)
 
                 validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)

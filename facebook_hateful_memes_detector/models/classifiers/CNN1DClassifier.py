@@ -29,14 +29,12 @@ class Residual1DConv(nn.Module):
         self.r3 = r3
 
         self.channel_sizer = None
-        mul = 1
-        if in_channels * mul != out_channels:
-            channel_sizer = nn.Conv1d(in_channels * mul, out_channels, 1, 1, padding=0, groups=1, bias=False) # dont change groups here
+        if in_channels != out_channels:
+            channel_sizer = nn.Conv1d(in_channels, out_channels, 1, 1, padding=0, groups=1, bias=False) # dont change groups here
             init_fc(channel_sizer, "linear")
             self.channel_sizer = nn.Sequential(dp, channel_sizer)
 
         self.pooling = nn.MaxPool1d(2)
-        self.pooling2 = nn.AvgPool1d(2)
         self.pool = pool
 
     def forward(self, x):
@@ -72,17 +70,17 @@ class CNN1DClassifier(BaseClassifier):
             layers.append(Residual1DConv(n_internal_dims, n_internal_dims, True, gaussian_noise, dropout))
             layers.append(gn)
         layers.append(Residual1DConv(n_internal_dims, n_channels_out, False, gaussian_noise, dropout))
-        layers.append(dp)
         self.featurizer = nn.Sequential(*layers)
 
-        self.c1 = nn.Conv1d(n_channels_out, num_classes, 3, 1, padding=0, groups=1, bias=False)
-        init_fc(self.c1, "linear")
-        self.avp = nn.AdaptiveAvgPool1d(1)
+        c1 = nn.Conv1d(n_channels_out, num_classes, 3, 1, padding=0, groups=1, bias=False)
+        init_fc(c1, "linear")
+        avp = nn.AdaptiveAvgPool1d(1)
+        self.classifier = nn.Sequential(dp, c1, avp) # Residual1DConv(n_channels_out, n_channels_out, True, gaussian_noise, dropout),
 
     def forward(self, x):
         x = x.transpose(1, 2)
         x = self.featurizer(x)
-        logits = self.avp(self.c1(x)).squeeze()
+        logits = self.classifier(x).squeeze()
         x = x.transpose(1, 2)
         assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
         return logits, x

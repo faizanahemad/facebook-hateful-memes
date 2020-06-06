@@ -12,6 +12,7 @@ from torchnlp.word_to_vector import BPEmb
 from flair.data import Sentence
 from flair.embeddings import FlairEmbeddings, BytePairEmbeddings, CharacterEmbeddings, WordEmbeddings, TransformerWordEmbeddings, StackedEmbeddings
 from flair.models import SequenceTagger
+import re
 import json
 import csv
 import numpy as np
@@ -33,7 +34,7 @@ from textblob import TextBlob
 import spacy
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
-    get_penn_treebank_pos_tag_indices, get_all_tags
+    get_penn_treebank_pos_tag_indices, get_all_tags, has_words
 from ...utils import get_universal_deps_indices, has_digits
 from .FasttextPooled import FasttextPooledModel
 from ..external import ModelWrapper, get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
@@ -65,7 +66,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         embedding_dim = 8
         cap_to_dim_map = {"spacy": 160, "snlp": embedding_dim * 5,
                           "key_phrases": 64, "nltk": 192, "full_view": 128,
-                          "tmoji": 32, "ibm_max": 16}
+                          "tmoji": 32, "ibm_max": 16, "gensim": 256}
         all_dims = sum([cap_to_dim_map[c] for c in capabilities])
         self.cap_to_dim_map = cap_to_dim_map
         self.all_dims = all_dims
@@ -79,6 +80,17 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         spacy_nn2 = nn.Linear(spacy_in_dims * 2, 128)
         init_fc(spacy_nn2, "linear")
         self.spacy_nn = nn.Sequential(nn.Dropout(dropout), spacy_nn1, nn.LeakyReLU(), nn.Dropout(dropout), spacy_nn2)
+
+        if "gensim" in capabilities:
+            gensim = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
+                      api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
+            self.gensim = gensim
+            gensim_nn1 = nn.Linear(700, 1400)
+            init_fc(gensim_nn1, "leaky_relu")
+            gensim_nn2 = nn.Linear(1400, 256)
+            init_fc(gensim_nn2, "linear")
+            self.gensim_nn = nn.Sequential(nn.Dropout(dropout), gensim_nn1, nn.LeakyReLU(), nn.Dropout(dropout),
+                                          gensim_nn2)
 
         if "full_view" in capabilities:
             full_sent_in_dims = 300
@@ -214,6 +226,23 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         tokenized, _, _ = self.st.tokenize_sentences(texts)
         prob = self.tmoji(tokenized)
         return torch.tensor(prob)
+
+    def get_one_sentence_vector(self, m, text):
+        result = [m[t] if t in m else np.zeros(m.vector_size) for t in word_tokenize(text)]
+        return torch.tensor(result, dtype=float)
+
+    def get_gensim_word_vectors(self, texts: List[str]):
+        n_tokens_in = self.n_tokens_in
+        result = []
+        for m in self.gensim:
+            r = stack_and_pad_tensors([self.get_one_sentence_vector(m, text) for text in texts], n_tokens_in)
+            result.append(r)
+        result = [r.float() for r in result]
+        result = torch.cat(result, 2)
+        result = self.gensim_nn(result)
+        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)
+        return result
+
 
     def get_nltk_vectors(self, texts: List[str]):
         # https://gist.github.com/japerk/1909413
@@ -375,7 +404,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         tm_probas = tm_probas.unsqueeze(1).expand(len(texts), self.n_tokens_in, tm_probas.size(1))
         return tm_probas
 
-
     def get_keyphrases(self, texts: List[str], spacy_texts):
         tm = self.text_model
         results = [get_pytextrank_wc_keylen(i) for i in spacy_texts]
@@ -385,12 +413,12 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         pytextrank_vectors = torch.cat((self.key_wc_pytextrank(key_wc_pytextrank), self.key_occ_cnt_pytextrank(key_occ_cnt_pytextrank)), 2) # 16
 
         yake_ke = self.kw_extractor
-        yake_embs = [np.array([tm.get_sentence_vector(s) for s in map(itemgetter(0), yake_ke.extract_keywords(t))]) for t in texts]
+        yake_embs = [[tm.get_sentence_vector(s) for s in map(itemgetter(0), yake_ke.extract_keywords(t))] if has_words(t) else [np.zeros(300)] for t in texts]
         yake_embs = torch.tensor([np.average(yk, axis=0, weights=softmax(list(range(len(yk), 0, -1)))).astype(np.float32) if len(yk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for yk in yake_embs])
         yake_embs = self.yake_nn(yake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.yake_dims)
 
         rake_ke = self.rake
-        rake_embs = [np.array([tm.get_sentence_vector(s) for s in map(itemgetter(0), rake_ke.apply(t))]) for
+        rake_embs = [[tm.get_sentence_vector(s) for s in map(itemgetter(0), rake_ke.apply(t))] if has_words(t) else [np.zeros(300)] for
                      t in texts]
         rake_embs = torch.tensor(
             [np.average(rk, axis=0, weights=softmax(list(range(len(rk), 0, -1)))).astype(np.float32) if len(rk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for rk in rake_embs])
@@ -404,7 +432,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
     def get_word_vectors(self, texts: List[str]):
         cap_method = {"snlp": self.get_stanford_nlp_vectors, "full_view": self.get_sentence_vector,
                       "nltk": self.get_nltk_vectors,
-                      "ibm_max": self.get_ibm_max, "tmoji": self.get_tmoji}
+                      "ibm_max": self.get_ibm_max, "tmoji": self.get_tmoji, "gensim": self.get_gensim_word_vectors}
         results = []
         if "spacy" in self.capabilities or "key_phrases" in self.capabilities:
             r, spt = self.get_spacy_nlp_vectors(texts)

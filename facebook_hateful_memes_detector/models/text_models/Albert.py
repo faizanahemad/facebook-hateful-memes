@@ -25,10 +25,13 @@ class AlbertClassifer(Fasttext1DCNNModel):
                                               n_tokens_in, n_tokens_out, True, **kwargs)
         assert n_tokens_in % n_tokens_out == 0
         model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
-        self.tokenizer = AutoTokenizer.from_pretrained('albert-base-v2')
-        self.model = AutoModel.from_pretrained('albert-base-v2')
-        for p in self.model.parameters():
-            p.requires_grad = False
+        finetune = kwargs["finetune"] if "finetune" in kwargs else False
+        self.tokenizer = AutoTokenizer.from_pretrained(model)
+        self.model = AutoModel.from_pretrained(model)
+        self.finetune = finetune
+        # if not finetune:
+        #     for p in self.model.parameters():
+        #         p.requires_grad = False
         if not use_as_super:
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
@@ -48,7 +51,11 @@ class AlbertClassifer(Fasttext1DCNNModel):
 
     def get_word_vectors(self, texts: List[str]):
         input_ids, attention_mask = self.tokenise(texts)
-        outputs = self.model(input_ids, attention_mask=attention_mask)
+        if self.finetune:
+            outputs = self.model(input_ids, attention_mask=attention_mask)
+        else:
+            with torch.no_grad():
+                outputs = self.model(input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs[0]
         pooled_output = outputs[1]
         return last_hidden_states
