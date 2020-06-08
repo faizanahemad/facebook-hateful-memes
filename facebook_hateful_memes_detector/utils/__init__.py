@@ -36,7 +36,8 @@ def get_all_tags():
             'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE', 'FACILITY', 'GPE', 'O']
     snlp_list = ["NUMBER", "ORDINAL", "MONEY", "DATE", "TIME", "CAUSE_OF_DEATH", "CITY",
                  "COUNTRY", "CRIMINAL_CHARGE", "EMAIL", "HANDLE", "IDEOLOGY", "NATIONALITY", "RELIGION", "STATE_OR_PROVINCE", "TITLE", "URL"]
-    all_list = deps + penn + upos + spacy_glossary + nltk_ner_tags + snlp_list
+    others = ['gsp']
+    all_list = deps + penn + upos + spacy_glossary + nltk_ner_tags + snlp_list + others
     tags = list(set(list(map(lambda x: x.lower(), all_list))))
     return dict(zip(tags, range(1, len(tags)+1)))
 
@@ -329,3 +330,30 @@ class WordChannelReducer(nn.Module):
         return self.layers(x)
 
 
+class ExpandContract(nn.Module):
+    def __init__(self, in_dims, out_dims, dropout=0.0, expansion_factor=2,
+                 use_layer_norm=False, unit_norm=False,
+                 use_layer_norm_input=False, unit_norm_input=False,
+                 activation="leaky_relu"):
+        super().__init__()
+        nn1 = nn.Linear(in_dims, in_dims * expansion_factor)
+        init_fc(nn1, activation)
+        nn2 = nn.Linear(in_dims * expansion_factor, out_dims)
+        init_fc(nn2, "linear")
+
+        layers = [nn.Dropout(dropout), nn1, nn.LeakyReLU(), nn.Dropout(dropout), nn2]
+        if use_layer_norm_input:
+            layers = [nn.LayerNorm(in_dims)] + layers
+        if use_layer_norm:
+            layers.append(nn.LayerNorm(out_dims))
+        self.nn = nn.Sequential(*layers)
+        self.unit_norm = unit_norm
+        self.unit_norm_input = unit_norm_input
+
+    def forward(self, x):
+        if self.unit_norm_input:
+            x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
+        x = self.nn(x)
+        if self.unit_norm:
+            x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
+        return x

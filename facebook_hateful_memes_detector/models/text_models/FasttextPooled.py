@@ -28,18 +28,18 @@ class FasttextPooledModel(nn.Module):
         else:
             self.text_model = fasttext_model
 
-        projection = [nn.Linear(500, classifer_dims * 2), nn.LeakyReLU(),
-                      nn.Linear(classifer_dims * 2, classifer_dims)]
-        init_fc(projection[0], "leaky_relu")
-        init_fc(projection[2], "linear")
-        self.projection = nn.Sequential(*projection)
-        layers = [GaussianNoise(gaussian_noise), nn.Linear(classifer_dims, classifer_dims, bias=True),
-                  nn.LeakyReLU(), nn.Dropout(dropout), nn.Linear(classifer_dims, num_classes)]
-        self.bpe = BPEmb(dim=100)
-        self.cngram = CharNGram()
-        init_fc(layers[1], "leaky_relu")
-        init_fc(layers[4], "linear")
-        self.classifier = nn.Sequential(*layers)
+        if not use_as_super:
+            projection = [nn.Linear(500, classifer_dims * 2), nn.LeakyReLU(),
+                          nn.Linear(classifer_dims * 2, classifer_dims)]
+            init_fc(projection[0], "leaky_relu")
+            init_fc(projection[2], "linear")
+            self.projection = nn.Sequential(*projection)
+            layers = [GaussianNoise(gaussian_noise), nn.Linear(classifer_dims, classifer_dims, bias=True),
+                      nn.LeakyReLU(), nn.Dropout(dropout), nn.Linear(classifer_dims, num_classes)]
+
+            init_fc(layers[1], "leaky_relu")
+            init_fc(layers[4], "linear")
+            self.classifier = nn.Sequential(*layers)
         self.loss = nn.CrossEntropyLoss()
         self.num_classes = num_classes
         self.binary = num_classes == 2
@@ -47,6 +47,8 @@ class FasttextPooledModel(nn.Module):
         self.auc_loss = False
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
+        self.bpe = BPEmb(dim=100)
+        self.cngram = CharNGram()
 
     def get_sentence_vector(self, texts: List[str]):
         tm = self.text_model
@@ -96,23 +98,7 @@ class FasttextPooledModel(nn.Module):
         preds = logits.max(dim=1).indices
         logits = torch.softmax(logits, dim=1)
         if self.binary and self.training and self.auc_loss:
-                # Projection aug loss
-                pos_projections = projections[labels == 1]
-                neg_projections = projections[labels == 0]
-                pos_randomized = pos_projections[torch.randperm(pos_projections.size(0))]
-                neg_randomized = neg_projections[torch.randperm(neg_projections.size(0))]
-                pos_cos = (F.cosine_similarity(pos_projections, pos_randomized) + 1)/2
-                neg_cos = (F.cosine_similarity(neg_projections, neg_randomized) + 1)/2
-                min_len = min(pos_projections.size(0), neg_projections.size(0))
-                pos_neg_cos = (F.cosine_similarity(pos_projections[:min_len], neg_projections[:min_len]) + 1)/2
-
-                pl = ((pos_cos - 1)**2).mean()
-                nl = ((neg_cos - 1)**2).mean()
-                pnl = (pos_neg_cos**2).mean()
-                projection_loss = (pl + nl + pnl)/3.0
-
                 # aucroc loss
-                #
                 probas = logits[:, 1]
                 pos_probas = labels * probas
                 neg_probas = (1-labels) * probas
@@ -123,7 +109,7 @@ class FasttextPooledModel(nn.Module):
                 loss_2 = F.relu(neg_probas_max - pos_probas).mean()
                 auc_loss = (loss_1 + loss_2)/2
 
-                loss = 1.0 * loss + 0.0 * auc_loss + 0.0 * projection_loss # 0.1, 0.9 weights
+                loss = 1.0 * loss + 0.0 * auc_loss # 0.1, 0.9 weights
 
         return logits, preds, projections, vectors, loss
 

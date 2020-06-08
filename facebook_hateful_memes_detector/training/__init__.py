@@ -112,11 +112,11 @@ def validate(model, batch_size, dataset, test_df):
     predictions_list = probas["predictions_list"].values
     labels_list = probas.merge(test_df[["id", "label"]], on="id")["label"].values
     auc = roc_auc_score(labels_list, proba_list)
-    p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="micro")
+    # p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="micro")
     prfs = precision_recall_fscore_support(labels_list, predictions_list, average=None, labels=[0, 1])
     map = average_precision_score(labels_list, proba_list)
     acc = accuracy_score(labels_list, predictions_list)
-    validation_scores = [f1_micro, map, acc, auc]
+    validation_scores = [map, acc, auc]
     return validation_scores, prfs
 
 
@@ -215,7 +215,7 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
         from tqdm import tqdm as tqdm, trange
     results_list = []
     prfs_list = []
-    index = ["f1_micro", "map", "accuracy", "auc"]
+    index = ["map", "accuracy", "auc"]
     model_stats_shown = False
     with trange(n_tests) as nt:
         for _ in nt:
@@ -225,6 +225,7 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
                 params = sum([np.prod(p.size()) for p in model_parameters])
                 if not model_stats_shown:
                     print("Model Params = %s" % (params), "\n", model)
+                    model_stats_shown = True
                 train_losses, learning_rates = train(model, optimizer, scheduler, batch_size, epochs, training_fold_dataset)
 
                 validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)
@@ -239,11 +240,9 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
     results = np.stack(results_list, axis=0)
     means = pd.DataFrame(results.mean(0), index=index)
     stds = pd.DataFrame(results.std(0), index=index)
-    tuples = [('mean', 'f1_micro'),
-              ('mean', 'map'),
+    tuples = [('mean', 'map'),
               ('mean', 'accuracy'),
               ('mean', 'auc'),
-              ('std', 'f1_micro'),
               ('std', 'map'),
               ('std', 'accuracy'),
               ('std', 'auc')]

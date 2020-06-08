@@ -31,10 +31,11 @@ import rake_nltk
 from textblob import TextBlob
 
 
+
 import spacy
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
-    get_penn_treebank_pos_tag_indices, get_all_tags, has_words
+    get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract
 from ...utils import get_universal_deps_indices, has_digits
 from .FasttextPooled import FasttextPooledModel
 from ..external import ModelWrapper, get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
@@ -61,12 +62,14 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                                                 internal_dims, n_layers,
                                                 classifier,
                                                 n_tokens_in, n_tokens_out, use_as_super=True, **kwargs)
-        capabilities = kwargs["capabilities"] if "capabilities" in kwargs else ["spacy"]
+        assert "capabilities" in kwargs
+        capabilities = kwargs["capabilities"]
+        assert "key_phrases" not in capabilities or ("key_phrases" in capabilities and "spacy" in capabilities)
         self.capabilities = capabilities
         embedding_dim = 8
-        cap_to_dim_map = {"spacy": 160, "snlp": embedding_dim * 5,
-                          "key_phrases": 64, "nltk": 192, "full_view": 128,
-                          "tmoji": 32, "ibm_max": 16, "gensim": 256}
+        cap_to_dim_map = {"spacy": 160, "snlp": 32,
+                          "key_phrases": 64, "nltk": 192, "full_view": 64,
+                          "tmoji": 32, "ibm_max": 16, "gensim": 256, "fasttext_crawl": 256}
         all_dims = sum([cap_to_dim_map[c] for c in capabilities])
         self.cap_to_dim_map = cap_to_dim_map
         self.all_dims = all_dims
@@ -75,34 +78,30 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         self.nlp = spacy.load("en_core_web_lg", disable=[])
         self.nlp.add_pipe(tr.PipelineComponent, name="textrank", last=True)
         spacy_in_dims = (96*2) + (11 * embedding_dim) + 2
-        spacy_nn1 = nn.Linear(spacy_in_dims, spacy_in_dims * 2)
-        init_fc(spacy_nn1, "leaky_relu")
-        spacy_nn2 = nn.Linear(spacy_in_dims * 2, 128)
-        init_fc(spacy_nn2, "linear")
-        self.spacy_nn = nn.Sequential(nn.Dropout(dropout), spacy_nn1, nn.LeakyReLU(), nn.Dropout(dropout), spacy_nn2)
+        self.spacy_nn = ExpandContract(spacy_in_dims, cap_to_dim_map["spacy"], dropout, use_layer_norm=False)
+
+        if "fasttext_crawl" in capabilities:
+            self.bpe = BPEmb(dim=200)
+            self.cngram = CharNGram()
+            fasttext_crawl_file = kwargs["fasttext_crawl_file"] if "fasttext_crawl_file" in kwargs else "crawl-300d-2M-subword.bin"
+            self.crawl = fasttext.load_model(fasttext_crawl_file)
+            self.crawl_nn = ExpandContract(200+300+100, cap_to_dim_map["fasttext_crawl"], dropout, use_layer_norm=False)
 
         if "gensim" in capabilities:
             gensim = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
                       api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
             self.gensim = gensim
-            gensim_nn1 = nn.Linear(700, 1400)
-            init_fc(gensim_nn1, "leaky_relu")
-            gensim_nn2 = nn.Linear(1400, 256)
-            init_fc(gensim_nn2, "linear")
-            self.gensim_nn = nn.Sequential(nn.Dropout(dropout), gensim_nn1, nn.LeakyReLU(), nn.Dropout(dropout),
-                                          gensim_nn2)
+            self.gensim_nn = ExpandContract(700, cap_to_dim_map["gensim"], dropout, use_layer_norm=False)
 
         if "full_view" in capabilities:
             full_sent_in_dims = 300
-            full_sent_nn1 = nn.Linear(full_sent_in_dims, full_sent_in_dims * 2)
-            init_fc(full_sent_nn1, "leaky_relu")
-            full_sent_nn2 = nn.Linear(full_sent_in_dims * 2, 160)
-            init_fc(full_sent_nn2, "linear")
-            self.full_sent_nn = nn.Sequential(nn.Dropout(dropout), full_sent_nn1, nn.LeakyReLU(), nn.Dropout(dropout), full_sent_nn2)
+            self.full_sent_nn = ExpandContract(full_sent_in_dims, cap_to_dim_map["full_view"], dropout, use_layer_norm=False)
 
         if "snlp" in capabilities:
             self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=False,
                                     pos_batch_size=2048)
+            self.snlp_nn = ExpandContract(embedding_dim * 5, cap_to_dim_map["snlp"], dropout,
+                                          use_layer_norm=False)
         if "key_phrases" in capabilities:
             self.kw_extractor = yake.KeywordExtractor(lan="en", n=3, dedupLim=0.9,
                                                  dedupFunc='seqm', windowsSize=3,
@@ -115,37 +114,20 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
             yake_dims = kwargs["yake_dims"] if "yake_dims" in kwargs else 32
             self.yake_dims = yake_dims
-            yk1 = nn.Linear(300, yake_dims * 2, bias=False)
-            init_fc(yk1, "leaky_relu")
-            yk2 = nn.Linear(yake_dims * 2, yake_dims, bias=False)
-            init_fc(yk2, "linear")
-            self.yake_nn = nn.Sequential(yk1, nn.LeakyReLU(), yk2)
+            self.yake_nn = ExpandContract(300, yake_dims, dropout, use_layer_norm=False)
 
             rake_dims = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
             self.rake_dims = rake_dims
-            rk1 = nn.Linear(300, rake_dims * 2, bias=False)
-            init_fc(rk1, "leaky_relu")
-            rk2 = nn.Linear(rake_dims * 2, rake_dims, bias=False)
-            init_fc(rk2, "linear")
-            self.rake_nn = nn.Sequential(rk1, nn.LeakyReLU(), rk2)
+            self.rake_nn = ExpandContract(300, rake_dims, dropout, use_layer_norm=False)
             self.rake = Rake(language_code="en")
 
             keyphrases_dim = 2*embedding_dim + rake_dims + yake_dims
-            kp1 = nn.Linear(keyphrases_dim, keyphrases_dim * 2, bias=False)
-            init_fc(kp1, "leaky_relu")
-            kp2 = nn.Linear(keyphrases_dim * 2, 64, bias=False)
-            init_fc(kp2, "linear")
-            self.keyphrase_nn = nn.Sequential(nn.Dropout(dropout), kp1, nn.LeakyReLU(), GaussianNoise(gaussian_noise), kp2)
+            self.keyphrase_nn = ExpandContract(keyphrases_dim, cap_to_dim_map["key_phrases"], dropout, use_layer_norm=False)
 
-
-
-        fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else None
-        fasttext_model = kwargs["fasttext_model"] if "fasttext_model" in kwargs else None
-        assert fasttext_file is not None or fasttext_model is not None or use_as_super
+        fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else "wiki-news-300d-1M-subword.bin"
+        assert fasttext_file is not None
         if fasttext_file is not None:
             self.text_model = fasttext.load_model(fasttext_file)
-        else:
-            self.text_model = fasttext_model
 
         self.pdict = get_all_tags()
         self.tag_em = nn.Embedding(len(self.pdict)+1, embedding_dim)
@@ -181,23 +163,13 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             nn.init.normal_(self.key_wc_rake_nltk.weight, std=1 / embedding_dim)
             self.nltk_sid = SentimentIntensityAnalyzer()
             in_dims = 306 + 5 * embedding_dim
-            nltk_nn1 = nn.Linear(in_dims, in_dims * 2)
-            init_fc(nltk_nn1, "leaky_relu")
-            nltk_nn2 = nn.Linear(in_dims * 2, 192)
-            init_fc(nltk_nn2, "linear")
-            self.nltk_nn = nn.Sequential(nn.Dropout(dropout), nltk_nn1, nn.LeakyReLU(), GaussianNoise(gaussian_noise), nltk_nn2)
+            self.nltk_nn = ExpandContract(in_dims, cap_to_dim_map["nltk"], dropout, use_layer_norm=False)
 
         if "ibm_max" in capabilities:
             self.ibm_max = ModelWrapper()
             for p in self.ibm_max.model.parameters():
                 p.requires_grad = False
-
-            ibm_nn1 = nn.Linear(6, 32)
-            init_fc(ibm_nn1, "leaky_relu")
-            ibm_nn2 = nn.Linear(32, 16)
-            init_fc(ibm_nn2, "linear")
-            self.ibm_nn = nn.Sequential(nn.Dropout(dropout), ibm_nn1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                       ibm_nn2)
+            self.ibm_nn = ExpandContract(6, cap_to_dim_map["ibm_max"], dropout, use_layer_norm=False)
 
         if "tmoji" in capabilities:
             with open(VOCAB_PATH, 'r') as f:
@@ -207,11 +179,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                 self.tmoji = torchmoji_emojis(PRETRAINED_PATH)
                 for p in self.tmoji.parameters():
                     p.requires_grad = False
-            tm_nn1 = nn.Linear(64, 128)
-            init_fc(tm_nn1, "leaky_relu")
-            tm_nn2 = nn.Linear(128, 32)
-            init_fc(tm_nn2, "linear")
-            self.tm_nn = nn.Sequential(nn.Dropout(dropout), tm_nn1, nn.LeakyReLU(), GaussianNoise(gaussian_noise), tm_nn2)
+            self.tm_nn = ExpandContract(64, cap_to_dim_map["tmoji"], dropout, use_layer_norm=False)
 
         if not use_as_super:
             embedding_dims = self.all_dims
@@ -221,6 +189,31 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                 self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
+
+    def get_one_crawl_sentence_vector(self, tm, sentence):
+        tokens = word_tokenize(sentence)
+        if isinstance(tm, fasttext.FastText._FastText):
+            result = torch.tensor([tm[t] for t in tokens])
+        elif isinstance(tm, torchnlp.word_to_vector.char_n_gram.CharNGram):
+            result = torch.stack([tm[t] for t in tokens])
+        else:
+            result = tm[tokens]
+        return result
+
+    def get__crawl_word_vectors(self, texts: List[str]):
+        bpe = self.bpe
+        cngram = self.cngram
+        tm = self.crawl
+        n_tokens_in = self.n_tokens_in
+        result = stack_and_pad_tensors([self.get_one_crawl_sentence_vector(tm, text) for text in texts], n_tokens_in)
+        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+        res2 = stack_and_pad_tensors([self.get_one_crawl_sentence_vector(bpe, text) for text in texts], n_tokens_in)
+        res2 = res2 / res2.norm(dim=2, keepdim=True).clamp(min=1e-5)
+        res3 = stack_and_pad_tensors([self.get_one_crawl_sentence_vector(cngram, text) for text in texts], n_tokens_in)
+        res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
+        result = torch.cat([result, res2, res3], 2)
+        result = self.crawl_nn(result)
+        return result
 
     def get_torchmoji_probas(self,  texts: List[str]):
         tokenized, _, _ = self.st.tokenize_sentences(texts)
@@ -240,9 +233,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         result = [r.float() for r in result]
         result = torch.cat(result, 2)
         result = self.gensim_nn(result)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)
         return result
-
 
     def get_nltk_vectors(self, texts: List[str]):
         # https://gist.github.com/japerk/1909413
@@ -281,7 +272,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
         result = torch.cat([nltk_emb, textblob_sentiments, pos_emb, ner_emb, nltk_rake_vectors, sid_vec, mask, has_digit], 2)
         result = self.nltk_nn(result)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)
         return result
 
     def get_sentence_vector(self, texts: List[str]):
@@ -289,7 +279,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         n_tokens_in = self.n_tokens_in
         result = torch.tensor([tm.get_sentence_vector(text) for text in texts])
         result = self.full_sent_nn(result)
-        result = result / result.norm(dim=1, keepdim=True).clamp(min=1e-5)  # Normalize in sentence dimension
         result = result.unsqueeze(1).expand(len(texts), n_tokens_in, result.size(1))
         return result
 
@@ -326,7 +315,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
         result = torch.cat(
             [upos_emb, xpos_emb, deprel_emb, sner_emb, deprel_emb2], 2)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+        result = self.snlp_nn(result)
         return result
 
     def get_spacy_nlp_vectors(self, texts: List[str]):
@@ -385,14 +374,12 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             [text_tensors, pos_emb, tag_emb, dep_emb, sw_emb, ner_emb, wl_emb,
              wc_emb, mask, has_digit, is_oov_em, sent_start_em, head_dist, head_tensors], 2)
         result = self.spacy_nn(result)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result, spacy_texts
 
     def get_ibm_max(self, texts: List[str]):
         with torch.no_grad():
             result = self.ibm_max.predict(texts)
         result = self.ibm_nn(result)
-        result = result / result.norm(dim=1, keepdim=True).clamp(min=1e-5)
         result = result.unsqueeze(1).expand(len(texts), self.n_tokens_in, result.size(1))
         return result
 
@@ -400,7 +387,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         with torch.no_grad():
             tm_probas = self.get_torchmoji_probas(texts)
         tm_probas = self.tm_nn(tm_probas)
-        tm_probas = tm_probas / tm_probas.norm(dim=1, keepdim=True).clamp(min=1e-5)
         tm_probas = tm_probas.unsqueeze(1).expand(len(texts), self.n_tokens_in, tm_probas.size(1))
         return tm_probas
 
@@ -426,15 +412,15 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
         result = torch.cat([pytextrank_vectors, yake_embs, rake_embs], 2)
         result = self.keyphrase_nn(result)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         return result
 
     def get_word_vectors(self, texts: List[str]):
         cap_method = {"snlp": self.get_stanford_nlp_vectors, "full_view": self.get_sentence_vector,
                       "nltk": self.get_nltk_vectors,
-                      "ibm_max": self.get_ibm_max, "tmoji": self.get_tmoji, "gensim": self.get_gensim_word_vectors}
+                      "ibm_max": self.get_ibm_max, "tmoji": self.get_tmoji, "gensim": self.get_gensim_word_vectors,
+                      "fasttext_crawl": self.get__crawl_word_vectors}
         results = []
-        if "spacy" in self.capabilities or "key_phrases" in self.capabilities:
+        if "spacy" in self.capabilities:
             r, spt = self.get_spacy_nlp_vectors(texts)
             results.append(r)
         if "key_phrases" in self.capabilities and "spacy" in self.capabilities:

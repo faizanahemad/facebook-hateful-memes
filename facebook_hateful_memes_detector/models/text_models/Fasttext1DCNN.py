@@ -12,7 +12,7 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors
 from .FasttextPooled import FasttextPooledModel
-from ..classifiers import CNN1DClassifier, GRUClassifier, CNN1DSimple
+from ..classifiers import CNN1DClassifier, GRUClassifier, CNN1DSimple, TransformerClassifier
 
 
 class Fasttext1DCNNModel(FasttextPooledModel):
@@ -29,6 +29,11 @@ class Fasttext1DCNNModel(FasttextPooledModel):
         if not use_as_super:
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
+            elif classifier == "transformer":
+                self.classifier = TransformerClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                                                        classifer_dims,
+                                                        internal_dims, n_layers, gaussian_noise, dropout)
+
             elif classifier == "gru":
                 self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
             elif classifier == "simple_cnn":

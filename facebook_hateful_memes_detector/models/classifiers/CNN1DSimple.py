@@ -12,30 +12,12 @@ import math
 # 5 Conv -> R1 -> MP -> R2 -> MP -> R3 -> MP
 
 
-class SingleCNNBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, activation, pool=False, gaussian_noise=0.0, dropout=0.0):
-        super().__init__()
-        assert activation in ["linear", "leaky_relu"]
-        r1 = nn.Conv1d(in_channels, out_channels, 3, 2 if pool else 1, padding=1, groups=4, bias=False)
-        init_fc(r1, activation)
-        gn = GaussianNoise(gaussian_noise)
-        dp = nn.Dropout(dropout)
-        layers = [gn, r1, dp]
-        if activation != "linear":
-            layers.append(nn.LeakyReLU())
-
-        self.cnn = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.cnn(x)
-
-
 class DualWideCNNBlock(nn.Module):
     def __init__(self, in_channels, out_channels, activation, pool=False, gaussian_noise=0.0, dropout=0.0):
         super().__init__()
         assert activation in ["linear", "leaky_relu"]
         r1 = nn.Conv1d(in_channels, in_channels * 2, 3, 1, padding=1, groups=4, bias=False)
-        r2 = nn.Conv1d(in_channels * 2, in_channels, 3, 2 if pool else 1, padding=1, groups=1, bias=False)
+        r2 = nn.Conv1d(in_channels * 2, out_channels, 3, 1, padding=1, groups=1, bias=False)
         init_fc(r1, "leaky_relu")
         init_fc(r2, activation)
         gn = GaussianNoise(gaussian_noise)
@@ -45,9 +27,15 @@ class DualWideCNNBlock(nn.Module):
             layers.append(nn.LeakyReLU())
 
         self.cnn = nn.Sequential(*layers)
+        self.pooling = nn.MaxPool1d(2)
+        self.pool = pool
+
 
     def forward(self, x):
-        return self.cnn(x)
+        x = self.cnn(x)
+        if self.pool:
+            x = self.pooling(x)
+        return x
 
 
 class DualCNNBlock(nn.Module):
@@ -55,7 +43,7 @@ class DualCNNBlock(nn.Module):
         super().__init__()
         assert activation in ["linear", "leaky_relu"]
         r1 = nn.Conv1d(in_channels, in_channels, 3, 1, padding=1, groups=8, bias=False)
-        r2 = nn.Conv1d(in_channels, out_channels, 3, 2 if pool else 1, padding=1, groups=8, bias=False)
+        r2 = nn.Conv1d(in_channels, out_channels, 3, 1, padding=1, groups=1, bias=False)
         init_fc(r1, "leaky_relu")
         init_fc(r2, activation)
         gn = GaussianNoise(gaussian_noise)
@@ -65,9 +53,14 @@ class DualCNNBlock(nn.Module):
             layers.append(nn.LeakyReLU())
 
         self.cnn = nn.Sequential(*layers)
+        self.pooling = nn.MaxPool1d(2)
+        self.pool = pool
 
     def forward(self, x):
-        return self.cnn(x)
+        x = self.cnn(x)
+        if self.pool:
+            x = self.pooling(x)
+        return x
 
 
 class CNN1DSimple(BaseClassifier):
