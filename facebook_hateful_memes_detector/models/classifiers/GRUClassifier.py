@@ -15,7 +15,7 @@ class GRUClassifier(BaseClassifier):
         super(GRUClassifier, self).__init__(num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                                             n_internal_dims, n_layers, gaussian_noise, dropout)
 
-        lstm = nn.Sequential(
+        lstm = nn.Sequential(GaussianNoise(gaussian_noise),
             nn.GRU(n_channels_in, n_internal_dims, n_layers, batch_first=True, bidirectional=True, dropout=dropout))
         projection = WordChannelReducer(n_internal_dims * 2, n_channels_out, self.num_pooling)
         self.featurizer = lstm

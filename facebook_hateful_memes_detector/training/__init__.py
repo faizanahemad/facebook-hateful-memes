@@ -256,12 +256,12 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
 
 
 def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weights: Dict[str, float], multi_eval=False):
-    train = datadict["train"]
-    train["augmented"] = False
-    train["augment_type"] = "None"
+    train_df = datadict["train"]
+    train_df["augmented"] = False
+    train_df["augment_type"] = "None"
     metadata = datadict["metadata"]
     augmented_data = metadata["augmented_data"]
-    train_augmented = datadict["train_augmented"] if augmented_data else train
+    train_augmented = datadict["train_augmented"] if augmented_data else train_df
     train_augmented["sample_weights"] = 0.0
     for k, v in augmentation_weights.items():
         train_augmented.loc[train_augmented["augment_type"] == k, "sample_weights"] = v

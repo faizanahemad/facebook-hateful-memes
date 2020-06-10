@@ -65,6 +65,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         assert "capabilities" in kwargs
         capabilities = kwargs["capabilities"]
         assert "key_phrases" not in capabilities or ("key_phrases" in capabilities and "spacy" in capabilities)
+        use_layer_norm = kwargs["use_layer_norm"] if "use_layer_norm" in kwargs else True
         self.capabilities = capabilities
         embedding_dim = 8
         cap_to_dim_map = {"spacy": 160, "snlp": 32,
@@ -78,30 +79,30 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         self.nlp = spacy.load("en_core_web_lg", disable=[])
         self.nlp.add_pipe(tr.PipelineComponent, name="textrank", last=True)
         spacy_in_dims = (96*2) + (11 * embedding_dim) + 2
-        self.spacy_nn = ExpandContract(spacy_in_dims, cap_to_dim_map["spacy"], dropout, use_layer_norm=False)
+        self.spacy_nn = ExpandContract(spacy_in_dims, cap_to_dim_map["spacy"], dropout, use_layer_norm=use_layer_norm)
 
         if "fasttext_crawl" in capabilities:
             self.bpe = BPEmb(dim=200)
             self.cngram = CharNGram()
             fasttext_crawl_file = kwargs["fasttext_crawl_file"] if "fasttext_crawl_file" in kwargs else "crawl-300d-2M-subword.bin"
             self.crawl = fasttext.load_model(fasttext_crawl_file)
-            self.crawl_nn = ExpandContract(200+300+100, cap_to_dim_map["fasttext_crawl"], dropout, use_layer_norm=False)
+            self.crawl_nn = ExpandContract(200+300+100, cap_to_dim_map["fasttext_crawl"], dropout, use_layer_norm=use_layer_norm)
 
         if "gensim" in capabilities:
             gensim = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
                       api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
             self.gensim = gensim
-            self.gensim_nn = ExpandContract(700, cap_to_dim_map["gensim"], dropout, use_layer_norm=False)
+            self.gensim_nn = ExpandContract(700, cap_to_dim_map["gensim"], dropout, use_layer_norm=use_layer_norm)
 
         if "full_view" in capabilities:
             full_sent_in_dims = 300
-            self.full_sent_nn = ExpandContract(full_sent_in_dims, cap_to_dim_map["full_view"], dropout, use_layer_norm=False)
+            self.full_sent_nn = ExpandContract(full_sent_in_dims, cap_to_dim_map["full_view"], dropout, use_layer_norm=use_layer_norm)
 
         if "snlp" in capabilities:
             self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=False,
                                     pos_batch_size=2048)
             self.snlp_nn = ExpandContract(embedding_dim * 5, cap_to_dim_map["snlp"], dropout,
-                                          use_layer_norm=False)
+                                          use_layer_norm=use_layer_norm)
         if "key_phrases" in capabilities:
             self.kw_extractor = yake.KeywordExtractor(lan="en", n=3, dedupLim=0.9,
                                                  dedupFunc='seqm', windowsSize=3,
@@ -114,15 +115,15 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
             yake_dims = kwargs["yake_dims"] if "yake_dims" in kwargs else 32
             self.yake_dims = yake_dims
-            self.yake_nn = ExpandContract(300, yake_dims, dropout, use_layer_norm=False)
+            self.yake_nn = ExpandContract(300, yake_dims, dropout, use_layer_norm=use_layer_norm)
 
             rake_dims = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
             self.rake_dims = rake_dims
-            self.rake_nn = ExpandContract(300, rake_dims, dropout, use_layer_norm=False)
+            self.rake_nn = ExpandContract(300, rake_dims, dropout, use_layer_norm=use_layer_norm)
             self.rake = Rake(language_code="en")
 
             keyphrases_dim = 2*embedding_dim + rake_dims + yake_dims
-            self.keyphrase_nn = ExpandContract(keyphrases_dim, cap_to_dim_map["key_phrases"], dropout, use_layer_norm=False)
+            self.keyphrase_nn = ExpandContract(keyphrases_dim, cap_to_dim_map["key_phrases"], dropout, use_layer_norm=use_layer_norm)
 
         fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else "wiki-news-300d-1M-subword.bin"
         assert fasttext_file is not None
@@ -163,13 +164,13 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             nn.init.normal_(self.key_wc_rake_nltk.weight, std=1 / embedding_dim)
             self.nltk_sid = SentimentIntensityAnalyzer()
             in_dims = 306 + 5 * embedding_dim
-            self.nltk_nn = ExpandContract(in_dims, cap_to_dim_map["nltk"], dropout, use_layer_norm=False)
+            self.nltk_nn = ExpandContract(in_dims, cap_to_dim_map["nltk"], dropout, use_layer_norm=use_layer_norm)
 
         if "ibm_max" in capabilities:
             self.ibm_max = ModelWrapper()
             for p in self.ibm_max.model.parameters():
                 p.requires_grad = False
-            self.ibm_nn = ExpandContract(6, cap_to_dim_map["ibm_max"], dropout, use_layer_norm=False)
+            self.ibm_nn = ExpandContract(6, cap_to_dim_map["ibm_max"], dropout, use_layer_norm=use_layer_norm)
 
         if "tmoji" in capabilities:
             with open(VOCAB_PATH, 'r') as f:
@@ -179,7 +180,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                 self.tmoji = torchmoji_emojis(PRETRAINED_PATH)
                 for p in self.tmoji.parameters():
                     p.requires_grad = False
-            self.tm_nn = ExpandContract(64, cap_to_dim_map["tmoji"], dropout, use_layer_norm=False)
+            self.tm_nn = ExpandContract(64, cap_to_dim_map["tmoji"], dropout, use_layer_norm=use_layer_norm)
 
         if not use_as_super:
             embedding_dims = self.all_dims

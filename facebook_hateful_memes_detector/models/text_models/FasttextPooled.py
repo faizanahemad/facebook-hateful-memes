@@ -9,7 +9,7 @@ import fasttext
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract
 from ...preprocessing import clean_text
 
 
@@ -47,8 +47,10 @@ class FasttextPooledModel(nn.Module):
         self.auc_loss = False
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
-        self.bpe = BPEmb(dim=100)
+        self.bpe = BPEmb(dim=200)
         self.cngram = CharNGram()
+        self.crawl_nn = ExpandContract(200 + 300 + 100, 512, dropout,
+                                       use_layer_norm=True, unit_norm=False)
 
     def get_sentence_vector(self, texts: List[str]):
         tm = self.text_model
@@ -88,7 +90,7 @@ class FasttextPooledModel(nn.Module):
         res3 = stack_and_pad_tensors([self.get_one_sentence_vector(cngram, text) for text in texts], n_tokens_in)
         res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
         result = torch.cat([result, res2, res3], 2)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+        result = self.crawl_nn(result)
         return result
 
     def forward(self, texts: List[str], img, labels):

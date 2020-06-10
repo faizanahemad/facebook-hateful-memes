@@ -315,6 +315,9 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     if use_dev:
         train_augmented = dev_augmented
         train = dev
+    else:
+        train = pd.concat((train, dev))
+        train_augmented = pd.concat((train_augmented, dev_augmented)) if train_augmented is not None else None
 
     rd = dict(train=train, test=test, dev=dev,
               train_augmented=train_augmented, dev_augmented=dev_augmented, test_augmented=test_augmented,
