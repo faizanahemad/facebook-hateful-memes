@@ -182,6 +182,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                     p.requires_grad = False
             self.tm_nn = ExpandContract(64, cap_to_dim_map["tmoji"], dropout, use_layer_norm=use_layer_norm)
 
+        self.word_layer_norm = nn.LayerNorm(self.all_dims)
         if not use_as_super:
             embedding_dims = self.all_dims
             if classifier == "cnn":
@@ -434,5 +435,5 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             results.append(r)
 
         result = torch.cat(results, 2)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+        result = self.word_layer_norm(result)
         return result

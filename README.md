@@ -36,6 +36,7 @@ pip install annoy
 pip install fastBPE regex requests sacremoses subword_nmt
 pip install mosestokenizer
 git lfs install
+pip install torch_optimizer
 wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"
 ```
 
@@ -65,13 +66,12 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
     - Use some crazy image augmentation networks 
     - http://raywzy.com/Old_Photo/
     - Ricap and cutout
-- Text Augmentation (Data Aug by Back translatiob)
+    - Super-resolution and then resize
 - Try 
     - image captioned text as another part of model input
-        - For the captioned text use multiple regions of image (Random slices?)
+    - Take a attention or conv based text classifier and overfit, make heatmap of which word is used for classification and invert those words to create negative examples. 
     - use a previous layer of Resnet and feed into attention model as a 3d array (14 x 14 x 256) so that it can look at regions of image
         - For image vectors use both row and column numbers for position embedding
-    - ALBERT and Reformer
     - Start with Pretrained Resnet and Transformers
     - Relative position embedding?
     - Analyse the images
@@ -80,28 +80,17 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
         - See if sentiment identification pre-trained network on images and text can help
         - See if object detection models like YOLOv4 can help
         
-    - Take a few base level classifiers made of LSTM/GRU and use their penultimate layer output as a feature 
     - Start with pretrained VLBert as base network, add more attention layers and incorporate side features with those.
-    - answer this: where should I look and which detector pipeline (what lens should I use to look) should I use to look at that point
     - This problem is more around image understanding rather than recognition. As such disentangled feature extraction from images can help.
 - analyse performance of different networks against adversarial attacks
 - Sarcasm detection pretrain
-
-- Pretrain
-    - MLM with COCO
-    - Is this caption correct with COCO
-    - VCR and VQA
+- VCR, NLVR, VQA Pretrained models
     
 - Can I find which words /  topics are sensitive from a Knowledge Base like Wikipedia and then use that info along with the word embedding
 - Sentiment classification datasets
-- Image Captioning Datasets
-- Avoid Embedding matrices, use bert base / bert large embeddings of tokens
-- Composing Models using self-attention
-- show training and prediction time for each model
 
 - Features
     - YOLOv4 objects and their relative sizes as features
-    - P(Hateful | Word) for each word using bayes theorem and assumption of independence
 
 - Models: Combine multiple Trained Models as ensembles (Text-only, Image-only, Multi-modal models)
     - Text Models can use back translation augmentation
@@ -120,7 +109,7 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
     
     
 - Training
-    - Build Robustness into the network and more generalisation capability by planning Adversarial attacks on it.
+    - Adversarial Images
     - Adversarial NLP inputs like hyphen in between phone numbers or spelling change but pronunciation intact
     
     
