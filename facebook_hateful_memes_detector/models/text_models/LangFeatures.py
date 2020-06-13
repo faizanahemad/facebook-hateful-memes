@@ -39,7 +39,6 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_
 from ...utils import get_universal_deps_indices, has_digits
 from .FasttextPooled import FasttextPooledModel
 from ..external import ModelWrapper, get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
-from ...utils import WordChannelReducer
 from ..classifiers import CNN1DClassifier, GRUClassifier
 from .Fasttext1DCNN import Fasttext1DCNNModel
 import pytextrank
@@ -68,18 +67,19 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         use_layer_norm = kwargs["use_layer_norm"] if "use_layer_norm" in kwargs else True
         self.capabilities = capabilities
         embedding_dim = 8
-        cap_to_dim_map = {"spacy": 160, "snlp": 32,
+        cap_to_dim_map = {"spacy": 128, "snlp": 32,
                           "key_phrases": 64, "nltk": 192, "full_view": 64,
-                          "tmoji": 32, "ibm_max": 16, "gensim": 256, "fasttext_crawl": 256}
+                          "tmoji": 32, "ibm_max": 16, "gensim": 256, "fasttext_crawl": 192}
         all_dims = sum([cap_to_dim_map[c] for c in capabilities])
         self.cap_to_dim_map = cap_to_dim_map
         self.all_dims = all_dims
 
         tr = pytextrank.TextRank(token_lookback=7)
-        self.nlp = spacy.load("en_core_web_lg", disable=[])
-        self.nlp.add_pipe(tr.PipelineComponent, name="textrank", last=True)
-        spacy_in_dims = (96*2) + (11 * embedding_dim) + 2
-        self.spacy_nn = ExpandContract(spacy_in_dims, cap_to_dim_map["spacy"], dropout, use_layer_norm=use_layer_norm)
+        if "spacy" in capabilities:
+            self.nlp = spacy.load("en_core_web_lg", disable=[])
+            self.nlp.add_pipe(tr.PipelineComponent, name="textrank", last=True)
+            spacy_in_dims = (96*2) + (11 * embedding_dim) + 2
+            self.spacy_nn = ExpandContract(spacy_in_dims, cap_to_dim_map["spacy"], dropout, use_layer_norm=use_layer_norm)
 
         if "fasttext_crawl" in capabilities:
             self.bpe = BPEmb(dim=200)
@@ -182,9 +182,9 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                     p.requires_grad = False
             self.tm_nn = ExpandContract(64, cap_to_dim_map["tmoji"], dropout, use_layer_norm=use_layer_norm)
 
-        self.word_layer_norm = nn.LayerNorm(self.all_dims)
+        self.contract_nn = ExpandContract(self.all_dims, embedding_dims, dropout,
+                                          use_layer_norm=True, unit_norm=False)
         if not use_as_super:
-            embedding_dims = self.all_dims
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
             elif classifier == "gru":
@@ -219,7 +219,8 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
     def get_torchmoji_probas(self,  texts: List[str]):
         tokenized, _, _ = self.st.tokenize_sentences(texts)
-        prob = self.tmoji(tokenized)
+        with torch.no_grad():
+            prob = self.tmoji(tokenized)
         return torch.tensor(prob)
 
     def get_one_sentence_vector(self, m, text):
@@ -435,5 +436,5 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             results.append(r)
 
         result = torch.cat(results, 2)
-        result = self.word_layer_norm(result)
+        result = self.contract_nn(result)
         return result

@@ -17,16 +17,13 @@ class Residual1DConv(nn.Module):
         super().__init__()
         r1 = nn.Conv1d(in_channels, in_channels * 2, 3, 1, padding=1, groups=4, bias=False)
         init_fc(r1, "leaky_relu")
-        r2 = nn.Conv1d(in_channels * 2, in_channels * 2, 3, 1, padding=1, groups=4, bias=False)
-        init_fc(r2, "leaky_relu")
-        r3 = nn.Conv1d(in_channels * 2, in_channels, 1, 1, padding=0, groups=1, bias=False)
-        init_fc(r3, "linear")
+        r2 = nn.Conv1d(in_channels * 2, in_channels, 3, 1, padding=1, groups=4, bias=False)
+        init_fc(r2, "linear")
         relu = nn.LeakyReLU()
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
         self.r1 = nn.Sequential(dp, r1, relu, gn,)
-        self.r2 = nn.Sequential(r2, relu, dp)
-        self.r3 = r3
+        self.r2 = r2
 
         self.channel_sizer = None
         if in_channels != out_channels:
@@ -40,8 +37,7 @@ class Residual1DConv(nn.Module):
     def forward(self, x):
         r1 = self.r1(x)
         r2 = self.r2(r1)
-        residual = self.r3(r2)
-        x = x + residual
+        x = x + r2
 
         if self.pool:
             x = self.pooling(x)
@@ -59,15 +55,29 @@ class CNN1DClassifier(BaseClassifier):
                                               n_internal_dims, n_layers, gaussian_noise, dropout)
         assert math.log2(self.num_pooling).is_integer()
 
-        l1 = nn.Conv1d(n_channels_in, n_internal_dims, 5, 1, padding=2, groups=4, bias=False)
+        assert n_internal_dims % 4 == 0
+        l1 = nn.Conv1d(n_channels_in, max(int(n_internal_dims/4), n_channels_in), 5, 1, padding=2, groups=4, bias=False)
         init_fc(l1, "leaky_relu")
-        l2 = nn.Conv1d(n_internal_dims, n_internal_dims, 3, 1, padding=1, groups=4, bias=False)
-        init_fc(l2, "linear")
+        l2 = nn.Conv1d(max(int(n_internal_dims/4), n_channels_in), int(n_internal_dims/2), 3, 1, padding=1, groups=4, bias=False)
+        init_fc(l2, "leaky_relu")
+        l3 = nn.Conv1d(int(n_internal_dims/2), int(n_internal_dims/4), 1, 1, padding=0, groups=1, bias=False)
+        init_fc(l3, "linear")
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
-        layers = [l1, nn.LeakyReLU(), gn, l2, dp]
-        for _ in range(int(math.log2(self.num_pooling))):
-            layers.append(Residual1DConv(n_internal_dims, n_internal_dims, True, gaussian_noise, dropout))
+        layers = [dp, l1, nn.LeakyReLU(), gn, l2, dp, nn.LeakyReLU(), l3, gn]
+
+        # assert n_internal_dims % 4 == 0
+        # l1 = nn.Conv1d(n_channels_in, n_internal_dims, 5, 1, padding=2, groups=4, bias=False)
+        # init_fc(l1, "leaky_relu")
+        # l2 = nn.Conv1d(n_internal_dims, n_internal_dims * 2, 3, 1, padding=1, groups=4, bias=False)
+        # init_fc(l2, "leaky_relu")
+        # l3 = nn.Conv1d(n_internal_dims * 2, n_internal_dims, 1, 1, padding=0, groups=1, bias=False)
+        # init_fc(l3, "linear")
+        # gn = GaussianNoise(gaussian_noise)
+        # dp = nn.Dropout(dropout)
+        # layers = [dp, l1, nn.LeakyReLU(), gn, l2, dp, nn.LeakyReLU(), l3, gn]
+        for i in range(int(math.log2(self.num_pooling))):
+            layers.append(Residual1DConv(n_internal_dims if i > 0 else int(n_internal_dims/4), n_internal_dims, True, gaussian_noise, dropout))
             layers.append(gn)
         layers.append(Residual1DConv(n_internal_dims, n_channels_out, False, gaussian_noise, dropout))
         self.featurizer = nn.Sequential(*layers)

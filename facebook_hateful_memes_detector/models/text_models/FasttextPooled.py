@@ -20,13 +20,14 @@ class FasttextPooledModel(nn.Module):
                 use_as_super=False,
                  **kwargs):
         super(FasttextPooledModel, self).__init__()
-        fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else None
+        fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else "crawl-300d-2M-subword.bin"  # "wiki-news-300d-1M-subword.bin"
         fasttext_model = kwargs["fasttext_model"] if "fasttext_model" in kwargs else None
         assert fasttext_file is not None or fasttext_model is not None or use_as_super
-        if fasttext_file is not None:
-            self.text_model = fasttext.load_model(fasttext_file)
-        else:
-            self.text_model = fasttext_model
+        if not use_as_super:
+            if fasttext_file is not None:
+                self.text_model = fasttext.load_model(fasttext_file)
+            else:
+                self.text_model = fasttext_model
 
         if not use_as_super:
             projection = [nn.Linear(500, classifer_dims * 2), nn.LeakyReLU(),

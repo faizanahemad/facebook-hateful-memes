@@ -74,31 +74,26 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, plot
     learning_rates = []
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
 
-    try:
-        with trange(epochs) as epo:
-            for _ in epo:
-                if update_in_epoch:
-                    scheduler.step()
-                _ = gc.collect()
-                with tqdm(train_loader) as data_batch:
-                    for texts, images, labels, sample_weights in data_batch:
-                        optimizer.zero_grad()
-                        _, _, _, _, loss = model(texts, images, labels, sample_weights)
-                        loss.backward()
-                        optimizer.step()
-                        if update_in_batch:
-                            scheduler.step()
-                        train_losses.append(loss.item())
-                        learning_rates.append(optimizer.param_groups[0]['lr'])
-                    data_batch.clear()
-                    data_batch.close()
+    with trange(epochs) as epo:
+        for _ in epo:
+            if update_in_epoch:
+                scheduler.step()
+            _ = gc.collect()
+            train_losses_cur_epoch = []
+            with tqdm(train_loader) as data_batch:
+                for texts, images, labels, sample_weights in data_batch:
+                    optimizer.zero_grad()
+                    _, _, _, _, loss = model(texts, images, labels, sample_weights)
+                    loss.backward()
+                    optimizer.step()
+                    if update_in_batch:
+                        scheduler.step()
+                    train_losses.append(loss.item())
+                    train_losses_cur_epoch.append(loss.item())
+                    learning_rates.append(optimizer.param_groups[0]['lr'])
+            print("Epoch Loss = ", np.mean(train_losses_cur_epoch))
 
-    except (KeyboardInterrupt, Exception) as e:
-        epo.close()
-        data_batch.close()
-        raise
     import matplotlib.pyplot as plt
-
     if plot:
         print(model)
         t = list(range(len(train_losses)))
@@ -185,8 +180,8 @@ def convert_dataframe_to_dataset(df, metadata, train=True):
     joiner = partial(os.path.join, metadata["data_dir"])
     text = list(df.text)
     img = list(map(joiner, df.img))
-    labels = torch.tensor(df.label) if "label" in df else None
-    sample_weights = torch.tensor(df.sample_weights) if "sample_weights" in df else None
+    labels = torch.tensor(df["label"].values) if "label" in df else None
+    sample_weights = torch.tensor(df["sample_weights"].values) if "sample_weights" in df else None
     ds = TextImageDataset(text, img, labels, sample_weights,
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
@@ -315,4 +310,10 @@ def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weigh
     probas = (test_augmented.groupby(["id"])["weighted_proba"].sum() / test_augmented.groupby(["id"])["sample_weights"].sum()).reset_index()
     probas.columns = ["id", "proba"]
     probas["label"] = (probas["proba"] > 0.5).astype(int)
-    return probas
+    submission_format = datadict["submission_format"]
+    assert set(submission_format.id) == set(probas.id)
+    sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="left", on="id")
+    sf["proba"] = sf["p"]
+    sf["label"] = sf["l"]
+    sf = sf[["id", "proba", "label"]]
+    return sf, model

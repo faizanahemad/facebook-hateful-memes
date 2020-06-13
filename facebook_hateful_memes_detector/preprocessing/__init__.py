@@ -311,6 +311,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     train_augmented = pd.read_csv(joiner("train-augmented.csv")) if os.path.exists(joiner("train-augmented.csv")) else None
     dev_augmented = pd.read_csv(joiner("dev-augmented.csv")) if os.path.exists(joiner("dev-augmented.csv")) else None
     test_augmented = pd.read_csv(joiner("test-augmented.csv")) if os.path.exists(joiner("test-augmented.csv")) else None
+    submission_format = pd.read_csv(joiner("submission_format.csv"))
     # TODO: Fold in dev into train
     if use_dev:
         train_augmented = dev_augmented
@@ -321,6 +322,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
 
     rd = dict(train=train, test=test, dev=dev,
               train_augmented=train_augmented, dev_augmented=dev_augmented, test_augmented=test_augmented,
+              submission_format=submission_format,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev,
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform,

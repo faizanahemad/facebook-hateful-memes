@@ -10,9 +10,9 @@ import fasttext
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract
 from .FasttextPooled import FasttextPooledModel
-from ..classifiers import CNN1DClassifier, GRUClassifier, CNN1DSimple, TransformerClassifier
+from ..classifiers import CNN1DClassifier, GRUClassifier, TransformerClassifier
 
 
 class Fasttext1DCNNModel(FasttextPooledModel):
@@ -25,6 +25,17 @@ class Fasttext1DCNNModel(FasttextPooledModel):
                  **kwargs):
         super(Fasttext1DCNNModel, self).__init__(classifer_dims, num_classes, gaussian_noise, dropout,
                                                  n_tokens_in, n_tokens_out, True, **kwargs)
+        fasttext_file = kwargs[
+            "fasttext_file"] if "fasttext_file" in kwargs else "crawl-300d-2M-subword.bin"  # "wiki-news-300d-1M-subword.bin"
+        fasttext_model = kwargs["fasttext_model"] if "fasttext_model" in kwargs else None
+        assert fasttext_file is not None or fasttext_model is not None or use_as_super
+        if not use_as_super:
+            if fasttext_file is not None:
+                self.text_model = fasttext.load_model(fasttext_file)
+            else:
+                self.text_model = fasttext_model
+        self.crawl_nn = ExpandContract(200 + 300 + 100, embedding_dims, dropout,
+                                       use_layer_norm=True, unit_norm=False)
 
         if not use_as_super:
             if classifier == "cnn":
@@ -36,8 +47,6 @@ class Fasttext1DCNNModel(FasttextPooledModel):
 
             elif classifier == "gru":
                 self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
-            elif classifier == "simple_cnn":
-                self.classifier = CNN1DSimple(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 

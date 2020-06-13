@@ -307,27 +307,9 @@ def stack_and_pad_tensors(batch, max_len=None, padding_index=DEFAULT_PADDING_IND
     return padded
 
 
-class Squeeze(nn.Module):
-    def forward(self, input):
-        return input.squeeze(1)
-
-
 class Transpose(nn.Module):
     def forward(self, input):
         return input.transpose(1, 2)
-
-
-class WordChannelReducer(nn.Module):
-    def __init__(self, in_channels, out_channels, strides):
-        super(WordChannelReducer, self).__init__()
-        conv = nn.Conv1d(in_channels, in_channels * strides, 1, 1, padding=0, groups=4, bias=False)
-        init_fc(conv, "leaky_relu")
-        pool = nn.AvgPool1d(strides)
-        conv2 = nn.Conv1d(in_channels * strides, out_channels, 1, 1, padding=0, groups=2, bias=False)
-        self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), pool, conv2, Transpose())
-
-    def forward(self, x):
-        return self.layers(x)
 
 
 class ExpandContract(nn.Module):
@@ -341,7 +323,12 @@ class ExpandContract(nn.Module):
         nn2 = nn.Linear(in_dims * expansion_factor, out_dims)
         init_fc(nn2, "linear")
 
-        layers = [nn.Dropout(dropout), nn1, nn.LeakyReLU(), nn.Dropout(dropout), nn2]
+        r1 = nn.Conv1d(in_dims, out_dims * expansion_factor, 1, 1, padding=0, groups=2, bias=False)
+        init_fc(r1, "leaky_relu")
+        r2 = nn.Conv1d(out_dims * expansion_factor, out_dims, 1, 1, padding=0, groups=8, bias=False)
+        init_fc(r2, "linear")
+
+        layers = [Transpose(), nn.Dropout(dropout), r1, nn.LeakyReLU(), nn.Dropout(dropout), r2, Transpose()]
         if use_layer_norm_input:
             layers = [nn.LayerNorm(in_dims)] + layers
         if use_layer_norm:
@@ -351,9 +338,16 @@ class ExpandContract(nn.Module):
         self.unit_norm_input = unit_norm_input
 
     def forward(self, x):
+        squeezed = False
+        if len(x.size()) < 3:
+            assert len(x.size()) == 2
+            x = x.unsqueeze(1)
+            squeezed = True
         if self.unit_norm_input:
             x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
         x = self.nn(x)
+        if squeezed:
+            x = x.squeeze()
         if self.unit_norm:
             x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
         return x

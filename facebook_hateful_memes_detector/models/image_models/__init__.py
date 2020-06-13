@@ -1,0 +1,1 @@
+from .ImageFullTextConvMidFusion import ImageFullTextConvMidFusionModel

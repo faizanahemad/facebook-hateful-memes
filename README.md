@@ -118,6 +118,9 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
     
     
 ## Possible Pretrained Models List
+    - https://github.com/facebookresearch/detectron2
+    - https://github.com/open-mmlab/mmdetection
+    - https://github.com/TuSimple/simpledet
     - https://github.com/Holmeyoung/crnn-pytorch
     - https://github.com/OpenNMT/OpenNMT-py
     - https://github.com/CSAILVision/semantic-segmentation-pytorch
@@ -125,6 +128,8 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
     - https://github.com/clovaai/deep-text-recognition-benchmark
     - https://github.com/facebookresearch/detectron2
     - https://github.com/thunlp/ERNIE : Wikipedia Knowledge base
+    - https://github.com/jackroos/VL-BERT
+    - https://github.com/facebookresearch/detr
     
 ## Possible Extra Datasets
     - Sarcasm
@@ -137,6 +142,7 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
         
     - Emoji
     - General NLP: https://pytorchnlp.readthedocs.io/en/latest/source/torchnlp.datasets.html
+    - https://visualgenome.org/
         
     
 ## Other References
