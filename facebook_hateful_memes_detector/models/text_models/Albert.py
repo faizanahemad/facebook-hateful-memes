@@ -4,7 +4,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from ..classifiers import CNN1DClassifier, GRUClassifier
+from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer
 from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
@@ -12,15 +12,15 @@ import torchvision.models as models
 
 
 class AlbertClassifer(Fasttext1DCNNModel):
-    def __init__(self, classifer_dims, num_classes, embedding_dims,
-                 gaussian_noise=0.0, dropout=0.0,
-                 internal_dims=512, n_layers=2,
-                 classifier="cnn",
+    def __init__(self, classifier_dims, num_classes, embedding_dims,
+                 gaussian_noise, dropout,
+                 internal_dims, n_layers,
+                 featurizer, final_layer_builder,
                  n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False, **kwargs):
-        super(AlbertClassifer, self).__init__(classifer_dims, num_classes, embedding_dims, gaussian_noise, dropout,
+        super(AlbertClassifer, self).__init__(classifier_dims, num_classes, embedding_dims, gaussian_noise, dropout,
                                               internal_dims, n_layers,
-                                              classifier,
+                                              featurizer, final_layer_builder,
                                               n_tokens_in, n_tokens_out, True, **kwargs)
         assert n_tokens_in % n_tokens_out == 0
         model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
@@ -32,12 +32,16 @@ class AlbertClassifer(Fasttext1DCNNModel):
             for p in self.model.parameters():
                 p.requires_grad = False
         if not use_as_super:
-            if classifier == "cnn":
-                self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
-                                                  classifer_dims, internal_dims, None, gaussian_noise, dropout)
-            elif classifier == "gru":
-                self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims,
+            if featurizer == "cnn":
+                self.featurizer = CNN1DFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                                                  classifier_dims, internal_dims, None, gaussian_noise, dropout)
+            elif featurizer == "gru":
+                self.featurizer = GRUFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifier_dims,
                                                 internal_dims, n_layers, gaussian_noise, dropout)
+            elif featurizer == "basic":
+                self.featurizer = BasicFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                                                  classifier_dims,
+                                                  internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 

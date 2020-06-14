@@ -308,8 +308,20 @@ def stack_and_pad_tensors(batch, max_len=None, padding_index=DEFAULT_PADDING_IND
 
 
 class Transpose(nn.Module):
-    def forward(self, input):
-        return input.transpose(1, 2)
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inp):
+        return inp.transpose(1, 2)
+
+
+class Average(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, inp: torch.Tensor):
+        return inp.mean(self.dim)
 
 
 class ExpandContract(nn.Module):
@@ -441,6 +453,159 @@ def get_set_device_functions():
 
 
 get_device, set_device, set_cpu_as_device, set_first_gpu = get_set_device_functions()
+
+
+class CNNHead(nn.Module):
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 task, loss=None, width="wide",):
+        super().__init__()
+        if task not in ["classification", "regression", "k-classification"]:
+            raise NotImplementedError(task)
+        # TODO: Implement n_of_k class classification or set prediction/bipartite loss
+        self.task = task
+        if task == "classification":
+            self.loss = nn.CrossEntropyLoss()
+        elif task == "regression":
+            self.loss = nn.MSELoss()
+        elif task == "k-classification":
+            self.loss = nn.BCEWithLogitsLoss()
+
+        if loss is not None:
+            self.loss = loss
+
+        c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=False)
+        init_fc(c1, "linear")
+        avp = nn.AdaptiveAvgPool1d(1)
+        dp = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(dp, Transpose(), c1, avp)
+        self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
+
+    def forward(self, x, labels=None):
+        """
+
+        :param x: Final Features in shape: (Batch, Seq, Embedding_dims)
+        :param labels: task specific labels with shape: (Batch,) for classification and (Batch,*) for regression and k-classification
+        :return: loss, logits
+        """
+        assert ((len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims))
+                or (len(x.size()) == 4 and x.size()[1] == self.n_dims))
+        logits = self.classifier(x).squeeze()
+        loss = torch.tensor(0.0)
+        if labels is not None:
+            if self.task == "classification":
+                assert len(labels.size()) == 1
+                loss = self.loss(logits, labels)
+                # preds = logits.max(dim=1).indices
+                logits = torch.softmax(logits, dim=1)
+            elif self.task == "regression":
+                assert len(labels.size()) == 2
+                assert labels.size()[1] == self.n_out
+                loss = self.loss(logits, labels)
+
+            elif self.task == "k-classification":
+                assert len(labels.size()) == 2
+                assert labels.size()[1] == self.n_out
+                labels = labels.astype(float)
+                loss = self.loss(logits, labels)
+                logits = torch.sigmoid(logits)
+
+        if self.task == "classification":
+            logits = torch.softmax(logits, dim=1)
+        elif self.task == "k-classification":
+            logits = torch.sigmoid(logits)
+
+        return logits, loss
+
+
+class CNN2DHead(CNNHead):
+    def __init__(self, n_dims, n_out, dropout,
+                 task, loss=None,):
+        super().__init__(n_dims, 1, n_out, dropout,
+                         task, loss)
+
+        conv = nn.Conv2d(n_dims, n_out, 3)
+        init_fc(conv, "linear")
+        dp = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(dp, conv, nn.AdaptiveAvgPool2d(1))
+
+
+class AveragedLinearHead(CNNHead):
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 task, loss=None,):
+        """
+        Expected input in format (Batch, Seq, Embedding_dims)
+        :param n_dims: Embedding_dims
+        :param n_tokens: Sequence Length
+        :param n_out:
+        :param dropout:
+        :param task:
+        :param loss:
+        """
+        super().__init__(n_dims, n_tokens, n_out, dropout,
+                         task, loss)
+        lin = nn.Linear(n_dims, n_out)
+        init_fc(lin, "linear")
+        dp = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(dp, Average(1), lin)
+
+
+class PositionExtract(nn.Module):
+    def __init__(self, pos):
+        super().__init__()
+        self.pos = pos
+
+    def forward(self, inp):
+        return inp[:, self.pos, :].squeeze()
+
+
+class OneTokenPositionLinearHead(nn.Module):
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 task, loss=None, extract_pos=0):
+        super().__init__(n_dims, n_tokens, n_out, dropout,
+                         task, loss)
+        lin = nn.Linear(n_dims, n_out)
+        init_fc(lin, "linear")
+        dp = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(dp, PositionExtract(extract_pos), lin)
+
+
+class MultiTaskForward(nn.Module):
+    def __init__(self, task_heads: List, task_weights=None):
+        super().__init__()
+        self.heads = nn.ModuleList(task_heads)
+        assert task_weights is None or len(task_weights) == len(task_heads)
+        if task_weights is None:
+            task_weights = torch.ones(len(task_heads), dtype=float) # use device= param for directly creating on target device
+        self.task_weights = task_weights
+
+    def forward(self, x, labels=None):
+        assert labels is None or len(labels) == len(self.heads) or len(self.heads) == 1
+        logits_list = []
+        loss_total = torch.tensor(0.0)
+        if len(self.heads) == 1 and type(labels) not in [list, tuple]:
+            labels = [labels]
+
+        for i, m in enumerate(self.heads):
+            logits, loss = m(x, labels[i])
+            logits_list.append(logits)
+            loss_total += loss * self.task_weights[i]
+
+        return logits_list if len(logits_list) > 1 else logits_list[0], loss_total
+
+
+class WordChannelReducer(nn.Module):
+    def __init__(self, in_channels, out_channels, strides):
+        super(WordChannelReducer, self).__init__()
+        self.strides = strides
+        conv = nn.Conv1d(in_channels, out_channels * 2, strides, strides, padding=0, groups=4, bias=False)
+        init_fc(conv, "leaky_relu")
+        conv2 = nn.Conv1d(out_channels * 2, out_channels, 1, 1, padding=0, groups=1, bias=False)
+        init_fc(conv2, "linear")
+        self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), conv2, Transpose())
+
+    def forward(self, x):
+        assert x.size(-1) % self.strides == 0
+        return self.layers(x)
 
 
 

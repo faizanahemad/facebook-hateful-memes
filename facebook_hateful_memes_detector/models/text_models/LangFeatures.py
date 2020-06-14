@@ -38,7 +38,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_
     get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract
 from ...utils import get_universal_deps_indices, has_digits
 from ..external import ModelWrapper, get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
-from ..classifiers import CNN1DClassifier, GRUClassifier
+from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer
 from .Fasttext1DCNN import Fasttext1DCNNModel
 import pytextrank
 import gensim.downloader as api
@@ -50,16 +50,16 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as VaderSen
 
 
 class LangFeaturesModel(Fasttext1DCNNModel):
-    def __init__(self, classifer_dims, num_classes, embedding_dims,
-                 gaussian_noise=0.0, dropout=0.0,
-                 internal_dims=512, n_layers=2,
-                 classifier="cnn",
+    def __init__(self, classifier_dims, num_classes, embedding_dims,
+                 gaussian_noise, dropout,
+                 internal_dims, n_layers,
+                 featurizer, final_layer_builder,
                  n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False,
                  **kwargs):
-        super(LangFeaturesModel, self).__init__(classifer_dims, num_classes, embedding_dims, gaussian_noise, dropout,
+        super(LangFeaturesModel, self).__init__(classifier_dims, num_classes, embedding_dims, gaussian_noise, dropout,
                                                 internal_dims, n_layers,
-                                                classifier,
+                                                featurizer, final_layer_builder,
                                                 n_tokens_in, n_tokens_out, use_as_super=True, **kwargs)
         assert "capabilities" in kwargs
         capabilities = kwargs["capabilities"]
@@ -186,10 +186,14 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         self.contract_nn = ExpandContract(self.all_dims, embedding_dims, dropout,
                                           use_layer_norm=True, unit_norm=False, groups=(4, 4))
         if not use_as_super:
-            if classifier == "cnn":
-                self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
-            elif classifier == "gru":
-                self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
+            if featurizer == "cnn":
+                self.featurizer = CNN1DFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, None, gaussian_noise, dropout)
+            elif featurizer == "gru":
+                self.featurizer = GRUFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
+            elif featurizer == "basic":
+                self.featurizer = BasicFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                                                  classifier_dims,
+                                                  internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 

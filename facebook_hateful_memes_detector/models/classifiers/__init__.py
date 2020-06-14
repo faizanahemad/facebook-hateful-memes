@@ -1,4 +1,4 @@
-from .CNN1DClassifier import CNN1DClassifier
-from .GRUClassifier import GRUClassifier
-from .TransformerClassifier import TransformerClassifier, TransformerEnsembleClassifier
-from .BaseClassifier import BasicFeaturizer
+from .CNN1DFeaturizer import CNN1DFeaturizer
+from .GRUFeaturizer import GRUFeaturizer
+from .TransformerFeaturizer import TransformerFeaturizer, TransformerEnsembleFeaturizer
+from .BaseFeaturizer import BasicFeaturizer

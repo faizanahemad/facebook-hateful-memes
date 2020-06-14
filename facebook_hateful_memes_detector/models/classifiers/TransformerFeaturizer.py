@@ -4,10 +4,10 @@ import torch.nn as nn
 import torch
 import torchnlp
 import torch.nn.functional as F
-from .BaseClassifier import BaseClassifier
+from .BaseFeaturizer import BaseFeaturizer
 from ...utils import init_fc, GaussianNoise, ExpandContract
 import math
-from .CNN1DClassifier import Residual1DConv
+from .CNN1DFeaturizer import Residual1DConv
 from torch.nn.init import xavier_uniform_
 from torch.nn.init import constant_
 from torch.nn.init import xavier_normal_
@@ -110,11 +110,11 @@ class PositionalEncoding2D(nn.Module):
         return self.dropout(x)
 
 
-class TransformerClassifier(BaseClassifier):
+class TransformerFeaturizer(BaseFeaturizer):
     def __init__(self, num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
-        super(TransformerClassifier, self).__init__(num_classes, n_tokens_in, n_channels_in, n_tokens_out,
+        super(TransformerFeaturizer, self).__init__(num_classes, n_tokens_in, n_channels_in, n_tokens_out,
                                                     n_channels_out,
                                                     n_internal_dims, n_layers, gaussian_noise, dropout)
         assert math.log2(self.num_pooling).is_integer()
@@ -133,10 +133,6 @@ class TransformerClassifier(BaseClassifier):
             init_fc(self.input_nn, "linear")
 
         self.transformer = nn.Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims*4, dropout)
-
-        classifier_nn2 = nn.Linear(n_channels_out, num_classes)
-        init_fc(classifier_nn2, "linear")
-        self.classifier_nn = classifier_nn2
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
 
     def forward(self, x):
@@ -152,17 +148,16 @@ class TransformerClassifier(BaseClassifier):
         x = x.transpose(0, 1)
 
         x = self.output_nn(x) if self.output_nn is not None else x
-        logits = self.classifier_nn(x.mean(1))
         assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
-        return logits, x
+        return x
 
 
-class TransformerEnsembleClassifier(nn.Module):
+class TransformerEnsembleFeaturizer(nn.Module):
     def __init__(self, ensemble_config: Dict[str, Dict[str, object]],
                  num_classes, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
-        super(TransformerEnsembleClassifier, self).__init__()
+        super(TransformerEnsembleFeaturizer, self).__init__()
         assert math.log2(self.num_pooling).is_integer()
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
@@ -196,11 +191,6 @@ class TransformerEnsembleClassifier(nn.Module):
 
         self.transformer = nn.Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims * 4, dropout)
 
-        classifier_nn1 = nn.Linear(n_channels_out, n_channels_out * 2)
-        init_fc(classifier_nn1, "leaky_relu")
-        classifier_nn2 = nn.Linear(n_channels_out * 2, num_classes)
-        init_fc(classifier_nn2, "linear")
-        self.classifier_nn = nn.Sequential(dp, classifier_nn1, nn.LeakyReLU(), classifier_nn2)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.pos_encoder2d = PositionalEncoding2D(n_internal_dims, dropout)
 
@@ -222,11 +212,9 @@ class TransformerEnsembleClassifier(nn.Module):
         transformer_tgt = transformer_tgt.transpose(0, 1)
         x = self.transformer(x, transformer_tgt)
         x = x.transpose(0, 1)
-
         x = self.output_nn(x)
-        logits = self.classifier_nn(x.mean(1))
         assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
-        return logits, x
+        return x
 
 
 

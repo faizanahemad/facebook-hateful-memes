@@ -11,14 +11,14 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract
-from ..classifiers import CNN1DClassifier, GRUClassifier, TransformerClassifier
+from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
 
 class Fasttext1DCNNModel(nn.Module):
-    def __init__(self, classifer_dims, num_classes, embedding_dims,
-                 gaussian_noise=0.0, dropout=0.0,
-                 internal_dims=512, n_layers=2,
-                 classifier="cnn",
+    def __init__(self, classifier_dims, num_classes, embedding_dims,
+                 gaussian_noise, dropout,
+                 internal_dims, n_layers,
+                 featurizer, final_layer_builder,
                  n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False,
                  **kwargs):
@@ -30,9 +30,9 @@ class Fasttext1DCNNModel(nn.Module):
         self.num_classes = num_classes
         self.binary = num_classes == 2
         self.auc_loss = False
-        self.loss = nn.CrossEntropyLoss()
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
+        self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout,)
 
 
         if not use_as_super:
@@ -46,25 +46,26 @@ class Fasttext1DCNNModel(nn.Module):
             self.bpe = BPEmb(dim=200)
             self.cngram = CharNGram()
 
-            if classifier == "cnn":
-                self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
-            elif classifier == "transformer":
-                self.classifier = TransformerClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
-                                                        classifer_dims,
+            if featurizer == "cnn":
+                self.featurizer = CNN1DFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
+            elif featurizer == "transformer":
+                self.featurizer = TransformerFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                                                        classifier_dims,
                                                         internal_dims, n_layers, gaussian_noise, dropout)
+            elif featurizer == "basic":
+                self.featurizer = BasicFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                                                  classifier_dims,
+                                                  internal_dims, n_layers, gaussian_noise, dropout)
 
-            elif classifier == "gru":
-                self.classifier = GRUClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, n_layers, gaussian_noise, dropout)
+            elif featurizer == "gru":
+                self.featurizer = GRUFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 
     def forward(self, texts: List[str], img, labels, sample_weights=None):
         vectors = self.get_word_vectors(texts)
-        logits, vectors = self.classifier(vectors)
-
-        loss = self.loss(logits.view(-1, self.num_classes), labels.view(-1))
-        preds = logits.max(dim=1).indices
-        logits = torch.softmax(logits, dim=1)
+        vectors = self.featurizer(vectors)
+        logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
         if self.binary and self.training and self.auc_loss:
                 # aucroc loss
                 probas = logits[:, 1]
@@ -79,7 +80,7 @@ class Fasttext1DCNNModel(nn.Module):
 
                 loss = 1.0 * loss + 0.0 * auc_loss
 
-        return logits, preds, vectors.mean(1), vectors, loss
+        return logits, vectors.mean(1), vectors, loss
 
     def get_sentence_vector(self, texts: List[str]):
         tm = self.text_model
