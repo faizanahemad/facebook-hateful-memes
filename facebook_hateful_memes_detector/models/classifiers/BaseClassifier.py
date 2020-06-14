@@ -15,3 +15,5 @@ class BaseClassifier(nn.Module):
         self.num_pooling = int(n_tokens_in / n_tokens_out)
         self.n_tokens_out = n_tokens_out
         self.n_channels_out = n_channels_out
+        self.n_internal_dims = n_internal_dims
+        self.num_classes = num_classes

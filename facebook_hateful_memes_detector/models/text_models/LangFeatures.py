@@ -37,7 +37,6 @@ import spacy
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
     get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract
 from ...utils import get_universal_deps_indices, has_digits
-from .FasttextPooled import FasttextPooledModel
 from ..external import ModelWrapper, get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
 from ..classifiers import CNN1DClassifier, GRUClassifier
 from .Fasttext1DCNN import Fasttext1DCNNModel

@@ -8,7 +8,6 @@ from ..classifiers import CNN1DClassifier, GRUClassifier
 from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
-
 import torchvision.models as models
 
 
@@ -29,9 +28,9 @@ class AlbertClassifer(Fasttext1DCNNModel):
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.model = AutoModel.from_pretrained(model)
         self.finetune = finetune
-        # if not finetune:
-        #     for p in self.model.parameters():
-        #         p.requires_grad = False
+        if not finetune:
+            for p in self.model.parameters():
+                p.requires_grad = False
         if not use_as_super:
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out,

@@ -142,11 +142,12 @@ class TransformerClassifier(BaseClassifier):
     def forward(self, x):
         x = self.input_nn(x) if self.input_nn is not None else x
 
-        x = x.transpose(0, 1)
+        x = x.transpose(0, 1) * math.sqrt(self.n_internal_dims)
         x = self.pos_encoder(x)
         batch_size = x.size(1)
         transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1)
+        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+        transformer_tgt = self.pos_encoder(transformer_tgt)
         x = self.transformer(x, transformer_tgt)
         x = x.transpose(0, 1)
 
@@ -208,9 +209,9 @@ class TransformerEnsembleClassifier(nn.Module):
         for k, v in idict.items():
             v = self.ensemble_inp[k](v)
             if self.ensemble_config[k]["is2d"]:
-                v = self.pos_encoder2d(v)
+                v = self.pos_encoder2d(v * math.sqrt(v["n_channels_in"]))
             else:
-                v = v.transpose(0, 1)
+                v = v.transpose(0, 1) * math.sqrt(v["n_channels_in"])
             seq_label = self.em(self.ensemble_id[k])
             v = v + seq_label
             vecs.append(v)
