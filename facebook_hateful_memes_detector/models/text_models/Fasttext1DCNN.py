@@ -35,7 +35,7 @@ class Fasttext1DCNNModel(FasttextPooledModel):
             else:
                 self.text_model = fasttext_model
         self.crawl_nn = ExpandContract(200 + 300 + 100, embedding_dims, dropout,
-                                       use_layer_norm=True, unit_norm=False)
+                                       use_layer_norm=True, unit_norm=False, groups=(8, 4))
 
         if not use_as_super:
             if classifier == "cnn":

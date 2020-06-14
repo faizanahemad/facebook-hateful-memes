@@ -6,8 +6,6 @@ import torchnlp
 import torch.nn.functional as F
 
 
-
-
 class BaseClassifier(nn.Module):
     def __init__(self, num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,

@@ -11,14 +11,15 @@ from ...utils import Transpose, GaussianNoise, init_fc
 class WordChannelReducer(nn.Module):
     def __init__(self, in_channels, out_channels, strides):
         super(WordChannelReducer, self).__init__()
-        conv = nn.Conv1d(in_channels, in_channels, 1, 1, padding=0, groups=4, bias=False)
+        self.strides = strides
+        conv = nn.Conv1d(in_channels, out_channels * 2, strides, strides, padding=0, groups=4, bias=False)
         init_fc(conv, "leaky_relu")
-        pool = nn.AvgPool1d(strides)
-        conv2 = nn.Conv1d(in_channels, out_channels, 1, 1, padding=0, groups=1, bias=False)
+        conv2 = nn.Conv1d(out_channels * 2, out_channels, 1, 1, padding=0, groups=1, bias=False)
         init_fc(conv2, "linear")
-        self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), pool, conv2, Transpose())
+        self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), conv2, Transpose())
 
     def forward(self, x):
+        assert x.size(-1) % self.strides == 0
         return self.layers(x)
 
 
@@ -33,13 +34,13 @@ class GRUClassifier(BaseClassifier):
         lstm = nn.Sequential(GaussianNoise(gaussian_noise),
             nn.GRU(n_channels_in, int(n_internal_dims/2), n_layers, batch_first=True, bidirectional=True, dropout=dropout))
 
-        conv = nn.Conv1d(n_internal_dims, n_channels_out, 1, 1, padding=0, groups=1, bias=False)
-        init_fc(conv, "linear")
-        pool = nn.AvgPool1d(self.num_pooling)
-        self.projection = nn.Sequential(Transpose(), conv, pool, Transpose())
-        # projection = WordChannelReducer(n_internal_dims, n_channels_out, self.num_pooling)
+        # conv = nn.Conv1d(n_internal_dims, n_channels_out, 1, 1, padding=0, groups=4, bias=False)
+        # init_fc(conv, "linear")
+        # pool = nn.AvgPool1d(self.num_pooling)
+        # self.projection = nn.Sequential(Transpose(), conv, pool, Transpose())
+        projection = WordChannelReducer(n_internal_dims, n_channels_out, self.num_pooling)
+        self.projection = nn.Sequential(GaussianNoise(gaussian_noise), projection)
         self.featurizer = lstm
-        # self.projection = nn.Sequential(GaussianNoise(gaussian_noise), projection)
         self.c1 = nn.Conv1d(n_channels_out, num_classes, n_tokens_out, 1, padding=0, groups=1, bias=False)
         init_fc(self.c1, "linear")
         self.avp = nn.AdaptiveAvgPool1d(1)

@@ -176,13 +176,10 @@ def model_builder(model_class, model_params,
 
 def convert_dataframe_to_dataset(df, metadata, train=True):
     from functools import partial
-    import os
-    joiner = partial(os.path.join, metadata["data_dir"])
     text = list(df.text)
-    img = list(map(joiner, df.img))
     labels = torch.tensor(df["label"].values) if "label" in df else None
     sample_weights = torch.tensor(df["sample_weights"].values) if "sample_weights" in df else None
-    ds = TextImageDataset(text, img, labels, sample_weights,
+    ds = TextImageDataset(text, list(df.img), labels, sample_weights,
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
                           cache_images=metadata["cache_images"], use_images=metadata["use_images"])

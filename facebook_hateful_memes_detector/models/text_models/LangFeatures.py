@@ -47,6 +47,7 @@ from operator import itemgetter
 import nltk
 from nltk.corpus import stopwords
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as VaderSentimentIntensityAnalyzer
 
 
 class LangFeaturesModel(Fasttext1DCNNModel):
@@ -74,29 +75,29 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         self.cap_to_dim_map = cap_to_dim_map
         self.all_dims = all_dims
 
-        tr = pytextrank.TextRank(token_lookback=7)
         if "spacy" in capabilities:
+            tr = pytextrank.TextRank(token_lookback=7)
             self.nlp = spacy.load("en_core_web_lg", disable=[])
             self.nlp.add_pipe(tr.PipelineComponent, name="textrank", last=True)
             spacy_in_dims = (96*2) + (11 * embedding_dim) + 2
-            self.spacy_nn = ExpandContract(spacy_in_dims, cap_to_dim_map["spacy"], dropout, use_layer_norm=use_layer_norm)
+            self.spacy_nn = ExpandContract(spacy_in_dims, cap_to_dim_map["spacy"], dropout, use_layer_norm=use_layer_norm, groups=(2, 4))
 
         if "fasttext_crawl" in capabilities:
             self.bpe = BPEmb(dim=200)
             self.cngram = CharNGram()
             fasttext_crawl_file = kwargs["fasttext_crawl_file"] if "fasttext_crawl_file" in kwargs else "crawl-300d-2M-subword.bin"
             self.crawl = fasttext.load_model(fasttext_crawl_file)
-            self.crawl_nn = ExpandContract(200+300+100, cap_to_dim_map["fasttext_crawl"], dropout, use_layer_norm=use_layer_norm)
+            self.crawl_nn = ExpandContract(200+300+100, cap_to_dim_map["fasttext_crawl"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         if "gensim" in capabilities:
             gensim = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
                       api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
             self.gensim = gensim
-            self.gensim_nn = ExpandContract(700, cap_to_dim_map["gensim"], dropout, use_layer_norm=use_layer_norm)
+            self.gensim_nn = ExpandContract(700, cap_to_dim_map["gensim"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         if "full_view" in capabilities:
             full_sent_in_dims = 300
-            self.full_sent_nn = ExpandContract(full_sent_in_dims, cap_to_dim_map["full_view"], dropout, use_layer_norm=use_layer_norm)
+            self.full_sent_nn = ExpandContract(full_sent_in_dims, cap_to_dim_map["full_view"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         if "snlp" in capabilities:
             self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=False,
@@ -115,15 +116,15 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
             yake_dims = kwargs["yake_dims"] if "yake_dims" in kwargs else 32
             self.yake_dims = yake_dims
-            self.yake_nn = ExpandContract(300, yake_dims, dropout, use_layer_norm=use_layer_norm)
+            self.yake_nn = ExpandContract(300, yake_dims, dropout, use_layer_norm=use_layer_norm, groups=(2, 2))
 
             rake_dims = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
             self.rake_dims = rake_dims
-            self.rake_nn = ExpandContract(300, rake_dims, dropout, use_layer_norm=use_layer_norm)
+            self.rake_nn = ExpandContract(300, rake_dims, dropout, use_layer_norm=use_layer_norm, groups=(2, 2))
             self.rake = Rake(language_code="en")
 
             keyphrases_dim = 2*embedding_dim + rake_dims + yake_dims
-            self.keyphrase_nn = ExpandContract(keyphrases_dim, cap_to_dim_map["key_phrases"], dropout, use_layer_norm=use_layer_norm)
+            self.keyphrase_nn = ExpandContract(keyphrases_dim, cap_to_dim_map["key_phrases"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else "wiki-news-300d-1M-subword.bin"
         assert fasttext_file is not None
@@ -163,14 +164,15 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.key_wc_rake_nltk = nn.Embedding(4, embedding_dim)
             nn.init.normal_(self.key_wc_rake_nltk.weight, std=1 / embedding_dim)
             self.nltk_sid = SentimentIntensityAnalyzer()
-            in_dims = 306 + 5 * embedding_dim
-            self.nltk_nn = ExpandContract(in_dims, cap_to_dim_map["nltk"], dropout, use_layer_norm=use_layer_norm)
+            self.vader_sid = VaderSentimentIntensityAnalyzer()
+            in_dims = 310 + 5 * embedding_dim
+            self.nltk_nn = ExpandContract(in_dims, cap_to_dim_map["nltk"], dropout, use_layer_norm=use_layer_norm, groups=(2, 4))
 
         if "ibm_max" in capabilities:
             self.ibm_max = ModelWrapper()
             for p in self.ibm_max.model.parameters():
                 p.requires_grad = False
-            self.ibm_nn = ExpandContract(6, cap_to_dim_map["ibm_max"], dropout, use_layer_norm=use_layer_norm)
+            self.ibm_nn = ExpandContract(6, cap_to_dim_map["ibm_max"], dropout, use_layer_norm=use_layer_norm, groups=(1, 1))
 
         if "tmoji" in capabilities:
             with open(VOCAB_PATH, 'r') as f:
@@ -180,10 +182,10 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                 self.tmoji = torchmoji_emojis(PRETRAINED_PATH)
                 for p in self.tmoji.parameters():
                     p.requires_grad = False
-            self.tm_nn = ExpandContract(64, cap_to_dim_map["tmoji"], dropout, use_layer_norm=use_layer_norm)
+            self.tm_nn = ExpandContract(64, cap_to_dim_map["tmoji"], dropout, use_layer_norm=use_layer_norm, groups=(1, 1))
 
         self.contract_nn = ExpandContract(self.all_dims, embedding_dims, dropout,
-                                          use_layer_norm=True, unit_norm=False)
+                                          use_layer_norm=True, unit_norm=False, groups=(4, 4))
         if not use_as_super:
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
@@ -241,6 +243,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
     def get_nltk_vectors(self, texts: List[str]):
         # https://gist.github.com/japerk/1909413
         sid = self.nltk_sid
+        vsid = self.vader_sid
         pdict = self.pdict
         n_tokens_in = self.n_tokens_in
         rake = self.rake_nltk
@@ -258,6 +261,8 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         nltk_emb = stack_and_pad_tensors([torch.tensor([m[t] for t in sent]) for sent in nltk_texts], n_tokens_in) # if t in m else np.zeros(m.vector_size)
         sid_vec = torch.tensor([list(sid.polarity_scores(t).values()) for t in texts])
         sid_vec = sid_vec.unsqueeze(1).expand(len(texts), n_tokens_in, sid_vec.size(1))
+        vsid_vec = torch.tensor([list(vsid.polarity_scores(t).values()) for t in texts])
+        vsid_vec = vsid_vec.unsqueeze(1).expand(len(texts), n_tokens_in, vsid_vec.size(1))
         conlltags = [[ptags for ptags in nltk.tree2conlltags(ne_chunk(pos_tag(x)))] for x in nltk_texts]
 
         pos = stack_and_pad_tensors(
@@ -273,7 +278,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         key_wc_rake_nltk = stack_and_pad_tensors(key_wc_rake_nltk, self.n_tokens_in)
         nltk_rake_vectors = self.key_wc_rake_nltk(key_wc_rake_nltk)
 
-        result = torch.cat([nltk_emb, textblob_sentiments, pos_emb, ner_emb, nltk_rake_vectors, sid_vec, mask, has_digit], 2)
+        result = torch.cat([vsid_vec, nltk_emb, textblob_sentiments, pos_emb, ner_emb, nltk_rake_vectors, sid_vec, mask, has_digit], 2)
         result = self.nltk_nn(result)
         return result
 
@@ -371,7 +376,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             list(map(lambda x: torch.tensor([float(token.idx - token.head.idx) for token in x]), spacy_texts)),
             n_tokens_in)
         head_dist = head_dist.unsqueeze(2).expand(len(texts), n_tokens_in, 2)
-
 
         result = torch.cat(
             [text_tensors, pos_emb, tag_emb, dep_emb, sw_emb, ner_emb, wl_emb,

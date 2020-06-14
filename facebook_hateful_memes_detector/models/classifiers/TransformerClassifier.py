@@ -5,9 +5,12 @@ import torch
 import torchnlp
 import torch.nn.functional as F
 from .BaseClassifier import BaseClassifier
-from ...utils import init_fc, GaussianNoise
+from ...utils import init_fc, GaussianNoise, ExpandContract
 import math
 from .CNN1DClassifier import Residual1DConv
+from torch.nn.init import xavier_uniform_
+from torch.nn.init import constant_
+from torch.nn.init import xavier_normal_
 
 
 class PositionalEncoding(nn.Module):
@@ -119,29 +122,25 @@ class TransformerClassifier(BaseClassifier):
         dp = nn.Dropout(dropout)
         self.decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims), requires_grad=True)
 
-        input_nn1 = nn.Linear(n_channels_in, n_channels_in * 2)
-        init_fc(input_nn1, "leaky_relu")
-        input_nn2 = nn.Linear(n_channels_in * 2, n_internal_dims)
-        init_fc(input_nn2, "linear")
-        self.input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU(), gn, input_nn2)
+        self.input_nn = None
+        if n_channels_in != n_internal_dims:
+            self.input_nn = nn.Linear(n_channels_in, n_internal_dims, bias=False)
+            init_fc(self.input_nn, "linear")
 
-        output_nn1 = nn.Linear(n_internal_dims, n_internal_dims * 2)
-        init_fc(output_nn1, "leaky_relu")
-        output_nn2 = nn.Linear(n_internal_dims * 2, n_channels_out)
-        init_fc(output_nn2, "linear")
-        self.output_nn = nn.Sequential(dp, output_nn1, nn.LeakyReLU(), gn, output_nn2)
+        self.output_nn = None
+        if n_internal_dims != n_channels_out:
+            self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
+            init_fc(self.input_nn, "linear")
 
         self.transformer = nn.Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims*4, dropout)
 
-        classifier_nn1 = nn.Linear(n_channels_out, n_channels_out * 2)
-        init_fc(classifier_nn1, "leaky_relu")
-        classifier_nn2 = nn.Linear(n_channels_out * 2, num_classes)
+        classifier_nn2 = nn.Linear(n_channels_out, num_classes)
         init_fc(classifier_nn2, "linear")
-        self.classifier_nn = nn.Sequential(dp, classifier_nn1, nn.LeakyReLU(), classifier_nn2)
+        self.classifier_nn = classifier_nn2
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
 
     def forward(self, x):
-        x = self.input_nn(x)
+        x = self.input_nn(x) if self.input_nn is not None else x
 
         x = x.transpose(0, 1)
         x = self.pos_encoder(x)
@@ -151,7 +150,7 @@ class TransformerClassifier(BaseClassifier):
         x = self.transformer(x, transformer_tgt)
         x = x.transpose(0, 1)
 
-        x = self.output_nn(x)
+        x = self.output_nn(x) if self.output_nn is not None else x
         logits = self.classifier_nn(x.mean(1))
         assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
         return logits, x

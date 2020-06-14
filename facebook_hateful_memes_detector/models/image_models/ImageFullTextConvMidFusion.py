@@ -13,7 +13,7 @@ import fasttext
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models
 from ..classifiers import CNN1DClassifier, GRUClassifier, TransformerClassifier, TransformerEnsembleClassifier
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 
@@ -27,24 +27,19 @@ class ImageFullTextConvMidFusionModel(nn.Module):
                  **kwargs):
         super(ImageFullTextConvMidFusionModel, self).__init__()
         if type(image_model) == str:
-            if image_model == "torchvision_resnet18":
-                im_model = models.resnet18(pretrained=True)
-                resnet_layers = list(im_model.children())[:-2]
-                l1 = nn.Conv2d(512, int(internal_dims/2), 1, 1, padding=0, groups=1, bias=False)
-                init_fc(l1, "leaky_relu")
-                l2 = nn.Conv2d(int(internal_dims/2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
-                init_fc(l2, "leaky_relu")
-                resnet_layers = resnet_layers + [nn.Dropout(dropout), l1, nn.LeakyReLU(),
-                                                 GaussianNoise(gaussian_noise), l2, nn.LeakyReLU()]
-                resnet18 = nn.Sequential(*resnet_layers)
-                self.im_model = resnet18
-                self.imf_width = 7
-
+            if "torchvision" in image_model:
+                net = image_model.split("_")[-1]
+                im_model, im_shape = get_torchvision_classification_models(net, finetune_image_model)
             else:
-                raise NotImplementedError()
-        if not finetune_image_model:
-            for param in self.im_model.parameters():
-                param.requires_grad = False
+                raise NotImplementedError(image_model)
+            self.im_model = im_model
+            self.imf_width = im_shape[-1]
+            l1 = nn.Conv2d(im_shape[0], int(internal_dims / 2), 1, 1, padding=0, groups=1, bias=False)
+            init_fc(l1, "leaky_relu")
+            l2 = nn.Conv2d(int(internal_dims / 2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
+            init_fc(l2, "leaky_relu")
+            self.im_proc = nn.Sequential(nn.Dropout(dropout), l1, nn.LeakyReLU(),
+                                         GaussianNoise(gaussian_noise), l2, nn.LeakyReLU())
 
         self.text_model = text_model_class(**text_model_params)
         # Normalize on 2nd dim for both text and img
@@ -64,6 +59,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         self.classifier = nn.Sequential(nn.LeakyReLU(), nn.Dropout(dropout), l2, nn.LeakyReLU(), l3, nn.AdaptiveAvgPool2d(1))
         self.loss = nn.CrossEntropyLoss()
         self.num_classes = num_classes
+        self.finetune_image_model = finetune_image_model
 
     def forward(self, texts: List[str], img, labels, sample_weights=None):
         _, _, _, text_repr, _ = self.text_model(texts, img, labels, sample_weights)
@@ -71,7 +67,12 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         text_repr = text_repr.expand((*text_repr.size()[:-1], self.imf_width)).unsqueeze(3)
         text_repr = text_repr.expand((*text_repr.size()[:-1], self.imf_width))
 
-        image_repr = self.im_model(img)
+        if not self.finetune_image_model:
+            with torch.no_grad():
+                image_repr = self.im_model(img)
+        else:
+            image_repr = self.im_model(img)
+        image_repr = self.im_proc(image_repr)
         repr = torch.cat((image_repr, text_repr), dim=1)
         vectors = self.featurizer(repr)
         logits = self.classifier(vectors).squeeze()

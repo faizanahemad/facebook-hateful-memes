@@ -307,6 +307,10 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     train = read_json_lines_into_df(joiner('train.jsonl'))
     test = read_json_lines_into_df(joiner('test.jsonl'))
 
+    dev["img"] = list(map(joiner, dev.img))
+    train["img"] = list(map(joiner, train.img))
+    test["img"] = list(map(joiner, test.img))
+
     augmented_data = os.path.exists(joiner("train-augmented.csv"))
     train_augmented = pd.read_csv(joiner("train-augmented.csv")) if os.path.exists(joiner("train-augmented.csv")) else None
     dev_augmented = pd.read_csv(joiner("dev-augmented.csv")) if os.path.exists(joiner("dev-augmented.csv")) else None

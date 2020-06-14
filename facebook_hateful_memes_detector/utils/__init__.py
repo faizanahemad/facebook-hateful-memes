@@ -316,16 +316,12 @@ class ExpandContract(nn.Module):
     def __init__(self, in_dims, out_dims, dropout=0.0, expansion_factor=2,
                  use_layer_norm=False, unit_norm=False,
                  use_layer_norm_input=False, unit_norm_input=False,
-                 activation="leaky_relu"):
+                 groups=(2, 4)):
         super().__init__()
-        nn1 = nn.Linear(in_dims, in_dims * expansion_factor)
-        init_fc(nn1, activation)
-        nn2 = nn.Linear(in_dims * expansion_factor, out_dims)
-        init_fc(nn2, "linear")
 
-        r1 = nn.Conv1d(in_dims, out_dims * expansion_factor, 1, 1, padding=0, groups=2, bias=False)
+        r1 = nn.Conv1d(in_dims, out_dims * expansion_factor, 1, 1, padding=0, groups=groups[0], bias=False)
         init_fc(r1, "leaky_relu")
-        r2 = nn.Conv1d(out_dims * expansion_factor, out_dims, 1, 1, padding=0, groups=8, bias=False)
+        r2 = nn.Conv1d(out_dims * expansion_factor, out_dims, 1, 1, padding=0, groups=groups[1], bias=False)
         init_fc(r2, "linear")
 
         layers = [Transpose(), nn.Dropout(dropout), r1, nn.LeakyReLU(), nn.Dropout(dropout), r2, Transpose()]
@@ -351,3 +347,67 @@ class ExpandContract(nn.Module):
         if self.unit_norm:
             x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
         return x
+
+
+def get_torchvision_classification_models(net, finetune=False):
+    from torchvision import models
+    if net == "resnet18":
+        im_model = models.resnet18(pretrained=True)
+        shape = (512, 7, 7)
+    elif net == "resnet34":
+        im_model = models.resnet34(pretrained=True)
+        shape = (512, 7, 7)
+    elif net == "resnet50":
+        im_model = models.resnet50(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "resnet101":
+        im_model = models.resnet101(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "resnet152":
+        im_model = models.resnet152(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "mobilenet_v2":
+        im_model = models.mobilenet_v2(pretrained=True)
+        resnet_layers = im_model.features[:-1]
+        rm = nn.Sequential(*resnet_layers)
+        shape = (320, 7, 7)
+    elif net == "resnext50_32x4d":
+        im_model = models.resnext50_32x4d(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x8d":
+        im_model = models.resnext101_32x8d(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "wide_resnet50_2":
+        im_model = models.wide_resnet50_2(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "wide_resnet101_2":
+        im_model = models.wide_resnet101_2(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "mnasnet0_5":
+        im_model = models.mnasnet0_5(pretrained=True)  # models.mnasnet1_0
+        resnet_layers = im_model.layers[:-3]
+        model = nn.Sequential(*resnet_layers)
+        shape = (160, 7, 7)
+    elif net == "mnasnet1_0":
+        im_model = models.mnasnet1_0(pretrained=True)  # models.mnasnet1_0
+        resnet_layers = im_model.layers[:-3]
+        model = nn.Sequential(*resnet_layers)
+        shape = (160, 7, 7)
+    elif net == "squeezenet1_1":
+        im_model = models.squeezenet1_1(pretrained=True)
+        resnet_layers = list(im_model.children())[:-1]
+        model = nn.Sequential(*resnet_layers)
+        shape = (512, 13, 13)
+    else:
+        raise NotImplementedError(net)
+
+    if "resnet" in net or "resnext" in net:
+        resnet_layers = list(im_model.children())[:-3] + [im_model.layer4[0], im_model.layer4[1]]
+        model = nn.Sequential(*resnet_layers)
+
+    if not finetune:
+        for p in model.parameters():
+            p.requires_grad = False
+
+    return model, shape
+
