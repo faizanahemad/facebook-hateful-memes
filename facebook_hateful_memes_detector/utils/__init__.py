@@ -411,3 +411,36 @@ def get_torchvision_classification_models(net, finetune=False):
 
     return model, shape
 
+
+def get_set_device_functions():
+    device = {"device": None}
+    def get_device():
+        if device["device"] is None:
+            raise ValueError("No device set. Call `set_device(device)` first.")
+        return device["device"]
+
+    def set_device(device):
+        assert type(device) == torch.device
+        if "cuda" in str(device):
+            if not torch.cuda.is_available():
+                raise ValueError("GPU device provided but `torch.cuda.is_available()` = False.")
+        device["device"] = device
+
+    def set_cpu_as_device():
+        device["device"] = torch.device('cpu')
+
+    def set_first_gpu():
+        assert torch.cuda.is_available()
+        device = torch.device('cuda:0')
+        if "cuda" in str(device):
+            if not torch.cuda.is_available():
+                raise ValueError("GPU device provided but `torch.cuda.is_available()` = False.")
+        device["device"] = device
+
+    return get_device, set_device, set_cpu_as_device, set_first_gpu
+
+
+get_device, set_device, set_cpu_as_device, set_first_gpu = get_set_device_functions()
+
+
+

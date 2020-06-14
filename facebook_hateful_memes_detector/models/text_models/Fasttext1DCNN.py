@@ -30,20 +30,22 @@ class Fasttext1DCNNModel(nn.Module):
         self.num_classes = num_classes
         self.binary = num_classes == 2
         self.auc_loss = False
-        self.bpe = BPEmb(dim=200)
-        self.cngram = CharNGram()
         self.loss = nn.CrossEntropyLoss()
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
+
+
         if not use_as_super:
             if fasttext_file is not None:
                 self.text_model = fasttext.load_model(fasttext_file)
             else:
                 self.text_model = fasttext_model
-        self.crawl_nn = ExpandContract(200 + 300 + 100, embedding_dims, dropout,
-                                       use_layer_norm=True, unit_norm=False, groups=(8, 4))
 
-        if not use_as_super:
+            self.crawl_nn = ExpandContract(200 + 300 + 100, embedding_dims, dropout,
+                                           use_layer_norm=True, unit_norm=False, groups=(8, 4))
+            self.bpe = BPEmb(dim=200)
+            self.cngram = CharNGram()
+
             if classifier == "cnn":
                 self.classifier = CNN1DClassifier(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifer_dims, internal_dims, None, gaussian_noise, dropout)
             elif classifier == "transformer":
