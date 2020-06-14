@@ -35,9 +35,9 @@ class ImageFullTextConvMidFusionModel(nn.Module):
                 raise NotImplementedError(image_model)
             self.im_model = im_model
             self.imf_width = im_shape[-1]
-            l1 = nn.Conv2d(im_shape[0], int(internal_dims / 2), 1, 1, padding=0, groups=1, bias=False)
+            l1 = nn.Conv2d(im_shape[0], int(im_shape[0] / 2), 1, 1, padding=0, groups=1, bias=False)
             init_fc(l1, "leaky_relu")
-            l2 = nn.Conv2d(int(internal_dims / 2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
+            l2 = nn.Conv2d(int(im_shape[0] / 2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
             init_fc(l2, "leaky_relu")
             self.im_proc = nn.Sequential(nn.Dropout(dropout), l1, nn.LeakyReLU(),
                                          GaussianNoise(gaussian_noise), l2, nn.LeakyReLU())
@@ -46,7 +46,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         # Normalize on 2nd dim for both text and img
         l2 = nn.Conv2d(internal_dims + text_in_channels, int((internal_dims + text_in_channels)/2), 1, 1, padding=0, groups=1, bias=False)
         init_fc(l2, "leaky_relu")
-        l3 = nn.Conv2d(int((internal_dims + text_in_channels)/2), internal_dims, 3, 1, padding=4, groups=1, bias=False)
+        l3 = nn.Conv2d(int((internal_dims + text_in_channels)/2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
         init_fc(l3, "leaky_relu")
         l4 = nn.Conv2d(internal_dims, classifier_dims, 3, 1, padding=0, groups=1, bias=False)
         init_fc(l4, "leaky_relu")

@@ -47,11 +47,11 @@ class Residual1DConv(nn.Module):
 
 
 class CNN1DFeaturizer(BaseFeaturizer):
-    def __init__(self, num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
+    def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
 
-        super(CNN1DFeaturizer, self).__init__(num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
+        super(CNN1DFeaturizer, self).__init__(n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                                               n_internal_dims, n_layers, gaussian_noise, dropout)
         assert math.log2(self.num_pooling).is_integer()
 

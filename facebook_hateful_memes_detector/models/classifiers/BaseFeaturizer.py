@@ -4,12 +4,11 @@ import torch.nn as nn
 import torch
 import torchnlp
 import torch.nn.functional as F
-from ...utils import Transpose, GaussianNoise, init_fc, Average
-
+from ...utils import Transpose, GaussianNoise, init_fc, Average, WordChannelReducer
 
 
 class BaseFeaturizer(nn.Module):
-    def __init__(self, num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
+    def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
         super(BaseFeaturizer, self).__init__()
@@ -18,7 +17,6 @@ class BaseFeaturizer(nn.Module):
         self.n_tokens_out = n_tokens_out
         self.n_channels_out = n_channels_out
         self.n_internal_dims = n_internal_dims
-        self.num_classes = num_classes
 
 
 class BasicFeaturizer(BaseFeaturizer):

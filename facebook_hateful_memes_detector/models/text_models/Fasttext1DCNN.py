@@ -32,7 +32,6 @@ class Fasttext1DCNNModel(nn.Module):
         self.auc_loss = False
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
-        self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout,)
 
 
         if not use_as_super:
@@ -47,20 +46,21 @@ class Fasttext1DCNNModel(nn.Module):
             self.cngram = CharNGram()
 
             if featurizer == "cnn":
-                self.featurizer = CNN1DFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
+                self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
             elif featurizer == "transformer":
-                self.featurizer = TransformerFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                         classifier_dims,
                                                         internal_dims, n_layers, gaussian_noise, dropout)
             elif featurizer == "basic":
-                self.featurizer = BasicFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out,
+                self.featurizer = BasicFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                   classifier_dims,
                                                   internal_dims, n_layers, gaussian_noise, dropout)
 
             elif featurizer == "gru":
-                self.featurizer = GRUFeaturizer(num_classes, n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
+                self.featurizer = GRUFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 
     def forward(self, texts: List[str], img, labels, sample_weights=None):
         vectors = self.get_word_vectors(texts)

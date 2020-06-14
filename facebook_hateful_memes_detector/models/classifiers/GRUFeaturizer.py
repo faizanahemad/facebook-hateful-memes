@@ -9,10 +9,10 @@ from ...utils import Transpose, GaussianNoise, init_fc, WordChannelReducer
 
 
 class GRUFeaturizer(BaseFeaturizer):
-    def __init__(self, num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
+    def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
-        super(GRUFeaturizer, self).__init__(num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
+        super(GRUFeaturizer, self).__init__(n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                                             n_internal_dims, n_layers, gaussian_noise, dropout)
 
         assert n_internal_dims % 2 == 0
