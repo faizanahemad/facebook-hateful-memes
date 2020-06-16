@@ -49,7 +49,8 @@ def get_cosine_with_hard_restarts_schedule_with_warmup(warmup_proportion=0.2, nu
     return init_fn
 
 
-def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, plot=False,
+def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, validation_strategy=None,
+          plot=False,
           class_weights={0: 1, 1: 1.8}):
     if in_notebook():
         from tqdm.notebook import tqdm, trange
@@ -75,7 +76,8 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, plot
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
 
     with trange(epochs) as epo:
-        for _ in epo:
+        for epoc in epo:
+            _ = model.train()
             if update_in_epoch:
                 scheduler.step()
             _ = gc.collect()
@@ -91,7 +93,16 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, plot
                     train_losses.append(loss.item())
                     train_losses_cur_epoch.append(loss.item())
                     learning_rates.append(optimizer.param_groups[0]['lr'])
-            print("Epoch Loss = ", np.mean(train_losses_cur_epoch))
+            print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
+            if validation_strategy is not None:
+                if (epoc + 1) in validation_strategy["validation_epochs"]:
+                    if "train" in validation_strategy:
+                        vst, _ = validation_strategy["train"]["method"](*validation_strategy["train"]["args"])
+                    if "val" in validation_strategy:
+                        vsv, _ = validation_strategy["val"]["method"](*validation_strategy["val"]["args"])
+                    vst = vst[-1]
+                    vsv = vsv[-1]
+                    print("Epoch = ", epoc + 1, "Train = %.6f" % vst, "Val = %.6f" % vsv,)
 
     import matplotlib.pyplot as plt
     if plot:
@@ -169,7 +180,7 @@ def model_builder(model_class, model_params,
         prams = dict(model_params)
         prams.update(kwargs)
         model = model_class(**prams)
-        optimizer = optimiser_class(model.parameters(), **optimiser_params)
+        optimizer = optimiser_class(filter(lambda p: p.requires_grad, model.parameters()), **optimiser_params)
         return model, optimizer
 
     return builder
@@ -220,9 +231,10 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
                convert_dataframe_to_dataset(test_split, metadata, False), train_split, test_split)
 
 
-def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
+def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           augmentation_weights: Dict[str, float],
-                          multi_eval=False, kfold=False, scheduler_init_fn=None, random_state=0):
+                          multi_eval=False, kfold=False, scheduler_init_fn=None,
+                          random_state=None, validation_epochs=None):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
     if in_notebook():
@@ -233,26 +245,30 @@ def train_validate_ntimes(model_fn, data, n_tests, batch_size, epochs,
     prfs_list = []
     index = ["map", "accuracy", "auc"]
     model_stats_shown = False
-    with trange(n_tests) as nt:
-        for _ in nt:
-            for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data, augmentation_weights, multi_eval=multi_eval, random_state=random_state):
-                model, optimizer = model_fn(dataset=training_fold_dataset)
-                model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
-                params = sum([np.prod(p.size()) for p in model_parameters])
-                if not model_stats_shown:
-                    print("Model Params = %s" % (params), "\n", model)
-                    model_stats_shown = True
-                train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset)
 
-                validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)
-                train_scores, prfs_train = validate(model, batch_size, training_test_dataset, train_df)
-                prfs_list.append(prfs_train + prfs_val)
-                rdf = dict(train=train_scores, val=validation_scores)
-                rdf = pd.DataFrame(data=rdf, index=index)
-                results_list.append(rdf)
-                if not kfold:
-                    break
-    nt.close()
+    for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data, augmentation_weights, multi_eval=multi_eval, random_state=random_state):
+        model, optimizer = model_fn(dataset=training_fold_dataset)
+        model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        if not model_stats_shown:
+            print("Model Params = %s" % (params), "\n", model)
+            model_stats_shown = True
+        validation_strategy = dict(validation_epochs=validation_epochs,
+                                   train=dict(method=validate, args=[model, batch_size, training_test_dataset, train_df]),
+                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset, test_df]))
+        validation_strategy = validation_strategy if validation_epochs is not None else None
+        train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset,
+                                             validation_strategy)
+
+        validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)
+        train_scores, prfs_train = validate(model, batch_size, training_test_dataset, train_df)
+        prfs_list.append(prfs_train + prfs_val)
+        rdf = dict(train=train_scores, val=validation_scores)
+        rdf = pd.DataFrame(data=rdf, index=index)
+        results_list.append(rdf)
+        if not kfold:
+            break
+
     results = np.stack(results_list, axis=0)
     means = pd.DataFrame(results.mean(0), index=index)
     stds = pd.DataFrame(results.std(0), index=index)

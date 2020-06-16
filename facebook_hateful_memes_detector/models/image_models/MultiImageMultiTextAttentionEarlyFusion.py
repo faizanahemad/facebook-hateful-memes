@@ -70,9 +70,10 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         self.text_models = dict(zip(names, text_models))
 
         ensemble_conf = {k: dict(is2d=True, n_tokens_in=v[-1] * v[-1], n_channels_in=v[0]) for k, v in self.im_shapes.items()}
-        ensemble_conf.update(
-            {k: dict(is2d=False, n_tokens_in=v["in_tokens"], n_channels_in=v["in_channels"]) for k, v in
-             self.text_models.items()})
+        text_ensemble_conf = {k: dict(is2d=False, n_tokens_in=v["in_tokens"], n_channels_in=v["in_channels"]) for k, v in
+             self.text_models.items()}
+        ensemble_conf.update(text_ensemble_conf)
+        # ensemble_conf = text_ensemble_conf
         self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
                                                         n_layers, gaussian_noise, dropout)
 

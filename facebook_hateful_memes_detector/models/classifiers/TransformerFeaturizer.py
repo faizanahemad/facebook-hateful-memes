@@ -103,25 +103,27 @@ class PositionalEncoding2D(nn.Module):
         x = x.transpose(1, 2).transpose(2, 3) # B, H, W, C
         x = x.transpose(0, 1).transpose(1, 2) # H, W, B, C
         pe = self.pe[:x.size(0), :] # H, C
-        sys.stdout.flush()
-        pe = pe.expand(pe.size(0), b, self.d_model) # H, B, C
+        # print("2D PE", pe.size(), self.pe.size(), torch.max(pe))
+        # pe = pe.expand(pe.size(0), b, self.d_model) # H, B, C
         pe1 = pe.unsqueeze(1)
         pe2 = pe.unsqueeze(0)
+        # print("2D PE", x.size(), pe.size(), pe1.size(), pe2.size())
+        # sys.stdout.flush()
         x = x + pe1 + pe2
         x = x.flatten(0, 1)
         return self.dropout(x)
 
 
-class TransformerFeaturizer(BaseFeaturizer):
+class TransformerFeaturizer(nn.Module):
     def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
-        super(TransformerFeaturizer, self).__init__(n_tokens_in, n_channels_in, n_tokens_out,
-                                                    n_channels_out,
-                                                    n_internal_dims, n_layers, gaussian_noise, dropout)
-        assert math.log2(self.num_pooling).is_integer()
+        super(TransformerFeaturizer, self).__init__()
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
+        self.n_tokens_out = n_tokens_out
+        self.n_channels_out = n_channels_out
+        self.n_internal_dims = n_internal_dims
         self.decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims), requires_grad=True)
 
         self.input_nn = None
@@ -168,6 +170,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
         self.ensemble_config = ensemble_config
         self.n_tokens_out = n_tokens_out
         self.n_channels_out = n_channels_out
+        self.n_internal_dims = n_internal_dims
         ensemble_inp = dict()
         ensemble_id = dict()
         # n_tokens_in n_channels_in is2d
@@ -175,9 +178,11 @@ class TransformerEnsembleFeaturizer(nn.Module):
             is2d, n_tokens_in, n_channels_in = v["is2d"], v["n_tokens_in"], v["n_channels_in"]
             # input_nn, embedding, position,
             if is2d:
-                input_nn1 = nn.Conv2d(n_channels_in, n_internal_dims, 1, groups=4)
+                input_nn1 = nn.Conv2d(n_channels_in, n_internal_dims * 2, 1, groups=8)
                 init_fc(input_nn1, "leaky_relu")
-                input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU())
+                input_nn2 = nn.Conv2d(n_internal_dims * 2, n_internal_dims, 1, groups=1)
+                init_fc(input_nn2, "linear")
+                input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU(), gn, input_nn2)
 
             else:
                 input_nn1 = nn.Linear(n_channels_in, n_internal_dims * 2)
@@ -200,6 +205,11 @@ class TransformerEnsembleFeaturizer(nn.Module):
 
         self.transformer = nn.Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims * 4, dropout)
 
+        self.n_tokens_in = sum([v["n_tokens_in"] for k, v in ensemble_config.items()])
+        TransformerFeaturizer(self.n_tokens_in, n_internal_dims, n_tokens_out,
+                              n_channels_out,
+                              n_internal_dims, n_layers, gaussian_noise, dropout)
+
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.pos_encoder2d = PositionalEncoding2D(n_internal_dims, dropout)
 
@@ -210,9 +220,9 @@ class TransformerEnsembleFeaturizer(nn.Module):
             sys.stdout.flush()
             v = self.ensemble_inp[k](v)
             if conf["is2d"]:
-                v = self.pos_encoder2d(v * math.sqrt(conf["n_channels_in"]))
+                v = self.pos_encoder2d(v * math.sqrt(self.n_internal_dims))
             else:
-                v = v.transpose(0, 1) * math.sqrt(conf["n_channels_in"])
+                v = v.transpose(0, 1) * math.sqrt(self.n_internal_dims)
             seq_label = self.em(torch.tensor(self.ensemble_id[k]))
             v = v + seq_label
             vecs.append(v)
