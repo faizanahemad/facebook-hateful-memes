@@ -134,7 +134,7 @@ class TransformerFeaturizer(nn.Module):
         self.output_nn = None
         if n_internal_dims != n_channels_out:
             self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
-            init_fc(self.input_nn, "linear")
+            init_fc(self.output_nn, "linear")
 
         self.transformer = nn.Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims*4, dropout)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)

@@ -246,7 +246,9 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     index = ["map", "accuracy", "auc"]
     model_stats_shown = False
 
-    for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data, augmentation_weights, multi_eval=multi_eval, random_state=random_state):
+    for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data, augmentation_weights,
+                                                                                                                                    multi_eval=multi_eval,
+                                                                                                                                    random_state=random_state):
         model, optimizer = model_fn(dataset=training_fold_dataset)
         model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
         params = sum([np.prod(p.size()) for p in model_parameters])

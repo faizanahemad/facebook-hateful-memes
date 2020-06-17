@@ -16,28 +16,18 @@ import re
 import json
 import csv
 import numpy as np
-import yake
 
-from torchmoji.sentence_tokenizer import SentenceTokenizer
-from torchmoji.model_def import torchmoji_emojis
-from torchmoji.global_variables import PRETRAINED_PATH, VOCAB_PATH
-import stanza
 from scipy.special import softmax
-from multi_rake import Rake
 from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
-import rake_nltk
-from textblob import TextBlob
-
-
 
 import spacy
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
     get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract
 from ...utils import get_universal_deps_indices, has_digits
-from ..external import ModelWrapper, get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
+from ..external import get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer
 from .Fasttext1DCNN import Fasttext1DCNNModel
 import pytextrank
@@ -46,7 +36,6 @@ from operator import itemgetter
 import nltk
 from nltk.corpus import stopwords
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as VaderSentimentIntensityAnalyzer
 
 
 class LangFeaturesModel(Fasttext1DCNNModel):
@@ -99,11 +88,14 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.full_sent_nn = ExpandContract(full_sent_in_dims, cap_to_dim_map["full_view"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         if "snlp" in capabilities:
+            import stanza
             self.snlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse,ner', use_gpu=False,
                                     pos_batch_size=2048)
             self.snlp_nn = ExpandContract(embedding_dim * 5, cap_to_dim_map["snlp"], dropout,
                                           use_layer_norm=use_layer_norm)
         if "key_phrases" in capabilities:
+            import yake
+            from multi_rake import Rake
             self.kw_extractor = yake.KeywordExtractor(lan="en", n=3, dedupLim=0.9,
                                                  dedupFunc='seqm', windowsSize=3,
                                                  top=10, features=None)
@@ -158,6 +150,9 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         nn.init.normal_(self.wc_emb.weight, std=1 / embedding_dim)
 
         if "nltk" in capabilities:
+            import rake_nltk
+            from textblob import TextBlob
+            from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as VaderSentimentIntensityAnalyzer
             self.stop_words = set(stopwords.words('english'))
             self.rake_nltk = rake_nltk.Rake()
             self.key_wc_rake_nltk = nn.Embedding(4, embedding_dim)
@@ -168,12 +163,16 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.nltk_nn = ExpandContract(in_dims, cap_to_dim_map["nltk"], dropout, use_layer_norm=use_layer_norm, groups=(2, 4))
 
         if "ibm_max" in capabilities:
+            from ..external import ModelWrapper
             self.ibm_max = ModelWrapper()
             for p in self.ibm_max.model.parameters():
                 p.requires_grad = False
             self.ibm_nn = ExpandContract(6, cap_to_dim_map["ibm_max"], dropout, use_layer_norm=use_layer_norm, groups=(1, 1))
 
         if "tmoji" in capabilities:
+            from torchmoji.sentence_tokenizer import SentenceTokenizer
+            from torchmoji.model_def import torchmoji_emojis
+            from torchmoji.global_variables import PRETRAINED_PATH, VOCAB_PATH
             with open(VOCAB_PATH, 'r') as f:
                 maxlen = self.n_tokens_in
                 self.vocabulary = json.load(f)
@@ -245,6 +244,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
     def get_nltk_vectors(self, texts: List[str]):
         # https://gist.github.com/japerk/1909413
+        from textblob import TextBlob
         sid = self.nltk_sid
         vsid = self.vader_sid
         pdict = self.pdict
