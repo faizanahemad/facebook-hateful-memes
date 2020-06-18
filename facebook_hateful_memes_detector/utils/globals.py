@@ -36,6 +36,7 @@ get_device, set_device, set_cpu_as_device, set_first_gpu = get_set_device_functi
 def build_cache(cachedir=None):
     from joblib import Memory
     memory = Memory(os.getcwd() if cachedir is None else cachedir, verbose=0)
+    # @memory.cache
     return memory
 
 

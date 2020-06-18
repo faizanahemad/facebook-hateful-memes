@@ -60,7 +60,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     if isinstance(dataset, TextImageDataset):
         use_images = dataset.use_images
         dataset.use_images = False
-        training_fold_labels = torch.tensor([dataset[i][2] for i in range(len(dataset))])
+        training_fold_labels = torch.tensor(dataset.labels)
         dataset.use_images = use_images
     else:
         raise NotImplementedError()
@@ -83,9 +83,9 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
             _ = gc.collect()
             train_losses_cur_epoch = []
             with tqdm(train_loader) as data_batch:
-                for texts, images, labels, sample_weights in data_batch:
+                for batch in data_batch:
                     optimizer.zero_grad()
-                    _, _, _, loss = model(texts, images, labels, sample_weights)
+                    _, _, _, loss = model(batch)
                     loss.backward()
                     optimizer.step()
                     if update_in_batch:
@@ -138,9 +138,9 @@ def generate_predictions(model, batch_size, dataset):
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                              shuffle=False, num_workers=32, pin_memory=True)
     with torch.no_grad():
-        for texts, images, labels, sample_weights in test_loader:
-            logits, _, _, _ = model(texts, images, labels, sample_weights)
-            labels = labels.tolist()
+        for batch in test_loader:
+            logits, _, _, _ = model(batch)
+            labels = batch.label
             labels_list.extend(labels)
             top_class = logits.max(dim=1).indices
             top_class = top_class.flatten().tolist()

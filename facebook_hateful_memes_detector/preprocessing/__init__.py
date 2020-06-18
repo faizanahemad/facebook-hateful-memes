@@ -19,6 +19,8 @@ import re
 import contractions
 from pycontractions import Contractions
 from torch.utils.data.sampler import WeightedRandomSampler
+from mmf.common.sample import Sample, SampleList
+from mmf.common.batch_collator import BatchCollator
 
 
 def clean_text(text):
@@ -278,7 +280,7 @@ class TextAugment:
         return text
 
 
-def get_basic_image_transforms():
+def get_image2torchvision_transforms():
     preprocess = transforms.Compose([
         transforms.Resize(256),
         transforms.RandomCrop(224),
@@ -287,15 +289,7 @@ def get_basic_image_transforms():
     ])
     return preprocess
 
-
-def my_collate(batch):
-    text = [item[0] for item in batch]
-    image = torch.stack([item[1] for item in batch])
-    label = [item[2] for item in batch]
-    label = torch.LongTensor(label) if label[0] is not None else label
-    sample_weights = torch.tensor([item[3] for item in batch], dtype=float)
-    return [text, image, label, sample_weights]
-
+my_collate = BatchCollator("", "")
 
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
@@ -348,8 +342,9 @@ def make_weights_for_balanced_classes(labels, weight_per_class: Dict = None):
 class TextImageDataset(Dataset):
     def __init__(self, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
                  sample_weights: List[float] = None,
-                 text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True):
-        self.texts = [clean_text(text) for text in texts]
+                 text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
+                 keep_original_text: bool = True, keep_original_image: bool = True,):
+        self.texts = list(texts)
         self.image_locations = image_locations
         if use_images:
             self.images = {l: Image.open(l).convert('RGB') for l in image_locations} if cache_images else dict()
@@ -359,11 +354,16 @@ class TextImageDataset(Dataset):
         self.use_images = use_images
         self.sample_weights = [1.0] * len(texts) if sample_weights is None else sample_weights
         assert len(self.sample_weights) == len(self.image_locations) == len(self.texts)
+        self.keep_original_text = keep_original_text
+        self.keep_original_image = keep_original_image
+        self.to_torchvision = get_image2torchvision_transforms()
 
     def __getitem__(self, item):
         text = self.texts[item]
         label = self.labels[item] if self.labels is not None else 0
         sample_weight = self.sample_weights[item]
+        # clean_text
+        orig_text = text
         if self.text_transform is not None:
             text = self.text_transform(text)
         if self.use_images:
@@ -371,10 +371,22 @@ class TextImageDataset(Dataset):
             image = self.images.get(l)
             if image is None:
                 image = Image.open(l).convert('RGB')
+            orig_im = image
             image = self.image_transform(image) if self.image_transform is not None else image
-            return text, image, label, sample_weight
+            s = Sample({"text": text, "torchvision_image": self.to_torchvision(image),
+                        "image": image,
+                        "label": label, "sample_weight": sample_weight})
+            if self.keep_original_image:
+                s.original_image = orig_im
         else:
-            return text, torch.tensor(0), label, sample_weight
+            s = Sample({"text": text, "torchvision_image": None,
+                        "image": None,
+                        "label": label, "sample_weight": sample_weight})
+
+        if self.keep_original_text:
+            s.original_text = orig_text
+
+        return s
 
     def __len__(self):
         return len(self.texts)

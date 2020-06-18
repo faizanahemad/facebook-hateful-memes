@@ -7,6 +7,7 @@ import torch
 import torchnlp
 import torch.nn.functional as F
 import fasttext
+from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
@@ -62,7 +63,12 @@ class Fasttext1DCNNModel(nn.Module):
                 raise NotImplementedError()
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 
-    def forward(self, texts: List[str], img, labels, sample_weights=None):
+    def forward(self, sampleList: SampleList):
+        texts = sampleList.text
+        img = sampleList.image
+        labels = sampleList.label
+        sample_weights = sampleList.sample_weight
+
         vectors = self.get_word_vectors(texts)
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)

@@ -10,6 +10,7 @@ import torch
 import torchnlp
 import torch.nn.functional as F
 import fasttext
+from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
@@ -58,8 +59,13 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         self.num_classes = num_classes
         self.finetune_image_model = finetune_image_model
 
-    def forward(self, texts: List[str], img, labels, sample_weights=None):
-        _, _, text_repr, _ = self.text_model(texts, img, labels, sample_weights)
+    def forward(self, sampleList: SampleList):
+        texts = sampleList.text
+        img = sampleList.torchvision_image
+        orig_image = sampleList.original_image
+        labels = sampleList.label
+        sample_weights = sampleList.sample_weight
+        _, _, text_repr, _ = self.text_model(sampleList)
         text_repr = text_repr.mean(1).unsqueeze(2)
         text_repr = text_repr.expand((*text_repr.size()[:-1], self.imf_width)).unsqueeze(3)
         text_repr = text_repr.expand((*text_repr.size()[:-1], self.imf_width))

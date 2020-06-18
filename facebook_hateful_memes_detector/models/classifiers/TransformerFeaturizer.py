@@ -93,14 +93,13 @@ class PositionalEncoding2D(nn.Module):
         Args:
             x: the 2D image features fed to the positional encoder model (required).
         Shape:
-            x: [batch size, C, H, W,]
+            x: [batch size, H, W, C]
             output: [HxW, batch size, C]
         Examples:
             >>> output = pos_encoder(x)
         """
         b = x.size(0)
-        assert x.size(1) == self.d_model
-        x = x.transpose(1, 2).transpose(2, 3) # B, H, W, C
+        assert x.size(-1) == self.d_model
         x = x.transpose(0, 1).transpose(1, 2) # H, W, B, C
         pe = self.pe[:x.size(0), :] # H, C
         # print("2D PE", pe.size(), self.pe.size(), torch.max(pe))
@@ -173,6 +172,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
         self.n_internal_dims = n_internal_dims
         ensemble_inp = dict()
         ensemble_id = dict()
+        layer_norms = dict()
         # n_tokens_in n_channels_in is2d
         for i, (k, v) in enumerate(ensemble_config.items()):
             is2d, n_tokens_in, n_channels_in = v["is2d"], v["n_tokens_in"], v["n_channels_in"]
@@ -190,10 +190,12 @@ class TransformerEnsembleFeaturizer(nn.Module):
                 input_nn2 = nn.Linear(n_internal_dims * 2, n_internal_dims)
                 init_fc(input_nn2, "linear")
                 input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU(), gn, input_nn2)
+            layer_norms[k] = nn.LayerNorm(n_internal_dims, eps=1e-06)
             ensemble_inp[k] = input_nn
             ensemble_id[k] = i
         self.ensemble_inp = nn.ModuleDict(ensemble_inp)
         self.ensemble_id = ensemble_id
+        self.layer_norms = nn.ModuleDict(layer_norms)
         self.em = nn.Embedding(len(ensemble_config), n_internal_dims)
         nn.init.normal_(self.em.weight, std=1 / n_internal_dims)
 
@@ -220,14 +222,20 @@ class TransformerEnsembleFeaturizer(nn.Module):
             sys.stdout.flush()
             v = self.ensemble_inp[k](v)
             if conf["is2d"]:
+                v = v.transpose(1, 2).transpose(2, 3)  # B, H, W, C
+                v = self.layer_norms[k](v)
                 v = self.pos_encoder2d(v * math.sqrt(self.n_internal_dims))
             else:
+                v = self.layer_norms[k](v)
                 v = v.transpose(0, 1) * math.sqrt(self.n_internal_dims)
             seq_label = self.em(torch.tensor(self.ensemble_id[k]))
             v = v + seq_label
             vecs.append(v)
         x = torch.cat(vecs, 0)
+        assert x.size(0) == self.n_tokens_in
+        # x = x * math.sqrt(self.n_internal_dims)
         x = self.pos_encoder(x)
+        # Layernorm here?
         batch_size = x.size(1)
         transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
         transformer_tgt = transformer_tgt.transpose(0, 1)

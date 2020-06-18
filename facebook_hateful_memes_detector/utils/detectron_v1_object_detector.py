@@ -22,6 +22,33 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
+def persistent_caching_fn(fn, name, cache_dir=os.getcwd()):
+    from diskcache import Cache
+    import joblib
+    cache = Cache(cache_dir)
+    try:
+        import inspect
+        fnh = joblib.hashing.hash(name, 'sha1') + joblib.hashing.hash(inspect.getsourcelines(fn)[0], 'sha1') + joblib.hashing.hash(fn.__name__, 'sha1')
+    except Exception as e:
+        try:
+            fnh = joblib.hashing.hash(name, 'sha1') + joblib.hashing.hash(fn.__name__, 'sha1')
+        except Exception as e:
+            fnh = joblib.hashing.hash(name, 'sha1')
+
+    def cfn(*args, **kwargs):
+        hsh = fnh + joblib.hashing.hash(args, 'sha1')
+        if len(kwargs) > 0:
+            hsh = hsh + joblib.hashing.hash(kwargs, 'sha1')
+        if hsh in cache:
+            return cache[hsh]
+        else:
+            r = fn(*args, **kwargs)
+            cache[hsh] = r
+            return r
+
+    return cfn
+
+
 
 class FeatureExtractor:
     CHANNEL_MEAN = [0.485, 0.456, 0.406]
@@ -173,6 +200,7 @@ def get_image_info_fn(enable_encoder_feats=False,
                       cachedir=None,
                       device=None,
                       **kwargs):
+    import gc
     if device is not None:
         kwargs["device"] = device
     else:
@@ -185,14 +213,14 @@ def get_image_info_fn(enable_encoder_feats=False,
     else:
         memory = build_cache(cachedir)
 
-    @memory.cache
     def get_img_details(impath):
         feats = feature_extractor(impath)
         return feats
 
     get_encoder_feats = None
     get_image_captions = None
-    assert not (enable_encoder_feats ^ enable_image_captions)
+    get_batch_encoder_feats = None
+    assert enable_encoder_feats or not enable_image_captions
 
     if enable_encoder_feats:
         import captioning
@@ -207,17 +235,23 @@ def get_image_info_fn(enable_encoder_feats=False,
         att_embed = model.att_embed
         encoder = model.model.encoder
 
-        @memory.cache
         def get_encoder_feats(image_text):
-            img_feature = get_img_details(image_text)[0]
-            att_feats = att_embed(img_feature[None])
-            att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
-            att_masks = att_masks.unsqueeze(-2)
-            em = encoder(att_feats, att_masks)
-            return em
+            with torch.no_grad():
+                img_feature = get_img_details(image_text)[0]
+                att_feats = att_embed(img_feature[None])
+                att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
+                att_masks = att_masks.unsqueeze(-2)
+                em = encoder(att_feats, att_masks)
+                return em
+
+        get_encoder_feats = persistent_caching_fn(get_encoder_feats, "get_encoder_feats")
+
+        def get_batch_encoder_feats(images):
+            img_feats = [get_encoder_feats(i) for i in images]
+            _ = gc.collect()
+            return torch.stack(img_feats, 0).to(device)
 
         if enable_image_captions:
-            @memory.cache
             def get_image_captions(image_text):
                 img_feature = get_img_details(image_text)[0]
                 processed_by_model = model(img_feature.mean(0)[None], img_feature[None], mode='sample',
@@ -225,8 +259,10 @@ def get_image_info_fn(enable_encoder_feats=False,
                 sents = model.decode_sequence(processed_by_model[0])
                 return sents
 
-    return {"get_img_details": get_img_details, "get_encoder_feats": get_encoder_feats,
-            "get_image_captions": get_image_captions, "feature_extractor": feature_extractor}
+    return {"get_img_details": persistent_caching_fn(get_img_details, "get_img_details"), "get_encoder_feats": get_encoder_feats,
+            "get_image_captions": persistent_caching_fn(get_image_captions, "get_image_captions"),
+            "feature_extractor": persistent_caching_fn(feature_extractor, "feature_extractor"),
+            "get_batch_encoder_feats": get_batch_encoder_feats}
 
 
 

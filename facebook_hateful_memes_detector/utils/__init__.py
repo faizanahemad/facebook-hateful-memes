@@ -12,6 +12,8 @@ import pandas as pd
 import jsonlines
 from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 from spacy import glossary
+from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache
+import os
 
 
 RE_D = re.compile('\d')
@@ -23,7 +25,6 @@ def has_digits(string):
 
 
 def get_all_tags():
-
     # https://github.com/explosion/spaCy/blob/master/spacy/glossary.py
     # https://github.com/nltk/nltk/blob/4e59677df364841c1a23dabfde0317388997aa6d/nltk/sem/relextract.py#L31
     deps = get_universal_deps_indices()
@@ -32,14 +33,15 @@ def get_all_tags():
     spacy_glossary = list(glossary.GLOSSARY.keys())
 
     nltk_ner_tags = ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
-            'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE'] + ['LOC', 'PER', 'ORG'] + ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
-            'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE', 'FACILITY', 'GPE', 'O']
+                     'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE'] + ['LOC', 'PER', 'ORG'] + ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
+                                                                                                   'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE',
+                                                                                                   'FACILITY', 'GPE', 'O']
     snlp_list = ["NUMBER", "ORDINAL", "MONEY", "DATE", "TIME", "CAUSE_OF_DEATH", "CITY",
                  "COUNTRY", "CRIMINAL_CHARGE", "EMAIL", "HANDLE", "IDEOLOGY", "NATIONALITY", "RELIGION", "STATE_OR_PROVINCE", "TITLE", "URL"]
     others = ['gsp']
     all_list = deps + penn + upos + spacy_glossary + nltk_ner_tags + snlp_list + others
     tags = list(set(list(map(lambda x: x.lower(), all_list))))
-    return dict(zip(tags, range(1, len(tags)+1)))
+    return dict(zip(tags, range(1, len(tags) + 1)))
 
 
 def get_universal_deps_indices():
@@ -238,7 +240,7 @@ class GaussianNoise(nn.Module):
 
     def forward(self, x):
         if self.training and self.sigma != 0:
-            sigma = self.sigma # * 1.0/np.sqrt(x.size(-1))
+            sigma = self.sigma  # * 1.0/np.sqrt(x.size(-1))
             scale = sigma * x.detach()
             sampled_noise = self.noise.repeat(*x.size()).normal_() * scale
             x = x + sampled_noise
@@ -426,7 +428,7 @@ def get_torchvision_classification_models(net, finetune=False):
 
 class CNNHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 task, loss=None, width="wide",):
+                 task, loss=None, width="wide", ):
         super().__init__()
         if task not in ["classification", "regression", "k-classification"]:
             raise NotImplementedError(task)
@@ -488,7 +490,7 @@ class CNNHead(nn.Module):
 
 class CNN2DHead(CNNHead):
     def __init__(self, n_dims, n_out, dropout,
-                 task, loss=None,):
+                 task, loss=None, ):
         super().__init__(n_dims, 1, n_out, dropout,
                          task, loss)
 
@@ -500,7 +502,7 @@ class CNN2DHead(CNNHead):
 
 class AveragedLinearHead(CNNHead):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 task, loss=None,):
+                 task, loss=None, ):
         """
         Expected input in format (Batch, Seq, Embedding_dims)
         :param n_dims: Embedding_dims
@@ -544,7 +546,7 @@ class MultiTaskForward(nn.Module):
         self.heads = nn.ModuleList(task_heads)
         assert task_weights is None or len(task_weights) == len(task_heads)
         if task_weights is None:
-            task_weights = torch.ones(len(task_heads), dtype=float) # use device= param for directly creating on target device
+            task_weights = torch.ones(len(task_heads), dtype=float)  # use device= param for directly creating on target device
         self.task_weights = task_weights
 
     def forward(self, x, labels=None):
@@ -577,8 +579,13 @@ class WordChannelReducer(nn.Module):
         return self.layers(x)
 
 
-from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache
-from .detectron_v1_object_detector import get_image_info_fn
+class LambdaLayer(nn.Module):
+    def __init__(self, lambd):
+        super(LambdaLayer, self).__init__()
+        self.lambd = lambd
+
+    def forward(self, x):
+        return self.lambd(x)
 
 
-
+from .detectron_v1_object_detector import get_image_info_fn, persistent_caching_fn
