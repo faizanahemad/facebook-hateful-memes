@@ -1,7 +1,7 @@
 # the metadata of the model
 # https://github.com/IBM/MAX-Toxic-Comment-Classifier
 model_meta = {
-    'id': 'max-toxic-comment-classifier',
+    'id': 'max-toxic-comment-featurizer',
     'name': 'MAX Toxic Comment Classifier',
     'description': 'BERT Base finetuned on toxic comments from Wikipedia.',
     'type': 'Text Classification',
@@ -20,7 +20,7 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
     the pooled output.
     Params:
         `config`: a BertConfig class instance with the configuration to build a new model.
-        `num_labels`: the number of classes for the classifier. Default = 2.
+        `num_labels`: the number of classes for the featurizer. Default = 2.
     Inputs:
         `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts

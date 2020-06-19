@@ -12,10 +12,19 @@ import pandas as pd
 import jsonlines
 from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 from spacy import glossary
+from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache
+import os
+
+
+RE_D = re.compile('\d')
+
+
+def has_digits(string):
+    res = RE_D.search(string)
+    return int(res is not None)
 
 
 def get_all_tags():
-
     # https://github.com/explosion/spaCy/blob/master/spacy/glossary.py
     # https://github.com/nltk/nltk/blob/4e59677df364841c1a23dabfde0317388997aa6d/nltk/sem/relextract.py#L31
     deps = get_universal_deps_indices()
@@ -24,13 +33,15 @@ def get_all_tags():
     spacy_glossary = list(glossary.GLOSSARY.keys())
 
     nltk_ner_tags = ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
-            'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE'] + ['LOC', 'PER', 'ORG'] + ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
-            'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE', 'FACILITY', 'GPE', 'O']
+                     'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE'] + ['LOC', 'PER', 'ORG'] + ['LOCATION', 'ORGANIZATION', 'PERSON', 'DURATION',
+                                                                                                   'DATE', 'CARDINAL', 'PERCENT', 'MONEY', 'MEASURE',
+                                                                                                   'FACILITY', 'GPE', 'O']
     snlp_list = ["NUMBER", "ORDINAL", "MONEY", "DATE", "TIME", "CAUSE_OF_DEATH", "CITY",
                  "COUNTRY", "CRIMINAL_CHARGE", "EMAIL", "HANDLE", "IDEOLOGY", "NATIONALITY", "RELIGION", "STATE_OR_PROVINCE", "TITLE", "URL"]
-    all_list = deps + penn + upos + spacy_glossary + nltk_ner_tags + snlp_list
+    others = ['gsp']
+    all_list = deps + penn + upos + spacy_glossary + nltk_ner_tags + snlp_list + others
     tags = list(set(list(map(lambda x: x.lower(), all_list))))
-    return dict(zip(tags, range(1, len(tags)+1)))
+    return dict(zip(tags, range(1, len(tags) + 1)))
 
 
 def get_universal_deps_indices():
@@ -229,11 +240,18 @@ class GaussianNoise(nn.Module):
 
     def forward(self, x):
         if self.training and self.sigma != 0:
-            sigma = self.sigma # * 1.0/np.sqrt(x.size(-1))
+            sigma = self.sigma  # * 1.0/np.sqrt(x.size(-1))
             scale = sigma * x.detach()
             sampled_noise = self.noise.repeat(*x.size()).normal_() * scale
             x = x + sampled_noise
         return x
+
+
+def has_words(text):
+    text = re.sub('[ ]+', ' ', text)
+    text = re.sub(r"[^A-Za-z ]+", ' ', text)
+    tokens = [t for t in text.split() if len(t) >= 3]
+    return len(tokens) >= 2
 
 
 def in_notebook():
@@ -291,26 +309,289 @@ def stack_and_pad_tensors(batch, max_len=None, padding_index=DEFAULT_PADDING_IND
     return padded
 
 
-class Squeeze(nn.Module):
-    def forward(self, input):
-        return input.squeeze(1)
-
-
 class Transpose(nn.Module):
-    def forward(self, input):
-        return input.transpose(1, 2)
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inp):
+        return inp.transpose(1, 2)
+
+
+class Average(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, inp: torch.Tensor):
+        return inp.mean(self.dim)
+
+
+class ExpandContract(nn.Module):
+    def __init__(self, in_dims, out_dims, dropout=0.0, expansion_factor=2,
+                 use_layer_norm=False, unit_norm=False,
+                 use_layer_norm_input=False, unit_norm_input=False,
+                 groups=(2, 4)):
+        super().__init__()
+
+        r1 = nn.Conv1d(in_dims, out_dims * expansion_factor, 1, 1, padding=0, groups=groups[0], bias=False)
+        init_fc(r1, "leaky_relu")
+        r2 = nn.Conv1d(out_dims * expansion_factor, out_dims, 1, 1, padding=0, groups=groups[1], bias=False)
+        init_fc(r2, "linear")
+
+        layers = [Transpose(), nn.Dropout(dropout), r1, nn.LeakyReLU(), nn.Dropout(dropout), r2, Transpose()]
+        if use_layer_norm_input:
+            layers = [nn.LayerNorm(in_dims)] + layers
+        if use_layer_norm:
+            layers.append(nn.LayerNorm(out_dims))
+        self.nn = nn.Sequential(*layers)
+        self.unit_norm = unit_norm
+        self.unit_norm_input = unit_norm_input
+
+    def forward(self, x):
+        squeezed = False
+        if len(x.size()) < 3:
+            assert len(x.size()) == 2
+            x = x.unsqueeze(1)
+            squeezed = True
+        if self.unit_norm_input:
+            x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
+        x = self.nn(x)
+        if squeezed:
+            x = x.squeeze()
+        if self.unit_norm:
+            x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
+        return x
+
+
+def get_torchvision_classification_models(net, finetune=False):
+    from torchvision import models
+    if net == "resnet18":
+        im_model = models.resnet18(pretrained=True)
+        shape = (512, 7, 7)
+    elif net == "resnet34":
+        im_model = models.resnet34(pretrained=True)
+        shape = (512, 7, 7)
+    elif net == "resnet50":
+        im_model = models.resnet50(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "resnet101":
+        im_model = models.resnet101(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "resnet152":
+        im_model = models.resnet152(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "mobilenet_v2":
+        im_model = models.mobilenet_v2(pretrained=True)
+        resnet_layers = im_model.features[:-1]
+        rm = nn.Sequential(*resnet_layers)
+        shape = (320, 7, 7)
+    elif net == "resnext50_32x4d":
+        im_model = models.resnext50_32x4d(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x8d":
+        im_model = models.resnext101_32x8d(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "wide_resnet50_2":
+        im_model = models.wide_resnet50_2(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "wide_resnet101_2":
+        im_model = models.wide_resnet101_2(pretrained=True)
+        shape = (2048, 7, 7)
+    elif net == "mnasnet0_5":
+        im_model = models.mnasnet0_5(pretrained=True)  # models.mnasnet1_0
+        resnet_layers = im_model.layers[:-3]
+        model = nn.Sequential(*resnet_layers)
+        shape = (160, 7, 7)
+    elif net == "mnasnet1_0":
+        im_model = models.mnasnet1_0(pretrained=True)  # models.mnasnet1_0
+        resnet_layers = im_model.layers[:-3]
+        model = nn.Sequential(*resnet_layers)
+        shape = (160, 7, 7)
+    elif net == "squeezenet1_1":
+        im_model = models.squeezenet1_1(pretrained=True)
+        resnet_layers = list(im_model.children())[:-1]
+        model = nn.Sequential(*resnet_layers)
+        shape = (512, 13, 13)
+    else:
+        raise NotImplementedError(net)
+
+    if "resnet" in net or "resnext" in net:
+        resnet_layers = list(im_model.children())[:-3] + [im_model.layer4[0], im_model.layer4[1]]
+        model = nn.Sequential(*resnet_layers)
+
+    if not finetune:
+        for p in model.parameters():
+            p.requires_grad = False
+
+    return model, shape
+
+
+class CNNHead(nn.Module):
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 task, loss=None, width="wide", ):
+        super().__init__()
+        if task not in ["classification", "regression", "k-classification"]:
+            raise NotImplementedError(task)
+        # TODO: Implement n_of_k class classification or set prediction/bipartite loss
+        self.task = task
+        if task == "classification":
+            self.loss = nn.CrossEntropyLoss()
+        elif task == "regression":
+            self.loss = nn.MSELoss()
+        elif task == "k-classification":
+            self.loss = nn.BCEWithLogitsLoss()
+
+        if loss is not None:
+            self.loss = loss
+
+        c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=False)
+        init_fc(c1, "linear")
+        avp = nn.AdaptiveAvgPool1d(1)
+        dp = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(dp, Transpose(), c1, avp)
+        self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
+
+    def forward(self, x, labels=None):
+        """
+
+        :param x: Final Features in shape: (Batch, Seq, Embedding_dims)
+        :param labels: task specific labels with shape: (Batch,) for classification and (Batch,*) for regression and k-classification
+        :return: loss, logits
+        """
+        assert ((len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims))
+                or (len(x.size()) == 4 and x.size()[1] == self.n_dims))
+        logits = self.classifier(x).squeeze()
+        loss = torch.tensor(0.0)
+        if labels is not None:
+            if self.task == "classification":
+                assert len(labels.size()) == 1
+                loss = self.loss(logits, labels.long())
+                # preds = logits.max(dim=1).indices
+                logits = torch.softmax(logits, dim=1)
+            elif self.task == "regression":
+                assert len(labels.size()) == 2
+                assert labels.size()[1] == self.n_out
+                loss = self.loss(logits, labels)
+
+            elif self.task == "k-classification":
+                assert len(labels.size()) == 2
+                assert labels.size()[1] == self.n_out
+                labels = labels.astype(float)
+                loss = self.loss(logits, labels)
+                logits = torch.sigmoid(logits)
+
+        if self.task == "classification":
+            logits = torch.softmax(logits, dim=1)
+        elif self.task == "k-classification":
+            logits = torch.sigmoid(logits)
+
+        return logits, loss
+
+
+class CNN2DHead(CNNHead):
+    def __init__(self, n_dims, n_out, dropout,
+                 task, loss=None, ):
+        super().__init__(n_dims, 1, n_out, dropout,
+                         task, loss)
+
+        conv = nn.Conv2d(n_dims, n_out, 3)
+        init_fc(conv, "linear")
+        dp = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(dp, conv, nn.AdaptiveAvgPool2d(1))
+
+
+class AveragedLinearHead(CNNHead):
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 task, loss=None, ):
+        """
+        Expected input in format (Batch, Seq, Embedding_dims)
+        :param n_dims: Embedding_dims
+        :param n_tokens: Sequence Length
+        :param n_out:
+        :param dropout:
+        :param task:
+        :param loss:
+        """
+        super().__init__(n_dims, n_tokens, n_out, dropout,
+                         task, loss)
+        lin0 = nn.Linear(n_dims, n_dims)
+        init_fc(lin0, "leaky_relu")
+        lin = nn.Linear(n_dims, n_out)
+        init_fc(lin, "linear")
+        dp = nn.Dropout(dropout)
+        ll = nn.LayerNorm(n_dims)
+        self.classifier = nn.Sequential(dp, Average(1), lin0, nn.LeakyReLU(), ll, lin)
+
+
+class PositionExtract(nn.Module):
+    def __init__(self, pos):
+        super().__init__()
+        self.pos = pos
+
+    def forward(self, inp):
+        return inp[:, self.pos].squeeze()
+
+
+class OneTokenPositionLinearHead(nn.Module):
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 task, loss=None, extract_pos=0):
+        super().__init__(n_dims, n_tokens, n_out, dropout,
+                         task, loss)
+        lin0 = nn.Linear(n_dims, n_dims)
+        init_fc(lin0, "leaky_relu")
+        lin = nn.Linear(n_dims, n_out)
+        init_fc(lin, "linear")
+        dp = nn.Dropout(dropout)
+        ll = nn.LayerNorm(n_dims)
+        self.classifier = nn.Sequential(dp, PositionExtract(extract_pos), lin0, nn.LeakyReLU(), ll, lin)
+
+
+class MultiTaskForward(nn.Module):
+    def __init__(self, task_heads: List, task_weights=None):
+        super().__init__()
+        self.heads = nn.ModuleList(task_heads)
+        assert task_weights is None or len(task_weights) == len(task_heads)
+        if task_weights is None:
+            task_weights = torch.ones(len(task_heads), dtype=float)  # use device= param for directly creating on target device
+        self.task_weights = task_weights
+
+    def forward(self, x, labels=None):
+        assert labels is None or len(labels) == len(self.heads) or len(self.heads) == 1
+        logits_list = []
+        loss_total = torch.tensor(0.0)
+        if len(self.heads) == 1 and type(labels) not in [list, tuple]:
+            labels = [labels]
+
+        for i, m in enumerate(self.heads):
+            logits, loss = m(x, labels[i])
+            logits_list.append(logits)
+            loss_total += loss * self.task_weights[i]
+
+        return logits_list if len(logits_list) > 1 else logits_list[0], loss_total
 
 
 class WordChannelReducer(nn.Module):
     def __init__(self, in_channels, out_channels, strides):
         super(WordChannelReducer, self).__init__()
-        conv = nn.Conv1d(in_channels, in_channels * strides, 1, 1, padding=0, groups=4, bias=False)
+        self.strides = strides
+        conv = nn.Conv1d(in_channels, out_channels * 2, strides, strides, padding=0, groups=4, bias=False)
         init_fc(conv, "leaky_relu")
-        pool = nn.AvgPool1d(strides)
-        conv2 = nn.Conv1d(in_channels * strides, out_channels, 1, 1, padding=0, groups=2, bias=False)
-        self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), pool, conv2, Transpose())
+        conv2 = nn.Conv1d(out_channels * 2, out_channels, 1, 1, padding=0, groups=1, bias=False)
+        init_fc(conv2, "linear")
+        self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), conv2, Transpose())
 
     def forward(self, x):
+        assert x.size(-1) % self.strides == 0
         return self.layers(x)
 
 
+class LambdaLayer(nn.Module):
+    def __init__(self, lambd):
+        super(LambdaLayer, self).__init__()
+        self.lambd = lambd
+
+    def forward(self, x):
+        return self.lambd(x)
+
+
+from .detectron_v1_object_detector import get_image_info_fn, persistent_caching_fn
