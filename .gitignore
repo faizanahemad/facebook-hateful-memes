@@ -853,3 +853,9 @@ $RECYCLE.BIN/
 *.lnk
 .idea
 data/*
+
+*.pkl
+*.bin
+*.vec
+*.pth
+facebook_hateful_memes_detector/utils/vqa-maskrcnn-benchmark

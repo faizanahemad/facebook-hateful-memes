@@ -10,7 +10,7 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook
+from ..utils import in_notebook, get_device
 from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -90,8 +90,8 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
                     optimizer.step()
                     if update_in_batch:
                         scheduler.step()
-                    train_losses.append(loss.item())
-                    train_losses_cur_epoch.append(loss.item())
+                    train_losses.append(loss.cpu().item())
+                    train_losses_cur_epoch.append(loss.cpu().item())
                     learning_rates.append(optimizer.param_groups[0]['lr'])
             print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
             if validation_strategy is not None:
@@ -142,6 +142,7 @@ def generate_predictions(model, batch_size, dataset):
             logits, _, _, _ = model(batch)
             labels = batch.label
             labels_list.extend(labels)
+            logits = logits.cpu()
             top_class = logits.max(dim=1).indices
             top_class = top_class.flatten().tolist()
             probas = logits[:, 1].tolist()
@@ -180,6 +181,7 @@ def model_builder(model_class, model_params,
         prams = dict(model_params)
         prams.update(kwargs)
         model = model_class(**prams)
+        model.to(get_device())
         optimizer = optimiser_class(filter(lambda p: p.requires_grad, model.parameters()), **optimiser_params)
         return model, optimizer
 
@@ -189,8 +191,8 @@ def model_builder(model_class, model_params,
 def convert_dataframe_to_dataset(df, metadata, train=True):
     from functools import partial
     text = list(df.text)
-    labels = torch.tensor(df["label"].values) if "label" in df else None
-    sample_weights = torch.tensor(df["sample_weights"].values) if "sample_weights" in df else None
+    labels = df["label"].values if "label" in df else None
+    sample_weights = df["sample_weights"].values if "sample_weights" in df else None
     ds = TextImageDataset(text, list(df.img), labels, sample_weights,
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],

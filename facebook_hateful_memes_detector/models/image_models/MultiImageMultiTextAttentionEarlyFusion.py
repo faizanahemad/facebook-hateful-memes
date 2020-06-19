@@ -14,7 +14,7 @@ from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_image_info_fn, LambdaLayer, persistent_caching_fn
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_device
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 
@@ -97,7 +97,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         vectors = dict()
         for k, m in self.tx_models.items():
             _, _, text_repr, _ = m(sampleList)
-            vectors[k] = text_repr
+            vectors[k] = text_repr.to(get_device())
 
         for k, m in self.im_models.items():
             if self.finetune_image_model:
@@ -106,7 +106,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 with torch.no_grad():
                     im_repr = m(orig_image if k == "caption_features" else img)
             im_repr = self.im_procs[k](im_repr)
-            vectors[k] = im_repr
+            vectors[k] = im_repr.to(get_device())
 
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels)

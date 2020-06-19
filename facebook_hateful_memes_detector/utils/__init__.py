@@ -465,7 +465,7 @@ class CNNHead(nn.Module):
         if labels is not None:
             if self.task == "classification":
                 assert len(labels.size()) == 1
-                loss = self.loss(logits, labels)
+                loss = self.loss(logits, labels.long())
                 # preds = logits.max(dim=1).indices
                 logits = torch.softmax(logits, dim=1)
             elif self.task == "regression":

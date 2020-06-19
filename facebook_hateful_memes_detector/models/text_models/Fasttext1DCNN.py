@@ -11,7 +11,7 @@ from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
 
@@ -66,8 +66,8 @@ class Fasttext1DCNNModel(nn.Module):
     def forward(self, sampleList: SampleList):
         texts = sampleList.text
         img = sampleList.image
-        labels = sampleList.label
-        sample_weights = sampleList.sample_weight
+        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
+        # sample_weights = torch.tensor(sampleList.sample_weight, dtype=float).to(get_device())
 
         vectors = self.get_word_vectors(texts)
         vectors = self.featurizer(vectors)
@@ -100,6 +100,7 @@ class Fasttext1DCNNModel(nn.Module):
         res3 = res3 / res3.norm(dim=1, keepdim=True).clamp(min=1e-5)
         result = torch.cat([result, res2, res3], 1)
         result = result / result.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        result = result.to(get_device())
         return result
 
     def get_one_sentence_vector(self, tm, sentence):
@@ -126,6 +127,7 @@ class Fasttext1DCNNModel(nn.Module):
         res3 = stack_and_pad_tensors([self.get_one_sentence_vector(cngram, text) for text in texts], n_tokens_in)
         res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
         result = torch.cat([result, res2, res3], 2)
+        result = result.to(get_device())
         result = self.crawl_nn(result)
         return result
 

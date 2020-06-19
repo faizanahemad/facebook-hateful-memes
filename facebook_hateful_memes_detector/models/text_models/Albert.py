@@ -9,6 +9,7 @@ from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
 import torchvision.models as models
+from ...utils import get_device
 
 
 class AlbertClassifer(Fasttext1DCNNModel):
@@ -50,7 +51,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
         n_tokens_in = self.n_tokens_in
         m = lambda x: tokenizer.encode_plus(x, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in)
         input_ids, attention_mask = zip(*[(d['input_ids'], d['attention_mask']) for d in map(m, texts)])
-        return torch.tensor(input_ids), torch.tensor(attention_mask)
+        return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())
 
     def get_word_vectors(self, texts: List[str]):
         input_ids, attention_mask = self.tokenise(texts)

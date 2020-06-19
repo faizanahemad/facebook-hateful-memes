@@ -38,6 +38,11 @@ pip install mosestokenizer
 git lfs install
 pip install torch_optimizer
 wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"
+pip install vaderSentiment
+pip install git+https://github.com/ruotianluo/ImageCaptioning.pytorch.git
+pip install git+https://github.com/ruotianluo/meshed-memory-transformer.git
+pip install fcache
+pip install --upgrade diskcache
 ```
 
 ## Build Wikipedia TF-IDF
@@ -119,6 +124,7 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
     
 ## Possible Pretrained Models List
     - https://github.com/facebookresearch/detectron2
+    - https://github.com/facebookresearch/mmf
     - https://github.com/open-mmlab/mmdetection
     - https://github.com/TuSimple/simpledet
     - https://github.com/Holmeyoung/crnn-pytorch
@@ -126,10 +132,11 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
     - https://github.com/CSAILVision/semantic-segmentation-pytorch
     - https://github.com/clovaai/CRAFT-pytorch
     - https://github.com/clovaai/deep-text-recognition-benchmark
-    - https://github.com/facebookresearch/detectron2
     - https://github.com/thunlp/ERNIE : Wikipedia Knowledge base
     - https://github.com/jackroos/VL-BERT
     - https://github.com/facebookresearch/detr
+    - https://github.com/cadene/pretrained-models.pytorch
+    - https://github.com/rwightman/pytorch-image-models/
     
 ## Possible Extra Datasets
     - Sarcasm
@@ -143,6 +150,10 @@ python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
     - Emoji
     - General NLP: https://pytorchnlp.readthedocs.io/en/latest/source/torchnlp.datasets.html
     - https://visualgenome.org/
+    - https://www.datasetlist.com/
+    - https://archive.ics.uci.edu/ml/index.php
+    - https://www.stateoftheart.ai/
+    - https://paperswithcode.com/sota
         
     
 ## Other References

@@ -25,7 +25,7 @@ from nltk.chunk import ne_chunk
 import spacy
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
-    get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract
+    get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract, get_device
 from ...utils import get_universal_deps_indices, has_digits
 from ..external import get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer
@@ -218,6 +218,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         res3 = stack_and_pad_tensors([self.get_one_crawl_sentence_vector(cngram, text) for text in texts], n_tokens_in)
         res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
         result = torch.cat([result, res2, res3], 2)
+        result = result.to(get_device())
         result = self.crawl_nn(result)
         return result
 
@@ -225,7 +226,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         tokenized, _, _ = self.st.tokenize_sentences(texts)
         with torch.no_grad():
             prob = self.tmoji(tokenized)
-        return torch.tensor(prob)
+        return torch.tensor(prob).to(get_device())
 
     def get_one_sentence_vector(self, m, text):
         result = [m[t] if t in m else np.zeros(m.vector_size) for t in word_tokenize(text)]
@@ -239,6 +240,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             result.append(r)
         result = [r.float() for r in result]
         result = torch.cat(result, 2)
+        result = result.to(get_device())
         result = self.gensim_nn(result)
         return result
 
@@ -282,6 +284,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         nltk_rake_vectors = self.key_wc_rake_nltk(key_wc_rake_nltk)
 
         result = torch.cat([vsid_vec, nltk_emb, textblob_sentiments, pos_emb, ner_emb, nltk_rake_vectors, sid_vec, mask, has_digit], 2)
+        result = result.to(get_device())
         result = self.nltk_nn(result)
         return result
 
@@ -289,6 +292,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         tm = self.text_model
         n_tokens_in = self.n_tokens_in
         result = torch.tensor([tm.get_sentence_vector(text) for text in texts])
+        result = result.to(get_device())
         result = self.full_sent_nn(result)
         result = result.unsqueeze(1).expand(len(texts), n_tokens_in, result.size(1))
         return result
@@ -326,6 +330,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
 
         result = torch.cat(
             [upos_emb, xpos_emb, deprel_emb, sner_emb, deprel_emb2], 2)
+        result = result.to(get_device())
         result = self.snlp_nn(result)
         return result
 
@@ -383,12 +388,14 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         result = torch.cat(
             [text_tensors, pos_emb, tag_emb, dep_emb, sw_emb, ner_emb, wl_emb,
              wc_emb, mask, has_digit, is_oov_em, sent_start_em, head_dist, head_tensors], 2)
+        result = result.to(get_device())
         result = self.spacy_nn(result)
         return result, spacy_texts
 
     def get_ibm_max(self, texts: List[str]):
         with torch.no_grad():
             result = self.ibm_max.predict(texts)
+        result = result.to(get_device())
         result = self.ibm_nn(result)
         result = result.unsqueeze(1).expand(len(texts), self.n_tokens_in, result.size(1))
         return result
@@ -421,6 +428,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         rake_embs = self.rake_nn(rake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.rake_dims)
 
         result = torch.cat([pytextrank_vectors, yake_embs, rake_embs], 2)
+        result = result.to(get_device())
         result = self.keyphrase_nn(result)
         return result
 
@@ -443,5 +451,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             results.append(r)
 
         result = torch.cat(results, 2)
+        result = result.to(get_device())
         result = self.contract_nn(result)
         return result
