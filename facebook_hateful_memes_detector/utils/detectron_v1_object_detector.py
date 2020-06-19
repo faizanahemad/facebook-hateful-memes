@@ -217,6 +217,9 @@ def get_image_info_fn(enable_encoder_feats=False,
         feats = feature_extractor(impath)
         return feats
 
+    get_img_details = persistent_caching_fn(get_img_details, "get_img_details")
+
+
     get_encoder_feats = None
     get_image_captions = None
     get_batch_encoder_feats = None
@@ -247,7 +250,7 @@ def get_image_info_fn(enable_encoder_feats=False,
         get_encoder_feats = persistent_caching_fn(get_encoder_feats, "get_encoder_feats")
 
         def get_batch_encoder_feats(images):
-            img_feats = [get_encoder_feats(i) for i in images]
+            img_feats = [get_encoder_feats(i).squeeze() for i in images]
             _ = gc.collect()
             return torch.stack(img_feats, 0).to(device)
 
@@ -259,7 +262,7 @@ def get_image_info_fn(enable_encoder_feats=False,
                 sents = model.decode_sequence(processed_by_model[0])
                 return sents
 
-    return {"get_img_details": persistent_caching_fn(get_img_details, "get_img_details"), "get_encoder_feats": get_encoder_feats,
+    return {"get_img_details": get_img_details, "get_encoder_feats": get_encoder_feats,
             "get_image_captions": persistent_caching_fn(get_image_captions, "get_image_captions"),
             "feature_extractor": persistent_caching_fn(feature_extractor, "feature_extractor"),
             "get_batch_encoder_feats": get_batch_encoder_feats}

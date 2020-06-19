@@ -514,10 +514,13 @@ class AveragedLinearHead(CNNHead):
         """
         super().__init__(n_dims, n_tokens, n_out, dropout,
                          task, loss)
+        lin0 = nn.Linear(n_dims, n_dims)
+        init_fc(lin0, "leaky_relu")
         lin = nn.Linear(n_dims, n_out)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(dp, Average(1), lin)
+        ll = nn.LayerNorm(n_dims)
+        self.classifier = nn.Sequential(dp, Average(1), lin0, nn.LeakyReLU(), ll, lin)
 
 
 class PositionExtract(nn.Module):
@@ -526,7 +529,7 @@ class PositionExtract(nn.Module):
         self.pos = pos
 
     def forward(self, inp):
-        return inp[:, self.pos, :].squeeze()
+        return inp[:, self.pos].squeeze()
 
 
 class OneTokenPositionLinearHead(nn.Module):
@@ -534,10 +537,13 @@ class OneTokenPositionLinearHead(nn.Module):
                  task, loss=None, extract_pos=0):
         super().__init__(n_dims, n_tokens, n_out, dropout,
                          task, loss)
+        lin0 = nn.Linear(n_dims, n_dims)
+        init_fc(lin0, "leaky_relu")
         lin = nn.Linear(n_dims, n_out)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(dp, PositionExtract(extract_pos), lin)
+        ll = nn.LayerNorm(n_dims)
+        self.classifier = nn.Sequential(dp, PositionExtract(extract_pos), lin0, nn.LeakyReLU(), ll, lin)
 
 
 class MultiTaskForward(nn.Module):

@@ -76,7 +76,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         self.im_shapes = dict(zip(image_models, im_shapes))
         self.text_models = dict(zip(names, text_models))
 
-        ensemble_conf = {k: dict(is2d=len(v) == 3, n_tokens_in=v[-1] * v[-1], n_channels_in=v[0]) for k, v in self.im_shapes.items()}
+        ensemble_conf = {k: dict(is2d=len(v) == 3, n_tokens_in=(v[-1] * v[-1]) if len(v) == 3 else v[-1], n_channels_in=v[0]) for k, v in self.im_shapes.items()}
         text_ensemble_conf = {k: dict(is2d=False, n_tokens_in=v["in_tokens"], n_channels_in=v["in_channels"]) for k, v in
              self.text_models.items()}
         ensemble_conf.update(text_ensemble_conf)
