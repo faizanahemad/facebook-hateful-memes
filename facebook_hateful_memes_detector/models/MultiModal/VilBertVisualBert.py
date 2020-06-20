@@ -14,7 +14,7 @@ from mmf.common import SampleList, Sample
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, dict2sampleList
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert
@@ -238,6 +238,7 @@ class VilBertVisualBertModel(nn.Module):
         return output_dict
 
     def forward(self, sampleList: SampleList):
+        sampleList = dict2sampleList(sampleList)
         texts = sampleList.text
         img = sampleList.torchvision_image
         orig_image = sampleList.original_image

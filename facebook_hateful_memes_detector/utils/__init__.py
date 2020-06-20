@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+from mmf.common import SampleList, Sample
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import re
@@ -605,5 +606,22 @@ def print_code(func):
 
     code = "".join(inspect.getsourcelines(func)[0])
     print(highlight(code, PythonLexer(), TerminalFormatter()))
+
+
+def dict2sampleList(samples: Dict):
+    if type(samples) == dict:
+        sl = SampleList()
+        for k, v in samples.items():
+            assert type(k) == str or type(k) == tuple
+            assert type(v) == list or type(v) == torch.Tensor
+            sl[k] = v
+        return sl
+    elif type(samples) == SampleList:
+        return samples
+    elif type(samples) == list and type(samples[0]) == Sample:
+        return SampleList(samples)
+    else:
+        raise ValueError
+
 
 
