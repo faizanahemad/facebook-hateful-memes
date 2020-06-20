@@ -15,7 +15,7 @@ mv *.png img
 ```bash
 conda install -y -c anaconda openjdk
 pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict transformers contractions pytorch-nlp spacy-transformers stanza
-pip install torch torchvision
+pip install torch torchvision # pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 pip install fasttext
 pip install git+https://github.com/myint/language-check.git 
 pip install pycontractions
@@ -48,7 +48,9 @@ pip install fcache
 pip install --upgrade diskcache
 pip install jsonlines
 pip install pytorch-pretrained-bert
-pip install mmf
+git clone https://github.com/facebookresearch/mmf.git
+cd mmf
+pip install --no-dependencies --editable .
 pip install pycontractions
 pip install contractions
 pip install yacs
