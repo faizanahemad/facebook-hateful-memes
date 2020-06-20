@@ -462,8 +462,10 @@ class CNNHead(nn.Module):
         assert ((len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims))
                 or (len(x.size()) == 4 and x.size()[1] == self.n_dims))
         logits = self.classifier(x).squeeze()
-        loss = torch.tensor(0.0)
+        logits = logits.to(get_device())
+        loss = torch.tensor(0.0, device=get_device())
         if labels is not None:
+            labels = labels.to(get_device())
             if self.task == "classification":
                 assert len(labels.size()) == 1
                 loss = self.loss(logits, labels.long())
@@ -472,7 +474,7 @@ class CNNHead(nn.Module):
             elif self.task == "regression":
                 assert len(labels.size()) == 2
                 assert labels.size()[1] == self.n_out
-                loss = self.loss(logits, labels)
+                loss = self.loss(logits, labels.float())
 
             elif self.task == "k-classification":
                 assert len(labels.size()) == 2

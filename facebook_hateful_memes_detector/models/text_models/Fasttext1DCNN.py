@@ -67,7 +67,7 @@ class Fasttext1DCNNModel(nn.Module):
         sampleList = dict2sampleList(sampleList)
         texts = sampleList.text
         img = sampleList.image
-        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
+        labels = torch.tensor(sampleList.label).to(get_device())
         # sample_weights = torch.tensor(sampleList.sample_weight, dtype=float).to(get_device())
 
         vectors = self.get_word_vectors(texts)
