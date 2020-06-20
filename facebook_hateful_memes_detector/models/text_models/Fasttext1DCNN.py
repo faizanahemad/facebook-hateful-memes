@@ -11,7 +11,7 @@ from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
 

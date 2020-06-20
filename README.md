@@ -54,6 +54,7 @@ pip install --no-dependencies --editable .
 pip install pycontractions
 pip install contractions
 pip install yacs
+pip install gpustat
 ```
 
 ## Build Wikipedia TF-IDF
