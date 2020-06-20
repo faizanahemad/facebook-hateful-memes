@@ -14,13 +14,16 @@ mv *.png img
 
 ```bash
 conda install -y -c anaconda openjdk
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict torch torchvision transformers fasttext contractions pytorch-nlp spacy-transformers stanza
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict transformers contractions pytorch-nlp spacy-transformers stanza
+pip install torch torchvision
+pip install fasttext
 pip install git+https://github.com/myint/language-check.git 
 pip install pycontractions
-python -m spacy download en_core_news_sm en_core_news_md en_core_news_lg
-pip install allennlp==1.0.0rc4 allennlp-models==1.0.0rc4
+python -m spacy download en_core_web_sm
+python -m spacy download en_core_web_md
+python -m spacy download en_core_web_lg
 pip install stanza
-python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon');nltk.download('treebank');nltk.download('wordnet')"
+python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon');nltk.download('treebank');nltk.download('wordnet');import gensim.downloader as api;api.load(\"glove-twitter-25\");api.load(\"glove-twitter-50\");api.load(\"glove-wiki-gigaword-50\");api.load(\"word2vec-google-news-300\");api.load(\"conceptnet-numberbatch-17-06-300\");"
 python -m spacy download en_trf_distilbertbaseuncased_lg
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install -e . && python scripts/download_weights.py
 # edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
@@ -28,21 +31,27 @@ git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip in
 pip install -U maxfw
 pip install pytextrank # https://github.com/DerwenAI/pytextrank
 pip install git+https://github.com/LIAAD/yake
-pip install multi-rake # CFLAGS="-Wno-narrowing" pip install cld2-cffi
+CFLAGS="-Wno-narrowing" pip install cld2-cffi
+pip install multi-rake
 pip install textblob
 pip install rake-nltk
 pip install nlpaug
 pip install annoy
 pip install fastBPE regex requests sacremoses subword_nmt
 pip install mosestokenizer
-git lfs install
 pip install torch_optimizer
 wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"
 pip install vaderSentiment
-pip install git+https://github.com/ruotianluo/ImageCaptioning.pytorch.git
+pip install git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git
 pip install git+https://github.com/ruotianluo/meshed-memory-transformer.git
 pip install fcache
 pip install --upgrade diskcache
+pip install jsonlines
+pip install pytorch-pretrained-bert
+pip install mmf
+pip install pycontractions
+pip install contractions
+pip install yacs
 ```
 
 ## Build Wikipedia TF-IDF

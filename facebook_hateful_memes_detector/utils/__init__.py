@@ -591,7 +591,7 @@ class LambdaLayer(nn.Module):
         self.lambd = lambd
 
     def forward(self, x):
-        return self.lambd(x)
+        return self.lambd(x).to(get_device())
 
 
 from .detectron_v1_object_detector import get_image_info_fn, persistent_caching_fn

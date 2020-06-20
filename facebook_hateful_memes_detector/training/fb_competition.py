@@ -47,6 +47,13 @@ def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weigh
 
     model, optimizer = model_fn(dataset=dataset)
     train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, plot=True)
+    return predict(model, datadict, batch_size, augmentation_weights, multi_eval)
+
+
+def predict(model, datadict, batch_size, augmentation_weights: Dict[str, float],
+                      multi_eval=False):
+    metadata = datadict["metadata"]
+    augmented_data = metadata["augmented_data"]
     test = datadict["test"]
     test["augmented"] = False
     test["augment_type"] = "None"

@@ -7,10 +7,27 @@ from mmf.utils.configuration import Configuration
 from mmf.utils.distributed import distributed_init, infer_init_method
 from mmf.utils.env import set_seed, setup_imports
 from mmf.utils.flags import flags
-from mmf.utils.logger import Logger
+# from mmf.utils.logger import Logger
 import argparse
 from transformers.tokenization_auto import AutoTokenizer
 from mmf.datasets.processors.bert_processors import BertTokenizer
+
+
+class Logger:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def add_handlers(self, *args, **kwargs):
+        pass
+
+    def write(self, *args, **kwargs):
+        pass
+
+    def log_progress(self, *args, **kwargs):
+        pass
+
+    def single_write(self, *args, **kwargs):
+        pass
 
 
 def get_model(device, opts):

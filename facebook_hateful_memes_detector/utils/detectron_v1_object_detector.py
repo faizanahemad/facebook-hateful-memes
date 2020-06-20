@@ -22,10 +22,14 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, cache_dir=os.getcwd()):
-    from diskcache import Cache
+def persistent_caching_fn(fn, name, cache_dir=os.path.join(os.getcwd(), 'cache')):
+    from diskcache import Cache, Index
     import joblib
-    cache = Cache(cache_dir)
+    if os.path.exists(cache_dir):
+        assert os.path.isdir(cache_dir)
+    else:
+        os.mkdir(cache_dir)
+    cache = Index(cache_dir, size_limit=int(5e10), sqlite_cache_size=2 ** 14, sqlite_mmap_size=2 ** 32)
     try:
         import inspect
         fnh = joblib.hashing.hash(name, 'sha1') + joblib.hashing.hash(inspect.getsourcelines(fn)[0], 'sha1') + joblib.hashing.hash(fn.__name__, 'sha1')
@@ -40,11 +44,13 @@ def persistent_caching_fn(fn, name, cache_dir=os.getcwd()):
         if len(kwargs) > 0:
             hsh = hsh + joblib.hashing.hash(kwargs, 'sha1')
         if hsh in cache:
-            return cache[hsh]
-        else:
-            r = fn(*args, **kwargs)
-            cache[hsh] = r
-            return r
+            try:
+                return cache[hsh]
+            except KeyError as ke:
+                pass
+        r = fn(*args, **kwargs)
+        cache[hsh] = r
+        return r
 
     return cfn
 
@@ -56,12 +62,13 @@ class FeatureExtractor:
 
     def __init__(self, cfg_file=f'{DIR}/detectron_model.yaml', model_file=f'{DIR}/detectron_model.pth',
                  num_features=100,
-                 device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')):
+                 device=torch.device('cpu')):
         self.device = device
         self.cfg_file = cfg_file # 'model_data/detectron_model.yaml'
         self.model_file = model_file # 'model_data/detectron_model.pth'
         self.detection_model = self._build_detection_model()
         self.num_features = num_features
+        # torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def __call__(self, url):
         with torch.no_grad():

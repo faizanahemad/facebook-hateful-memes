@@ -92,6 +92,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         img = sampleList.torchvision_image
         orig_image = sampleList.original_image
         labels = sampleList.label
+        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
 
         vectors = dict()

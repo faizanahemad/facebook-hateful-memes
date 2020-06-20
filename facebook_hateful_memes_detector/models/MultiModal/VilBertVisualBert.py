@@ -14,8 +14,8 @@ from mmf.common import SampleList, Sample
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn
-from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose
+from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert
 
@@ -24,7 +24,7 @@ class VilBertVisualBertModel(nn.Module):
     def __init__(self, model_name, num_classes,
                  gaussian_noise, dropout,
                  internal_dims, classifier_dims,
-                 final_layer_builder,
+                 featurizer, final_layer_builder,
                  n_tokens_out, n_layers,
                  finetune=False,
                  **kwargs):
@@ -32,8 +32,13 @@ class VilBertVisualBertModel(nn.Module):
         self.model_name = model_name
         if model_name == "vilbert":
             m = get_vilbert(get_device())
+            n_tokens_in, embedding_dims = 228, 768
+            vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
+            init_fc(vilbert_seq_v_conv, "leaky_relu")
+            self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
         elif model_name == "visual_bert":
             m = get_visual_bert(get_device())
+            n_tokens_in, embedding_dims = 100, 768
         else:
             raise NotImplementedError()
         self.model, self.text_processor = m["model"], m["tokenizer"]
@@ -42,12 +47,35 @@ class VilBertVisualBertModel(nn.Module):
             for p in self.model.parameters():
                 p.requires_grad = False
 
+        if featurizer == "cnn":
+            self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
+        elif featurizer == "transformer":
+            self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
+                                                    classifier_dims,
+                                                    internal_dims, n_layers, gaussian_noise, dropout)
+        elif featurizer == "basic":
+            self.featurizer = BasicFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
+                                              classifier_dims,
+                                              internal_dims, n_layers, gaussian_noise, dropout)
+
+        elif featurizer == "pass":
+            assert n_tokens_in == n_tokens_out
+            assert embedding_dims == classifier_dims
+        else:
+            raise NotImplementedError()
+
+        self.featurizer_type = featurizer
+        if self.featurizer_type == "pass":
+            assert not finetune
+        else:
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+
 
         # ensemble_conf = text_ensemble_conf
         # self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
         #                                                 n_layers, gaussian_noise, dropout)
         #
-        # self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+
         self.finetune = finetune
 
     def build_sample_list(self, sampleList: SampleList):
@@ -55,7 +83,7 @@ class VilBertVisualBertModel(nn.Module):
         orig_image = sampleList.original_image
         texts = [self.text_processor({"text": t}) for t in texts]
         feat_list, info_list = zip(*[self.get_img_details(im) for im in orig_image])
-        samples = [Sample(dict(text=t, image_feature_0=f, image_info_0=i)) for t, f, i in zip(texts, feat_list, info_list)]
+        samples = [Sample(dict(image_feature_0=f, image_info_0=i, **t)) for t, f, i in zip(texts, feat_list, info_list)]
         sl = SampleList(samples)
         return sl
 
@@ -65,8 +93,9 @@ class VilBertVisualBertModel(nn.Module):
         bert_input_type_ids = sample_list.segment_ids
 
         image_info = getattr(sample_list, "image_info_0", {})
-        image_dim_variable = getattr(image_info, "max_features", None)
+        image_dim_variable = torch.tensor(getattr(image_info, "max_features", None))
         image_feature_variable = getattr(sample_list, "image_feature_0", None)
+        image_feature_variable = image_feature_variable.to(get_device())
         image_label_variable = getattr(sample_list, "image_labels", None)
         if image_label_variable is not None:
             image_label_variable = torch.tensor(
@@ -94,8 +123,8 @@ class VilBertVisualBertModel(nn.Module):
         image_location[:, :, 2] = image_location[:, :, 2] / image_w[:, None]
         image_location[:, :, 3] = image_location[:, :, 3] / image_h[:, None]
         image_location_variable = torch.tensor(
-            image_location, dtype=torch.float
-        ).to(get_device())
+            image_location, dtype=torch.float, device=get_device()
+        )
 
         cls_prob = getattr(image_info, "cls_prob", None)
         image_target = np.array(cls_prob, dtype=np.float32)
@@ -108,9 +137,9 @@ class VilBertVisualBertModel(nn.Module):
         # Prepare Mask
         if params["image_feature"] is not None and params["image_dim"] is not None:
             image_mask = (
-                torch.arange(params["image_feature"].size(-2))
+                torch.arange(params["image_feature"].size(-2), device=get_device())
                     .expand(*params["image_feature"].size()[:-1])
-                    .to(get_device())
+
             )
             if len(params["image_dim"].size()) < len(image_mask.size()):
                 params["image_dim"] = params["image_dim"].unsqueeze(-1)
@@ -159,8 +188,9 @@ class VilBertVisualBertModel(nn.Module):
         bert_input_mask = sample_list.input_mask
         bert_input_type_ids = sample_list.segment_ids
         image_info = getattr(sample_list, "image_info_0", {})
-        image_dim_variable = getattr(image_info, "max_features", None)
+        image_dim_variable = torch.tensor(getattr(image_info, "max_features", None))
         image_feat_variable = getattr(sample_list, "image_feature_0", None)
+        image_feat_variable = image_feat_variable.to(get_device())
 
         sample_list.visual_embeddings = image_feat_variable
         sample_list.image_dim = image_dim_variable
@@ -176,9 +206,8 @@ class VilBertVisualBertModel(nn.Module):
         # Prepare Mask
         if visual_embeddings is not None and image_dim is not None:
             image_mask = (
-                torch.arange(visual_embeddings.size(-2))
+                torch.arange(visual_embeddings.size(-2), device=get_device())
                     .expand(*visual_embeddings.size()[:-1])
-                    .to(get_device())
             )
             if len(image_dim.size()) < len(image_mask.size()):
                 image_dim = image_dim.unsqueeze(-1)
@@ -200,7 +229,6 @@ class VilBertVisualBertModel(nn.Module):
             sample_list.position_embeddings_visual,
             sample_list.visual_embeddings_type,
             sample_list.image_text_alignment,
-            sample_list.masked_lm_labels,
         )
         output_dict = {}
         output_dict["sequence_output"] = sequence_output
@@ -214,31 +242,28 @@ class VilBertVisualBertModel(nn.Module):
         img = sampleList.torchvision_image
         orig_image = sampleList.original_image
         labels = sampleList.label
+        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
 
         sl = self.build_sample_list(sampleList)
         if self.model_name == "vilbert":
             out = self.vilbert_forward(sl)
+            if self.featurizer_type != "pass":
+                out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
+            else:
+                out["sequence_output_v"] = out["sequence_output_v"][:, :, :out["sequence_output_t"].size(-1)]
+            sequence_output = torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1)
         elif self.model_name == "visual_bert":
             out = self.visual_bert_forward(sl)
+            sequence_output = out["sequence_output"]
         else:
             raise NotImplementedError()
-        print({k: v.size() for k, v in out.items()})
+        print("Sizes = ", {k: v.size() for k, v in out.items()})
 
-        vectors = dict()
-        for k, m in self.tx_models.items():
-            _, _, text_repr, _ = m(sampleList)
-            vectors[k] = text_repr
-
-        for k, m in self.im_models.items():
-            if self.finetune_image_model:
-                im_repr = m(img)
-            else:
-                with torch.no_grad():
-                    im_repr = m(img)
-            im_repr = self.im_procs[k](im_repr)
-            vectors[k] = im_repr
-
-        vectors = self.featurizer(vectors)
-        logits, loss = self.final_layer(vectors, labels)
-        return logits, vectors.mean(1), vectors, loss
+        if self.featurizer_type == "pass":
+            logits = out["logits"]
+            loss = torch.tensor(0.0)
+        else:
+            vectors = self.featurizer(sequence_output)
+            logits, loss = self.final_layer(vectors, labels)
+        return logits, sequence_output.mean(1), sequence_output, loss
