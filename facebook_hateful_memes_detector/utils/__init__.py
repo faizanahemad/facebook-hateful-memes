@@ -237,7 +237,7 @@ class GaussianNoise(nn.Module):
     def __init__(self, sigma=0.1):
         super().__init__()
         self.sigma = sigma
-        self.noise = torch.tensor(0.0)
+        self.noise = torch.tensor(0.0, device=get_device())
 
     def forward(self, x):
         if self.training and self.sigma != 0:
