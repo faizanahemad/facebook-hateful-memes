@@ -614,6 +614,8 @@ def dict2sampleList(samples: Dict):
         for k, v in samples.items():
             assert type(k) == str or type(k) == tuple
             assert type(v) == list or type(v) == torch.Tensor or type(v) == str
+            if type(v) == torch.Tensor:
+                v = v.to(get_device())
             sl[k] = v
         return sl
     elif type(samples) == SampleList:
