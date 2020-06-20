@@ -595,3 +595,15 @@ class LambdaLayer(nn.Module):
 
 
 from .detectron_v1_object_detector import get_image_info_fn, persistent_caching_fn
+
+
+def print_code(func):
+    import inspect
+    from pygments import highlight
+    from pygments.lexers import PythonLexer
+    from pygments.formatters import TerminalFormatter
+
+    code = "".join(inspect.getsourcelines(func)[0])
+    print(highlight(code, PythonLexer(), TerminalFormatter()))
+
+
