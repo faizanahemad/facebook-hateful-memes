@@ -69,8 +69,8 @@ class VilBertVisualBertModel(nn.Module):
 
         self.featurizer_type = featurizer
         if self.featurizer_type == "pass":
+            self.num_classes = num_classes
             if self.model.config.num_labels != num_classes:
-                self.num_classes = num_classes
                 lin0 = nn.Linear(pooled_dims, pooled_dims)
                 init_fc(lin0, "leaky_relu")
                 lin = nn.Linear(pooled_dims, num_classes)
