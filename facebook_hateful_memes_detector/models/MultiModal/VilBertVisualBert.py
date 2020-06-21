@@ -203,7 +203,8 @@ class VilBertVisualBertModel(nn.Module):
             output_all_encoded_layers=False,
             output_all_attention_masks=False,
         )
-
+        del params
+        clean_memory()
         if self.model.model.fusion_method == "sum":
             pooled_output = self.model.model.dropout(pooled_output_t + pooled_output_v)
         elif self.model.model.fusion_method == "mul":
@@ -211,7 +212,10 @@ class VilBertVisualBertModel(nn.Module):
         else:
             raise AssertionError
 
-        logits = self.model.model.classifier(pooled_output).contiguous().squeeze()
+
+        logits = None
+        if self.featurizer_type == "pass"
+            logits = self.model.model.classifier(pooled_output).contiguous().squeeze()
         output = dict(sequence_output_t=sequence_output_t,
                       sequence_output_v=sequence_output_v,
                       pooled_output_t=pooled_output_t,
@@ -290,7 +294,11 @@ class VilBertVisualBertModel(nn.Module):
         output_dict = {}
         output_dict["sequence_output"] = sequence_output
         output_dict["pooled_output"] = pooled_output
-        logits = self.model.model.classifier(pooled_output).contiguous().squeeze()
+        del params
+        clean_memory()
+        logits = None
+        if self.featurizer_type == "pass"
+            logits = self.model.model.classifier(pooled_output).contiguous().squeeze()
         output_dict["logits"] = logits
         return output_dict
 
@@ -304,6 +312,7 @@ class VilBertVisualBertModel(nn.Module):
         sample_weights = sampleList.sample_weight
 
         sl = self.build_sample_list(sampleList)
+        clean_memory()
         # GPUtil.showUtilization()
         if self.model_name == "vilbert":
             out = self.vilbert_forward(sl)
@@ -320,11 +329,13 @@ class VilBertVisualBertModel(nn.Module):
             out = self.vilbert_forward(sl)
             out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
             vilbert_sequence_output = torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1)
+            del out
             clean_memory()
             self.model = self.visual_bert
             out = self.visual_bert_forward(sl)
             visual_bert_sequence_output = out["sequence_output"]
             sequence_output = torch.cat([vilbert_sequence_output, visual_bert_sequence_output], 1)
+            clean_memory()
 
         else:
             raise NotImplementedError()
