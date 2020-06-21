@@ -55,6 +55,101 @@ def persistent_caching_fn(fn, name, cache_dir=os.path.join(os.getcwd(), 'cache')
     return cfn
 
 
+class LXMERTFeatureExtractor:
+    def __init__(self, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')):
+        from detectron2.config import get_cfg
+        cfg = get_cfg()
+        cfg.merge_from_file(f"{DIR}/py-bottom-up-attention/configs/VG-Detection/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml")
+        cfg.MODEL.DEVICE = str(device)
+        cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 300
+        cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.6
+        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.2
+        # VG Weight
+        cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe_attr.pkl"
+        self.cfg = cfg
+
+    def __call__(self, url):
+        if not hasattr(self, 'predictor'):
+            from detectron2.engine import DefaultPredictor
+            self.predictor = DefaultPredictor(self.cfg)
+        detectron_features = self.doit(url)
+        return detectron_features
+
+    def get_cv2_image(self, image_path):
+        if type(image_path) == np.ndarray:
+            return image_path
+        elif "PIL" in str(type(image_path)):
+            return np.array(image_path.convert('RGB'))[:, :, ::-1]
+        elif image_path.startswith('http'):
+            path = requests.get(image_path, stream=True).raw
+        else:
+            path = image_path
+
+        return np.array(Image.open(path).convert('RGB'))[:, :, ::-1]
+
+    def doit(self, raw_image):
+        raw_image = self.get_cv2_image(raw_image)
+        from detectron2.modeling.postprocessing import detector_postprocess
+        from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs, fast_rcnn_inference_single_image
+        predictor = self.predictor
+        with torch.no_grad():
+            NUM_OBJECTS = 36
+            raw_height, raw_width = raw_image.shape[:2]
+            image = predictor.transform_gen.get_transform(raw_image).apply_image(raw_image)
+            image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+            inputs = [{"image": image, "height": raw_height, "width": raw_width}]
+            images = predictor.model.preprocess_image(inputs)
+
+            # Run Backbone Res1-Res4
+            features = predictor.model.backbone(images.tensor)
+
+            # Generate proposals with RPN
+            proposals, _ = predictor.model.proposal_generator(images, features, None)
+            proposal = proposals[0]
+
+            # Run RoI head for each proposal (RoI Pooling + Res5)
+            proposal_boxes = [x.proposal_boxes for x in proposals]
+            features = [features[f] for f in predictor.model.roi_heads.in_features]
+            box_features = predictor.model.roi_heads._shared_roi_transform(
+                features, proposal_boxes
+            )
+            feature_pooled = box_features.mean(dim=[2, 3])  # pooled to 1x1
+            # Predict classes and boxes for each proposal.
+            pred_class_logits, pred_attr_logits, pred_proposal_deltas = predictor.model.roi_heads.box_predictor(feature_pooled)
+            outputs = FastRCNNOutputs(
+                predictor.model.roi_heads.box2box_transform,
+                pred_class_logits,
+                pred_proposal_deltas,
+                proposals,
+                predictor.model.roi_heads.smooth_l1_beta,
+            )
+            probs = outputs.predict_probs()[0]
+            boxes = outputs.predict_boxes()[0]
+
+            attr_prob = pred_attr_logits[..., :-1].softmax(-1)
+            max_attr_prob, max_attr_label = attr_prob.max(-1)
+
+            # Note: BUTD uses raw RoI predictions,
+            #       we use the predicted boxes instead.
+            # boxes = proposal_boxes[0].tensor
+
+            # NMS
+            for nms_thresh in np.arange(0.5, 1.0, 0.1):
+                instances, ids = fast_rcnn_inference_single_image(
+                    boxes, probs, image.shape[1:],
+                    score_thresh=0.2, nms_thresh=nms_thresh, topk_per_image=NUM_OBJECTS
+                )
+                if len(ids) == NUM_OBJECTS:
+                    break
+
+            instances = detector_postprocess(instances, raw_height, raw_width)
+            roi_features = feature_pooled[ids].detach()
+            max_attr_prob = max_attr_prob[ids].detach()
+            max_attr_label = max_attr_label[ids].detach()
+            instances.attr_scores = max_attr_prob
+            instances.attr_classes = max_attr_label
+            return instances, roi_features
+
 
 class FeatureExtractor:
     CHANNEL_MEAN = [0.485, 0.456, 0.406]
@@ -66,11 +161,12 @@ class FeatureExtractor:
         self.device = device
         self.cfg_file = cfg_file # 'model_data/detectron_model.yaml'
         self.model_file = model_file # 'model_data/detectron_model.pth'
-        self.detection_model = self._build_detection_model()
         self.num_features = num_features
         # torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def __call__(self, url):
+        if not hasattr(self, 'detection_model'):
+            self.detection_model = self._build_detection_model()
         with torch.no_grad():
             detectron_features = self.get_detectron_features(url)
 
@@ -286,6 +382,7 @@ def get_image_info_fn(enable_encoder_feats=False,
         device = get_device()
 
     feature_extractor = FeatureExtractor(**kwargs)
+    lxmert_feature_extractor = LXMERTFeatureExtractor(**kwargs)
 
     if cachedir is None:
         global memory
@@ -297,8 +394,10 @@ def get_image_info_fn(enable_encoder_feats=False,
         return feats
 
     def get_lxmert_details(impath):
-        feats = feature_extractor.get_lxmert_features(impath)
+        feats = lxmert_feature_extractor(impath)
         return feats
+
+    get_lxmert_details = persistent_caching_fn(get_lxmert_details, "get_lxmert_details")
 
     get_img_details = persistent_caching_fn(get_img_details, "get_img_details")
 

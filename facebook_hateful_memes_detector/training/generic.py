@@ -70,7 +70,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     weights = make_weights_for_balanced_classes(training_fold_labels, class_weights) # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
     sampler = WeightedRandomSampler(weights, len(weights))
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
-                              shuffle=False, num_workers=32, pin_memory=True, sampler=sampler)
+                              shuffle=False, num_workers=4, pin_memory=True, sampler=sampler)
     train_losses = []
     learning_rates = []
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
@@ -135,9 +135,10 @@ def generate_predictions(model, batch_size, dataset):
     proba_list = []
     predictions_list = []
     labels_list = []
-
+    clean_memory()
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
-                             shuffle=False, num_workers=32, pin_memory=True)
+                             shuffle=False, num_workers=4, pin_memory=True)
+
     with torch.no_grad():
         for batch in test_loader:
             batch = dict2sampleList(batch, device=get_device())
@@ -150,6 +151,7 @@ def generate_predictions(model, batch_size, dataset):
             probas = logits[:, 1].tolist()
             predictions_list.extend(top_class)
             proba_list.extend(probas)
+            clean_memory()
     return proba_list, predictions_list, labels_list
 
 

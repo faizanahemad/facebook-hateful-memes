@@ -28,4 +28,11 @@ pip install yacs
 pip uninstall -y captioning
 pip install git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git
 
+pip install fvcore
+pip install opencv-python
+git clone https://github.com/airsplay/py-bottom-up-attention.git
+cd py-bottom-up-attention
+pip install  . # python setup.py build develop
+# MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
+
 
