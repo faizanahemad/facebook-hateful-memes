@@ -40,28 +40,42 @@ class VilBertVisualBertModel(nn.Module):
             vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
             init_fc(vilbert_seq_v_conv, "leaky_relu")
             self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
+            self.model, self.text_processor = m["model"], m["tokenizer"]
         elif model_name == "visual_bert":
             m = get_visual_bert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = 228, 768, 768
+            self.model, self.text_processor = m["model"], m["tokenizer"]
+        elif model_name == "vilbert_and_visual_bert":
+            assert featurizer == "transformer"
+            m1 = get_vilbert(get_device())
+            vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
+            init_fc(vilbert_seq_v_conv, "leaky_relu")
+            self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
+            m2 = get_visual_bert(get_device())
+            self.vilbert = m1["model"]
+            self.visual_bert = m2["model"]
+            self.text_processor = m1["tokenizer"]
+            n_tokens_in, embedding_dims, pooled_dims = 228*2, 768, None
+
         else:
             raise NotImplementedError()
-        self.model, self.text_processor = m["model"], m["tokenizer"]
+
         self.get_img_details = get_image_info_fn(enable_encoder_feats=True, device=get_device())["get_img_details"]
         if not finetune:
-            for p in self.model.parameters():
-                p.requires_grad = False
+            if hasattr(self, 'model'):
+                for p in self.model.parameters():
+                    p.requires_grad = False
+            if hasattr(self, 'vilbert'):
+                for p in self.vilbert.parameters():
+                    p.requires_grad = False
+            if hasattr(self, 'visual_bert'):
+                for p in self.visual_bert.parameters():
+                    p.requires_grad = False
 
-        if featurizer == "cnn":
-            self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
-        elif featurizer == "transformer":
+        if featurizer == "transformer":
             self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                     classifier_dims,
                                                     internal_dims, n_layers, gaussian_noise, dropout)
-        elif featurizer == "basic":
-            self.featurizer = BasicFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
-                                              classifier_dims,
-                                              internal_dims, n_layers, gaussian_noise, dropout)
-
         elif featurizer == "pass":
             assert n_tokens_in == n_tokens_out
             assert embedding_dims == classifier_dims
@@ -171,7 +185,7 @@ class VilBertVisualBertModel(nn.Module):
     def vilbert_forward(self, sample_list: SampleList):
         params = self.__vilbert_preprocessing__(sample_list)
         clean_memory()
-        GPUtil.showUtilization()
+        # GPUtil.showUtilization()
 
         (
             sequence_output_t,
@@ -204,7 +218,7 @@ class VilBertVisualBertModel(nn.Module):
                       pooled_output_v=pooled_output_v,
                       pooled_output=pooled_output,
                       logits=logits)
-        GPUtil.showUtilization()
+        # GPUtil.showUtilization()
         return output
 
     def __visual_bert_preprocessing__(self, sample_list: SampleList):
@@ -290,7 +304,7 @@ class VilBertVisualBertModel(nn.Module):
         sample_weights = sampleList.sample_weight
 
         sl = self.build_sample_list(sampleList)
-        GPUtil.showUtilization()
+        # GPUtil.showUtilization()
         if self.model_name == "vilbert":
             out = self.vilbert_forward(sl)
             if self.featurizer_type != "pass":
@@ -301,13 +315,25 @@ class VilBertVisualBertModel(nn.Module):
         elif self.model_name == "visual_bert":
             out = self.visual_bert_forward(sl)
             sequence_output = out["sequence_output"]
+        elif self.model_name == "vilbert_and_visual_bert":
+            self.model = self.vilbert
+            out = self.vilbert_forward(sl)
+            out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
+            vilbert_sequence_output = torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1)
+            clean_memory()
+            self.model = self.visual_bert
+            out = self.visual_bert_forward(sl)
+            visual_bert_sequence_output = out["sequence_output"]
+            sequence_output = torch.cat([vilbert_sequence_output, visual_bert_sequence_output], 1)
+
         else:
             raise NotImplementedError()
         # print("Sizes = ", {k: v.size() for k, v in out.items()})
         pooled_output = out["pooled_output"]
         logits = out["logits"]
+        del out
         clean_memory()
-        GPUtil.showUtilization()
+        # GPUtil.showUtilization()
 
         if self.featurizer_type == "pass":
             if self.model.config.num_labels != self.num_classes:
