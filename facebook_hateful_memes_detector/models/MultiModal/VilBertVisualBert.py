@@ -292,7 +292,7 @@ class VilBertVisualBertModel(nn.Module):
                 logits = self.final_layer(out["pooled_output"])
             else:
                 logits = out["logits"]
-            loss = loss_calculator(logits, labels, self.task, self.loss)
+            logits, loss = loss_calculator(logits, labels, self.task, self.loss)
         else:
             vectors = self.featurizer(sequence_output)
             logits, loss = self.final_layer(vectors, labels)
