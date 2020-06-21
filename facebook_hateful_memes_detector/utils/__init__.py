@@ -555,13 +555,13 @@ class MultiTaskForward(nn.Module):
         self.heads = nn.ModuleList(task_heads)
         assert task_weights is None or len(task_weights) == len(task_heads)
         if task_weights is None:
-            task_weights = torch.ones(len(task_heads), dtype=float)  # use device= param for directly creating on target device
-        self.task_weights = task_weights
+            task_weights = torch.ones(len(task_heads), dtype=float, device=get_device())  # use device= param for directly creating on target device
+        self.task_weights = task_weights.to(get_device())
 
     def forward(self, x, labels=None):
         assert labels is None or len(labels) == len(self.heads) or len(self.heads) == 1
         logits_list = []
-        loss_total = torch.tensor(0.0)
+        loss_total = torch.tensor(0.0, device=get_device())
         if len(self.heads) == 1 and type(labels) not in [list, tuple]:
             labels = [labels]
 
