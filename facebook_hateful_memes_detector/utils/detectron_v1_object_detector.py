@@ -29,7 +29,7 @@ def persistent_caching_fn(fn, name, cache_dir=os.path.join(os.getcwd(), 'cache')
         assert os.path.isdir(cache_dir)
     else:
         os.mkdir(cache_dir)
-    cache = Index(cache_dir, size_limit=int(5e10), sqlite_cache_size=2 ** 14, sqlite_mmap_size=2 ** 32)
+    cache = Index(cache_dir, sqlite_cache_size=2 ** 13, sqlite_mmap_size=2 ** 26)
     try:
         import inspect
         fnh = joblib.hashing.hash(name, 'sha1') + joblib.hashing.hash(inspect.getsourcelines(fn)[0], 'sha1') + joblib.hashing.hash(fn.__name__, 'sha1')
