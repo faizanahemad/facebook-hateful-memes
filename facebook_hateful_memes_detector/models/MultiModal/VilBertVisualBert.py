@@ -116,7 +116,7 @@ class VilBertVisualBertModel(nn.Module):
         if image_label_variable is not None:
             image_label_variable = torch.tensor(
                 image_label_variable, dtype=torch.long
-            ).to(get_device())
+            )
 
         bbox = np.array(getattr(image_info, "bbox", None), dtype=np.float32)
         image_w = np.array(
@@ -144,20 +144,16 @@ class VilBertVisualBertModel(nn.Module):
 
         cls_prob = getattr(image_info, "cls_prob", None)
         image_target = np.array(cls_prob, dtype=np.float32)
-        image_target_variable = torch.tensor(image_target, dtype=torch.float).to(get_device())
-
+        image_target_variable = torch.tensor(image_target, dtype=torch.float)
+        image_feature_variable = image_feature_variable.to(get_device())
         params = {"input_ids": bert_input_ids, "attention_mask": bert_input_mask, "token_type_ids": bert_input_type_ids, "image_dim": image_dim_variable,
                   "image_feature": image_feature_variable, "image_location": image_location_variable, "image_target": image_target_variable,
                   "image_label": image_label_variable, "masked_lm_labels": getattr(sample_list, "lm_label_ids", None)}
-        params = {k: v.to(get_device()) if type(v) == torch.Tensor else v for k, v in params.items()}
+
 
         # Prepare Mask
         if params["image_feature"] is not None and params["image_dim"] is not None:
-            image_mask = (
-                torch.arange(params["image_feature"].size(-2), device=get_device())
-                    .expand(*params["image_feature"].size()[:-1])
-
-            )
+            image_mask = (torch.arange(params["image_feature"].size(-2), device=get_device()).expand(*params["image_feature"].size()[:-1]))
             if len(params["image_dim"].size()) < len(image_mask.size()):
                 params["image_dim"] = params["image_dim"].unsqueeze(-1)
                 assert len(params["image_dim"].size()) == len(image_mask.size())
@@ -168,6 +164,8 @@ class VilBertVisualBertModel(nn.Module):
         params.pop("image_dim")
         params = {"input_ids": params["input_ids"], "image_feature": params["image_feature"], "image_location": params["image_location"],
                   "token_type_ids": params["token_type_ids"], "attention_mask": params["attention_mask"], "image_attention_mask": params["image_attention_mask"]}
+        clean_memory()
+        params = {k: v.to(get_device()) if type(v) == torch.Tensor else v for k, v in params.items()}
         return params
 
     def vilbert_forward(self, sample_list: SampleList):
