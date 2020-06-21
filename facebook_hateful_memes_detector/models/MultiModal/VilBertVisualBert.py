@@ -78,7 +78,7 @@ class VilBertVisualBertModel(nn.Module):
                 dp = nn.Dropout(dropout)
                 ll = nn.LayerNorm(pooled_dims)
                 self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, lin)
-                self.loss = get_loss_by_task(task)
+            self.loss = get_loss_by_task(task)
 
             assert not finetune
         else:
