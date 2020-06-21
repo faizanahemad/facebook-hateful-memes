@@ -10,7 +10,7 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, get_device, dict2sampleList
+from ..utils import in_notebook, get_device, dict2sampleList, clean_memory
 from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -80,7 +80,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
             _ = model.train()
             if update_in_epoch:
                 scheduler.step()
-            _ = gc.collect()
+            clean_memory()
             train_losses_cur_epoch = []
             with tqdm(train_loader) as data_batch:
                 for batch in data_batch:
@@ -90,9 +90,10 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
                     optimizer.step()
                     if update_in_batch:
                         scheduler.step()
-                    train_losses.append(loss.cpu().item())
-                    train_losses_cur_epoch.append(loss.cpu().item())
-                    learning_rates.append(optimizer.param_groups[0]['lr'])
+                    train_losses.append(float(loss.cpu().detach().item()))
+                    train_losses_cur_epoch.append(float(loss.cpu().detach().item()))
+                    learning_rates.append(float(optimizer.param_groups[0]['lr']))
+                    clean_memory()
             print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
             if validation_strategy is not None:
                 if (epoc + 1) in validation_strategy["validation_epochs"]:
@@ -143,7 +144,7 @@ def generate_predictions(model, batch_size, dataset):
             logits, _, _, _ = model(batch)
             labels = batch.label
             labels_list.extend(labels)
-            logits = logits.cpu()
+            logits = logits.cpu().detach()
             top_class = logits.max(dim=1).indices
             top_class = top_class.flatten().tolist()
             probas = logits[:, 1].tolist()

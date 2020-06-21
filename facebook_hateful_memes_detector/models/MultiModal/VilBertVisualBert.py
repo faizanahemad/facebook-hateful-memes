@@ -15,10 +15,11 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
-    dict2sampleList, loss_calculator, get_loss_by_task
+    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert
+import GPUtil
 
 
 class VilBertVisualBertModel(nn.Module):
@@ -101,7 +102,7 @@ class VilBertVisualBertModel(nn.Module):
         sl = SampleList(samples)
         return sl
 
-    def vilbert_forward(self, sample_list: SampleList):
+    def __vilbert_preprocessing__(self, sample_list: SampleList):
         bert_input_ids = sample_list.input_ids
         bert_input_mask = sample_list.input_mask
         bert_input_type_ids = sample_list.segment_ids
@@ -165,6 +166,14 @@ class VilBertVisualBertModel(nn.Module):
         else:
             params["image_attention_mask"] = None
         params.pop("image_dim")
+        params = {"input_ids": params["input_ids"], "image_feature": params["image_feature"], "image_location": params["image_location"],
+                  "token_type_ids": params["token_type_ids"], "attention_mask": params["attention_mask"], "image_attention_mask": params["image_attention_mask"]}
+        return params
+
+    def vilbert_forward(self, sample_list: SampleList):
+        params = self.__vilbert_preprocessing__(sample_list)
+        clean_memory()
+        GPUtil.showUtilization()
 
         (
             sequence_output_t,
@@ -197,9 +206,10 @@ class VilBertVisualBertModel(nn.Module):
                       pooled_output_v=pooled_output_v,
                       pooled_output=pooled_output,
                       logits=logits)
+        GPUtil.showUtilization()
         return output
 
-    def visual_bert_forward(self, sample_list: SampleList):
+    def __visual_bert_preprocessing__(self, sample_list: SampleList):
         bert_input_ids = sample_list.input_ids
         bert_input_mask = sample_list.input_mask
         bert_input_type_ids = sample_list.segment_ids
@@ -246,15 +256,24 @@ class VilBertVisualBertModel(nn.Module):
         sample_list.token_type_ids = sample_list.token_type_ids.to(get_device())
         sample_list.visual_embeddings = sample_list.visual_embeddings.to(get_device())
         sample_list.visual_embeddings_type = sample_list.visual_embeddings_type.to(get_device())
+        params = {"input_ids": sample_list.input_ids, "attention_mask": sample_list.attention_mask, "token_type_ids": sample_list.token_type_ids,
+                  "visual_embeddings": sample_list.visual_embeddings, "position_embeddings_visual": sample_list.position_embeddings_visual,
+                  "visual_embeddings_type": sample_list.visual_embeddings_type,
+                  "image_text_alignment": sample_list.image_text_alignment,}
+        return params
+
+    def visual_bert_forward(self, sample_list: SampleList):
+        params = self.__visual_bert_preprocessing__(sample_list)
+        clean_memory()
 
         sequence_output, pooled_output, attention_weights = self.model.model.bert(
-            sample_list.input_ids,
-            sample_list.attention_mask,
-            sample_list.token_type_ids,
-            sample_list.visual_embeddings,
-            sample_list.position_embeddings_visual,
-            sample_list.visual_embeddings_type,
-            sample_list.image_text_alignment,
+            params["input_ids"],
+            params["attention_mask"],
+            params["token_type_ids"],
+            params["visual_embeddings"],
+            params["position_embeddings_visual"],
+            params["visual_embeddings_type"],
+            params["image_text_alignment"],
         )
         output_dict = {}
         output_dict["sequence_output"] = sequence_output
@@ -273,6 +292,7 @@ class VilBertVisualBertModel(nn.Module):
         sample_weights = sampleList.sample_weight
 
         sl = self.build_sample_list(sampleList)
+        GPUtil.showUtilization()
         if self.model_name == "vilbert":
             out = self.vilbert_forward(sl)
             if self.featurizer_type != "pass":
@@ -286,14 +306,16 @@ class VilBertVisualBertModel(nn.Module):
         else:
             raise NotImplementedError()
         # print("Sizes = ", {k: v.size() for k, v in out.items()})
+        pooled_output = out["pooled_output"]
+        logits = out["logits"]
+        clean_memory()
+        GPUtil.showUtilization()
 
         if self.featurizer_type == "pass":
             if self.model.config.num_labels != self.num_classes:
-                logits = self.final_layer(out["pooled_output"])
-            else:
-                logits = out["logits"]
+                logits = self.final_layer(pooled_output)
             logits, loss = loss_calculator(logits, labels, self.task, self.loss)
         else:
             vectors = self.featurizer(sequence_output)
             logits, loss = self.final_layer(vectors, labels)
-        return logits, sequence_output.mean(1), sequence_output, loss
+        return logits, pooled_output, sequence_output, loss

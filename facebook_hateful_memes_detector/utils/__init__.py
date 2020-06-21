@@ -381,10 +381,62 @@ def get_torchvision_classification_models(net, finetune=False):
     elif net == "resnet152":
         im_model = models.resnet152(pretrained=True)
         shape = (2048, 7, 7)
+
+    elif net == "resnet18_swsl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet18_swsl')
+        shape = (512, 7, 7)
+    elif net == "resnet50_swsl":
+        im_model = model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet50_swsl')
+        shape = (2048, 7, 7)
+    elif net == "resnext50_32x4d_swsl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext50_32x4d_swsl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x4d_swsl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x4d_swsl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x8d_swsl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x8d_swsl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x16d_swsl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x16d_swsl')
+        shape = (2048, 7, 7)
+
+    elif net == "resnet18_ssl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet18_ssl')
+        shape = (512, 7, 7)
+    elif net == "resnet50_ssl":
+        im_model = model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet50_ssl')
+        shape = (2048, 7, 7)
+    elif net == "resnext50_32x4d_ssl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext50_32x4d_ssl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x4d_ssl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x4d_ssl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x8d_ssl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x8d_ssl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x16d_ssl":
+        im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x16d_ssl')
+        shape = (2048, 7, 7)
+
+    elif net == "resnext101_32x8d_wsl":
+        im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x8d_wsl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x16d_wsl":
+        im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x16d_wsl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x32d_wsl":
+        im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x32d_wsl')
+        shape = (2048, 7, 7)
+    elif net == "resnext101_32x48d_wsl":
+        im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x48d_wsl')
+        shape = (2048, 7, 7)
+
     elif net == "mobilenet_v2":
         im_model = models.mobilenet_v2(pretrained=True)
         resnet_layers = im_model.features[:-1]
-        rm = nn.Sequential(*resnet_layers)
+        model = nn.Sequential(*resnet_layers)
         shape = (320, 7, 7)
     elif net == "resnext50_32x4d":
         im_model = models.resnext50_32x4d(pretrained=True)
@@ -637,6 +689,15 @@ def dict2sampleList(samples: Dict, device: torch.device):
         return SampleList(samples)
     else:
         raise ValueError
+
+
+def clean_memory():
+    import torch
+    import gc
+    _ = gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    _ = gc.collect()
 
 
 

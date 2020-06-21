@@ -55,6 +55,7 @@ pip install pycontractions
 pip install contractions
 pip install yacs
 pip install gpustat
+pip install gputil
 ```
 
 ## Build Wikipedia TF-IDF
