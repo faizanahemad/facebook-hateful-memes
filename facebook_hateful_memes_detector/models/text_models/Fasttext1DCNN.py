@@ -64,7 +64,7 @@ class Fasttext1DCNNModel(nn.Module):
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 
     def forward(self, sampleList: SampleList):
-        sampleList = dict2sampleList(sampleList)
+        sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
         img = sampleList.image
         labels = torch.tensor(sampleList.label).to(get_device())

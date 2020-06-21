@@ -60,7 +60,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         self.finetune_image_model = finetune_image_model
 
     def forward(self, sampleList: SampleList):
-        sampleList = dict2sampleList(sampleList)
+        sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
         img = sampleList.torchvision_image
         orig_image = sampleList.original_image

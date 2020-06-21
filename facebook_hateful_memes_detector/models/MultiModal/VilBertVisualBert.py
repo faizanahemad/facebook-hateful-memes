@@ -42,7 +42,7 @@ class VilBertVisualBertModel(nn.Module):
         else:
             raise NotImplementedError()
         self.model, self.text_processor = m["model"], m["tokenizer"]
-        self.get_img_details = get_image_info_fn(enable_encoder_feats=True)["get_img_details"]
+        self.get_img_details = get_image_info_fn(enable_encoder_feats=True, device=get_device())["get_img_details"]
         if not finetune:
             for p in self.model.parameters():
                 p.requires_grad = False
@@ -94,6 +94,7 @@ class VilBertVisualBertModel(nn.Module):
 
         image_info = getattr(sample_list, "image_info_0", {})
         image_dim_variable = torch.tensor(getattr(image_info, "max_features", None))
+        image_dim_variable = image_dim_variable.to(get_device())
         image_feature_variable = getattr(sample_list, "image_feature_0", None)
         image_feature_variable = image_feature_variable.to(get_device())
         image_label_variable = getattr(sample_list, "image_labels", None)
@@ -189,6 +190,7 @@ class VilBertVisualBertModel(nn.Module):
         bert_input_type_ids = sample_list.segment_ids
         image_info = getattr(sample_list, "image_info_0", {})
         image_dim_variable = torch.tensor(getattr(image_info, "max_features", None))
+        image_dim_variable = image_dim_variable.to(get_device())
         image_feat_variable = getattr(sample_list, "image_feature_0", None)
         image_feat_variable = image_feat_variable.to(get_device())
 
@@ -200,6 +202,7 @@ class VilBertVisualBertModel(nn.Module):
 
         visual_embeddings = getattr(sample_list, "visual_embeddings", None)
         image_dim = getattr(sample_list, "image_dim", None)
+        image_dim = image_dim.to(get_device())
         # pretraining labels
         sample_list.masked_lm_labels = getattr(sample_list, "lm_label_ids", None)
         # image_feat_variable = batch x ( num_choice x ) image_feature_length x dim
@@ -238,7 +241,7 @@ class VilBertVisualBertModel(nn.Module):
         return output_dict
 
     def forward(self, sampleList: SampleList):
-        sampleList = dict2sampleList(sampleList)
+        sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
         img = sampleList.torchvision_image
         orig_image = sampleList.original_image

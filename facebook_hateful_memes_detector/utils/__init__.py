@@ -610,14 +610,14 @@ def print_code(func):
     print(highlight(code, PythonLexer(), TerminalFormatter()))
 
 
-def dict2sampleList(samples: Dict):
+def dict2sampleList(samples: Dict, device: torch.device):
     if type(samples) == dict:
         sl = SampleList()
         for k, v in samples.items():
             assert type(k) == str or type(k) == tuple
             assert type(v) == list or type(v) == torch.Tensor or type(v) == str
             if type(v) == torch.Tensor:
-                v = v.to(get_device())
+                v = v.to(device)
             sl[k] = v
         return sl
     elif type(samples) == SampleList:
