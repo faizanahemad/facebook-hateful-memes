@@ -10,7 +10,7 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, get_device
+from ..utils import in_notebook, get_device, dict2sampleList
 from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -139,6 +139,7 @@ def generate_predictions(model, batch_size, dataset):
                              shuffle=False, num_workers=32, pin_memory=True)
     with torch.no_grad():
         for batch in test_loader:
+            batch = dict2sampleList(batch, device=get_device())
             logits, _, _, _ = model(batch)
             labels = batch.label
             labels_list.extend(labels)

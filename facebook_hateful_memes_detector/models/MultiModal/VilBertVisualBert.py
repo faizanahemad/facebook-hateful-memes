@@ -270,7 +270,7 @@ class VilBertVisualBertModel(nn.Module):
             sequence_output = out["sequence_output"]
         else:
             raise NotImplementedError()
-        print("Sizes = ", {k: v.size() for k, v in out.items()})
+        # print("Sizes = ", {k: v.size() for k, v in out.items()})
 
         if self.featurizer_type == "pass":
             logits = out["logits"]
