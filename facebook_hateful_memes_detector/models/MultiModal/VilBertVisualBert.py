@@ -38,7 +38,7 @@ class VilBertVisualBertModel(nn.Module):
             self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
         elif model_name == "visual_bert":
             m = get_visual_bert(get_device())
-            n_tokens_in, embedding_dims = 100, 768
+            n_tokens_in, embedding_dims = 228, 768
         else:
             raise NotImplementedError()
         self.model, self.text_processor = m["model"], m["tokenizer"]
@@ -226,6 +226,12 @@ class VilBertVisualBertModel(nn.Module):
         sample_list.input_mask = sample_list.input_mask.to(get_device())
         sample_list = self.model.flatten_for_bert(sample_list)
 
+        sample_list.input_ids = sample_list.input_ids.to(get_device())
+        sample_list.attention_mask = sample_list.attention_mask.to(get_device())
+        sample_list.token_type_ids = sample_list.token_type_ids.to(get_device())
+        sample_list.visual_embeddings = sample_list.visual_embeddings.to(get_device())
+        sample_list.visual_embeddings_type = sample_list.visual_embeddings_type.to(get_device())
+
         sequence_output, pooled_output, attention_weights = self.model.model.bert(
             sample_list.input_ids,
             sample_list.attention_mask,
@@ -238,7 +244,7 @@ class VilBertVisualBertModel(nn.Module):
         output_dict = {}
         output_dict["sequence_output"] = sequence_output
         output_dict["pooled_output"] = pooled_output
-        logits = self.classifier(pooled_output).contiguous().squeeze()
+        logits = self.model.model.classifier(pooled_output).contiguous().squeeze()
         output_dict["logits"] = logits
         return output_dict
 
