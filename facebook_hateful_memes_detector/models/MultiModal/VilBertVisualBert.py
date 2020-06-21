@@ -134,6 +134,7 @@ class VilBertVisualBertModel(nn.Module):
         params = {"input_ids": bert_input_ids, "attention_mask": bert_input_mask, "token_type_ids": bert_input_type_ids, "image_dim": image_dim_variable,
                   "image_feature": image_feature_variable, "image_location": image_location_variable, "image_target": image_target_variable,
                   "image_label": image_label_variable, "masked_lm_labels": getattr(sample_list, "lm_label_ids", None)}
+        params = {k: v.to(get_device()) if type(v) == torch.Tensor else v for k, v in params.items()}
 
         # Prepare Mask
         if params["image_feature"] is not None and params["image_dim"] is not None:
@@ -270,7 +271,7 @@ class VilBertVisualBertModel(nn.Module):
             sequence_output = out["sequence_output"]
         else:
             raise NotImplementedError()
-        # print("Sizes = ", {k: v.size() for k, v in out.items()})
+        print("Sizes = ", {k: v.size() for k, v in out.items()})
 
         if self.featurizer_type == "pass":
             logits = out["logits"]
