@@ -14,7 +14,8 @@ from mmf.common import SampleList, Sample
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, dict2sampleList
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
+    dict2sampleList, loss_calculator, get_loss_by_task
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert
@@ -26,19 +27,21 @@ class VilBertVisualBertModel(nn.Module):
                  internal_dims, classifier_dims,
                  featurizer, final_layer_builder,
                  n_tokens_out, n_layers,
+                 task,
                  finetune=False,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
         self.model_name = model_name
+        self.task = task
         if model_name == "vilbert":
             m = get_vilbert(get_device())
-            n_tokens_in, embedding_dims = 228, 768
+            n_tokens_in, embedding_dims, pooled_dims = 228, 768, 1024
             vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
             init_fc(vilbert_seq_v_conv, "leaky_relu")
             self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
         elif model_name == "visual_bert":
             m = get_visual_bert(get_device())
-            n_tokens_in, embedding_dims = 228, 768
+            n_tokens_in, embedding_dims, pooled_dims = 228, 768, 768
         else:
             raise NotImplementedError()
         self.model, self.text_processor = m["model"], m["tokenizer"]
@@ -66,6 +69,17 @@ class VilBertVisualBertModel(nn.Module):
 
         self.featurizer_type = featurizer
         if self.featurizer_type == "pass":
+            if self.model.config.num_labels != num_classes:
+                self.num_classes = num_classes
+                lin0 = nn.Linear(pooled_dims, pooled_dims)
+                init_fc(lin0, "leaky_relu")
+                lin = nn.Linear(pooled_dims, num_classes)
+                init_fc(lin, "linear")
+                dp = nn.Dropout(dropout)
+                ll = nn.LayerNorm(pooled_dims)
+                self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, lin)
+                self.loss = get_loss_by_task(task)
+
             assert not finetune
         else:
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
@@ -274,8 +288,11 @@ class VilBertVisualBertModel(nn.Module):
         print("Sizes = ", {k: v.size() for k, v in out.items()})
 
         if self.featurizer_type == "pass":
-            logits = out["logits"]
-            loss = torch.tensor(0.0)
+            if self.model.config.num_labels != self.num_classes:
+                logits = self.final_layer(out["pooled_output"])
+            else:
+                logits = out["logits"]
+            loss = loss_calculator(logits, labels, self.task, self.loss)
         else:
             vectors = self.featurizer(sequence_output)
             logits, loss = self.final_layer(vectors, labels)

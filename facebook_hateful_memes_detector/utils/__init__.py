@@ -427,6 +427,47 @@ def get_torchvision_classification_models(net, finetune=False):
     return model, shape
 
 
+def loss_calculator(logits, labels, task, loss_fn):
+    logits = logits.to(get_device())
+    loss = torch.tensor(0.0, device=get_device())
+    if labels is not None:
+        labels = labels.to(get_device())
+        if task == "classification":
+            assert len(labels.size()) == 1
+            loss = loss_fn(logits, labels.long())
+            # preds = logits.max(dim=1).indices
+            logits = torch.softmax(logits, dim=1)
+        elif task == "regression":
+            assert len(labels.size()) == 2
+            loss = loss_fn(logits, labels.float())
+
+        elif task == "k-classification":
+            assert len(labels.size()) == 2
+            labels = labels.astype(float)
+            loss = loss_fn(logits, labels)
+            logits = torch.sigmoid(logits)
+
+    if task == "classification":
+        logits = torch.softmax(logits, dim=1)
+    elif task == "k-classification":
+        logits = torch.sigmoid(logits)
+
+    return logits, loss
+
+
+def get_loss_by_task(task):
+    if task == "classification":
+        loss = nn.CrossEntropyLoss()
+    elif task == "regression":
+        loss = nn.MSELoss()
+    elif task == "k-classification":
+        loss = nn.BCEWithLogitsLoss()
+    else:
+        raise NotImplementedError
+
+    return loss
+
+
 class CNNHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
                  task, loss=None, width="wide", ):
@@ -435,12 +476,7 @@ class CNNHead(nn.Module):
             raise NotImplementedError(task)
         # TODO: Implement n_of_k class classification or set prediction/bipartite loss
         self.task = task
-        if task == "classification":
-            self.loss = nn.CrossEntropyLoss()
-        elif task == "regression":
-            self.loss = nn.MSELoss()
-        elif task == "k-classification":
-            self.loss = nn.BCEWithLogitsLoss()
+        self.loss = get_loss_by_task(task)
 
         if loss is not None:
             self.loss = loss
@@ -463,32 +499,7 @@ class CNNHead(nn.Module):
                 or (len(x.size()) == 4 and x.size()[1] == self.n_dims))
         logits = self.classifier(x).squeeze()
         logits = logits.to(get_device())
-        loss = torch.tensor(0.0, device=get_device())
-        if labels is not None:
-            labels = labels.to(get_device())
-            if self.task == "classification":
-                assert len(labels.size()) == 1
-                loss = self.loss(logits, labels.long())
-                # preds = logits.max(dim=1).indices
-                logits = torch.softmax(logits, dim=1)
-            elif self.task == "regression":
-                assert len(labels.size()) == 2
-                assert labels.size()[1] == self.n_out
-                loss = self.loss(logits, labels.float())
-
-            elif self.task == "k-classification":
-                assert len(labels.size()) == 2
-                assert labels.size()[1] == self.n_out
-                labels = labels.astype(float)
-                loss = self.loss(logits, labels)
-                logits = torch.sigmoid(logits)
-
-        if self.task == "classification":
-            logits = torch.softmax(logits, dim=1)
-        elif self.task == "k-classification":
-            logits = torch.sigmoid(logits)
-
-        return logits, loss
+        return loss_calculator(logits, labels, self.task, self.loss)
 
 
 class CNN2DHead(CNNHead):
