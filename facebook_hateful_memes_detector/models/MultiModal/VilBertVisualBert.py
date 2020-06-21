@@ -78,6 +78,8 @@ class VilBertVisualBertModel(nn.Module):
                 dp = nn.Dropout(dropout)
                 ll = nn.LayerNorm(pooled_dims)
                 self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, lin)
+            else:
+                assert finetune
             self.loss = get_loss_by_task(task)
         else:
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
