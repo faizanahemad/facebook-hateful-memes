@@ -126,7 +126,7 @@ class VilBertVisualBertModel(nn.Module):
 
     def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
         imgfs = [self.get_lxmert_details(im) for im in orig_image]
-        print({i: (b.size(), f.size()) for i, (b, f) in enumerate(imgfs)})
+        print({i: (b.pred_boxes.tensor.size(), f.size()) for i, (b, f) in enumerate(imgfs)})
         samples = [Sample(dict(feats=feats, boxes=boxes.pred_boxes.tensor)) for boxes, feats in imgfs]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
