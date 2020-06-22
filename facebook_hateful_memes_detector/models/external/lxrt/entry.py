@@ -78,16 +78,18 @@ def set_visual_config(args):
 
 
 class LXRTEncoder(nn.Module):
-    def __init__(self, args, max_seq_length, mode='x'):
+    def __init__(self, args, max_seq_length, pretokenized=False, mode='lxr'):
         super().__init__()
         self.max_seq_length = max_seq_length
         set_visual_config(args)
 
         # Using the bert tokenizer
-        self.tokenizer = BertTokenizer.from_pretrained(
-            "bert-base-uncased",
-            do_lower_case=True
-        )
+        self.pretokenized = pretokenized
+        if not pretokenized:
+            self.tokenizer = BertTokenizer.from_pretrained(
+                "bert-base-uncased",
+                do_lower_case=True
+            )
 
         # Build LXRT Model
         self.model = VisualBertForLXRFeature.from_pretrained(

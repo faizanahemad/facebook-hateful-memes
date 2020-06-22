@@ -86,15 +86,19 @@ def tokenizer_conf(max_seq_length=128):
     return s
 
 
-def get_vilbert(device, max_seq_length=128):
+def get_tokenizer(max_seq_length=128):
+    return BertTokenizer(tokenizer_conf(max_seq_length))
+
+
+def get_vilbert(device, ):
     opts = ['config=projects/hateful_memes/configs/vilbert/from_cc.yaml', 'model=vilbert',
             'dataset=hateful_memes', 'run_type=val',
             'checkpoint.resume_zoo=vilbert.finetuned.hateful_memes.from_cc_original', 'evaluation.predict=true']
-    return {"model": get_model(device, opts), "tokenizer": BertTokenizer(tokenizer_conf(max_seq_length))}
+    return get_model(device, opts)
 
 
-def get_visual_bert(device, max_seq_length=128):
+def get_visual_bert(device):
     opts = ['config=projects/hateful_memes/configs/visual_bert/from_coco.yaml', 'model=visual_bert',
             'dataset=hateful_memes', 'run_type=val',
             'checkpoint.resume_zoo=visual_bert.finetuned.hateful_memes.from_coco', 'evaluation.predict=true']
-    return {"model": get_model(device, opts), "tokenizer": BertTokenizer(tokenizer_conf(max_seq_length))}
+    return get_model(device, opts)

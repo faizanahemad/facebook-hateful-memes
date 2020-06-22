@@ -18,12 +18,12 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvis
     dict2sampleList, loss_calculator, get_loss_by_task, clean_memory
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
-from ..external.mmf import get_vilbert, get_visual_bert
+from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer
 import GPUtil
 
 
 class VilBertVisualBertModel(nn.Module):
-    def __init__(self, model_name, num_classes,
+    def __init__(self, model_name: List, num_classes,
                  gaussian_noise, dropout,
                  internal_dims, classifier_dims,
                  featurizer, final_layer_builder,
@@ -32,33 +32,26 @@ class VilBertVisualBertModel(nn.Module):
                  finetune=False,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
-        self.model_name = model_name
         self.task = task
         max_seq_length = 64
-        if model_name == "vilbert":
-            m = get_vilbert(get_device(), max_seq_length)
-            n_tokens_in, embedding_dims, pooled_dims = 100 + max_seq_length, 768, 1024
+        self.text_processor = get_tokenizer(max_seq_length)
+        n_tokens_in, pooled_dims = 0, 0, 0
+        model_name = [model_name] if type(model_name) ==  str else model_name
+        self.model_name = model_name
+        if "vilbert" in model_name:
+            self.vilbert = get_vilbert(get_device())
+            n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
             vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
             init_fc(vilbert_seq_v_conv, "leaky_relu")
             self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
-            self.model, self.text_processor = m["model"], m["tokenizer"]
-        elif model_name == "visual_bert":
-            m = get_visual_bert(get_device(), max_seq_length)
-            n_tokens_in, embedding_dims, pooled_dims = 100 + max_seq_length, 768, 768
-            self.model, self.text_processor = m["model"], m["tokenizer"]
-        elif model_name == "vilbert_and_visual_bert":
-            assert featurizer == "transformer"
-            m1 = get_vilbert(get_device(), max_seq_length)
-            vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
-            init_fc(vilbert_seq_v_conv, "leaky_relu")
-            self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
-            m2 = get_visual_bert(get_device(), max_seq_length)
-            self.vilbert = m1["model"]
-            self.visual_bert = m2["model"]
-            self.text_processor = m1["tokenizer"]
-            n_tokens_in, embedding_dims, pooled_dims = (100 + max_seq_length)*2, 768, None
+        if "visual_bert" in model_name:
+            self.visual_bert = get_visual_bert(get_device())
+            n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
 
-        else:
+        if len(model_name) > 1:
+            assert featurizer == "transformer"
+
+        if len(set(model_name) - {"vilbert", "visual_bert"}) > 0:
             raise NotImplementedError()
 
         self.get_img_details = get_image_info_fn(enable_encoder_feats=True, device=get_device())["get_img_details"]
@@ -71,6 +64,9 @@ class VilBertVisualBertModel(nn.Module):
                     p.requires_grad = False
             if hasattr(self, 'visual_bert'):
                 for p in self.visual_bert.parameters():
+                    p.requires_grad = False
+            if hasattr(self, 'lxmert'):
+                for p in self.lxmert.parameters():
                     p.requires_grad = False
 
         if featurizer == "transformer":
@@ -108,13 +104,22 @@ class VilBertVisualBertModel(nn.Module):
 
         self.finetune = finetune
 
-    def build_sample_list(self, sampleList: SampleList):
-        texts = sampleList.text
-        orig_image = sampleList.original_image
+    def get_tokens(self, texts):
+        keys = ["input_ids", "input_mask", "segment_ids"]
         texts = [self.text_processor({"text": t}) for t in texts]
+        texts = SampleList([Sample({k: t[k] for k in keys}) for t in texts])
+        for k in keys:
+            texts[k] = texts[k].to(get_device())
+        return texts
+
+
+    def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList):
         feat_list, info_list = zip(*[self.get_img_details(im) for im in orig_image])
-        samples = [Sample(dict(image_feature_0=f, image_info_0=i, **t)) for t, f, i in zip(texts, feat_list, info_list)]
+        samples = [Sample(dict(image_feature_0=f, image_info_0=i)) for f, i in zip(feat_list, info_list)]
         sl = SampleList(samples)
+        sl.input_ids = textSampleList.input_ids
+        sl.input_mask = textSampleList.input_mask
+        sl.segment_ids = textSampleList.segment_ids
         return sl
 
     def __vilbert_preprocessing__(self, sample_list: SampleList):
@@ -194,7 +199,7 @@ class VilBertVisualBertModel(nn.Module):
             pooled_output_t,
             pooled_output_v,
             attention_weights,
-        ) = self.model.model.bert(
+        ) = self.vilbert.model.bert(
             params["input_ids"],
             params["image_feature"],
             params["image_location"],
@@ -206,17 +211,17 @@ class VilBertVisualBertModel(nn.Module):
         )
         del params
         clean_memory()
-        if self.model.model.fusion_method == "sum":
-            pooled_output = self.model.model.dropout(pooled_output_t + pooled_output_v)
-        elif self.model.model.fusion_method == "mul":
-            pooled_output = self.model.model.dropout(pooled_output_t * pooled_output_v)
+        if self.vilbert.model.fusion_method == "sum":
+            pooled_output = self.vilbert.model.dropout(pooled_output_t + pooled_output_v)
+        elif self.vilbert.model.fusion_method == "mul":
+            pooled_output = self.vilbert.model.dropout(pooled_output_t * pooled_output_v)
         else:
             raise AssertionError
 
 
         logits = None
         if self.featurizer_type == "pass":
-            logits = self.model.model.classifier(pooled_output).contiguous().squeeze()
+            logits = self.vilbert.model.classifier(pooled_output).contiguous().squeeze()
         output = dict(sequence_output_t=sequence_output_t,
                       sequence_output_v=sequence_output_v,
                       pooled_output_t=pooled_output_t,
@@ -279,11 +284,8 @@ class VilBertVisualBertModel(nn.Module):
                   "image_text_alignment": sample_list.image_text_alignment,}
         return params
 
-    def visual_bert_forward(self, sample_list: SampleList):
-        params = self.__visual_bert_preprocessing__(sample_list)
-        clean_memory()
-
-        sequence_output, pooled_output, attention_weights = self.model.model.bert(
+    def visual_bert_forward(self, params: Dict):
+        sequence_output, pooled_output, attention_weights = self.visual_bert.model.bert(
             params["input_ids"],
             params["attention_mask"],
             params["token_type_ids"],
@@ -299,7 +301,7 @@ class VilBertVisualBertModel(nn.Module):
         clean_memory()
         logits = None
         if self.featurizer_type == "pass":
-            logits = self.model.model.classifier(pooled_output).contiguous().squeeze()
+            logits = self.visual_bert.model.classifier(pooled_output).contiguous().squeeze()
         output_dict["logits"] = logits
         return output_dict
 
@@ -312,36 +314,35 @@ class VilBertVisualBertModel(nn.Module):
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
 
-        sl = self.build_sample_list(sampleList)
+        textSampleList = self.get_tokens(texts)
+        sl = self.build_vilbert_visual_bert_sample_list(orig_image, textSampleList)
         clean_memory()
         # GPUtil.showUtilization()
-        if self.model_name == "vilbert":
+        pooled_output = []
+        sequence_output = []
+        if "vilbert" in self.model_name:
             out = self.vilbert_forward(sl)
             if self.featurizer_type != "pass":
                 out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
             else:
                 out["sequence_output_v"] = out["sequence_output_v"][:, :, :out["sequence_output_t"].size(-1)]
-            sequence_output = torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1)
-        elif self.model_name == "visual_bert":
-            out = self.visual_bert_forward(sl)
-            sequence_output = out["sequence_output"]
-        elif self.model_name == "vilbert_and_visual_bert":
-            self.model = self.vilbert
-            out = self.vilbert_forward(sl)
-            out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
-            vilbert_sequence_output = torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1)
-            del out
-            clean_memory()
-            self.model = self.visual_bert
-            out = self.visual_bert_forward(sl)
-            visual_bert_sequence_output = out["sequence_output"]
-            sequence_output = torch.cat([vilbert_sequence_output, visual_bert_sequence_output], 1)
+            sequence_output.append(torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1))
+            pooled_output.append(out["pooled_output"])
             clean_memory()
 
-        else:
-            raise NotImplementedError()
+        if "lxmert" in self.model_name:
+            pass
+
+        if "visual_bert" in self.model_name:
+            params = self.__visual_bert_preprocessing__(sl)
+            del sl
+            clean_memory()
+            out = self.visual_bert_forward(params)
+            sequence_output.append(out["sequence_output"])
+
         # print("Sizes = ", {k: v.size() for k, v in out.items()})
-        pooled_output = out["pooled_output"]
+        pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
+        sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
         logits = out["logits"]
         del out
         clean_memory()

@@ -16,15 +16,15 @@ def model_name_to_url(name):
         return "https://drive.google.com/uc?id=1L2TM9Y_KZsl4x28CJe9H82_P39gGyhTe" # "https://drive.google.com/file/d/1L2TM9Y_KZsl4x28CJe9H82_P39gGyhTe"
 
 
-def get_lxrt_model(name, max_seq_len=64):
+def get_lxrt_model(name, pretokenized, max_seq_len=64):
     from types import SimpleNamespace
     args = SimpleNamespace()
     args.llayers = 9
     args.rlayers = 5
     args.xlayers = 5
     args.from_scratch = False
-
-    model = LXRTEncoder(args, max_seq_len)
+    assert type(pretokenized) == bool
+    model = LXRTEncoder(args, max_seq_len, pretokenized)
     model.load(cached_path(model_name_to_url(name)))
     return model
 
