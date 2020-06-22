@@ -21,6 +21,54 @@ from pycontractions import Contractions
 from torch.utils.data.sampler import WeightedRandomSampler
 from mmf.common.sample import Sample, SampleList
 from mmf.common.batch_collator import BatchCollator
+import torchvision
+import random
+
+
+class DefinedRotation(torchvision.transforms.RandomRotation):
+    def __init__(self, degrees):
+        super().__init__(degrees)
+
+    @staticmethod
+    def get_params(degrees):
+        """Get parameters for ``rotate`` for a random rotation.
+
+        Returns:
+            sequence: params to be passed to ``rotate`` for random rotation.
+        """
+
+        angle = random.sample(list(degrees), k=1)[0]
+
+        return angle
+
+
+class QuadrantCut:
+    def __call__(self, image):
+        arr = np.array(image)  # H, W, C PIL image
+        mean = 110  # mean = np.mean(arr)
+        shape = arr.shape
+        x_half = int(shape[0] / 2)
+        y_half = int(shape[1] / 2)
+        choice = random.randint(1, 8)
+        if choice == 1:
+            arr[:x_half, :y_half] = mean
+        if choice == 2:
+            arr[:x_half, y_half:] = mean
+        if choice == 3:
+            arr[x_half:, y_half:] = mean
+        if choice == 4:
+            arr[x_half:, :y_half] = mean
+
+        if choice == 5:
+            arr[:x_half, :] = mean
+        if choice == 6:
+            arr[x_half:, :] = mean
+        if choice == 7:
+            arr[:, y_half:] = mean
+        if choice == 8:
+            arr[:, :y_half] = mean
+
+        return Image.fromarray(arr)
 
 
 def clean_text(text):

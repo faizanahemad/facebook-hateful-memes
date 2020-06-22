@@ -352,7 +352,7 @@ class VilBertVisualBertModel(nn.Module):
         sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
         img = sampleList.torchvision_image
-        orig_image = sampleList.original_image
+        image = sampleList.image # orig_image = sampleList.original_image
         labels = sampleList.label
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
@@ -365,7 +365,7 @@ class VilBertVisualBertModel(nn.Module):
         sequence_output = []
         logits = None
         if "vilbert" in self.model_name or "visual_bert" in self.model_name:
-            sl = self.build_vilbert_visual_bert_sample_list(orig_image, textSampleList)
+            sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
             if "vilbert" in self.model_name:
                 out = self.vilbert_processor(sl)
                 if self.featurizer_type != "pass":
@@ -394,11 +394,11 @@ class VilBertVisualBertModel(nn.Module):
             clean_memory()
 
         if "lxmert" in self.model_name:
-            feat_seq, pooled = self.lxmert_forward(orig_image, textSampleList)
+            feat_seq, pooled = self.lxmert_forward(image, textSampleList)
             pooled_output.append(pooled)
             sequence_output.append(feat_seq)
 
-        del orig_image
+        del image
         del textSampleList
 
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
