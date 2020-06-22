@@ -51,13 +51,13 @@ class VilBertVisualBertModel(nn.Module):
 
         if "lxmert" in model_name:
             self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
-            n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length, 768, pooled_dims
+            n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
 
         if len(model_name) > 1:
             assert featurizer == "transformer"
 
-        if len(set(model_name) - {"vilbert", "visual_bert"}) > 0:
+        if len(set(model_name) - {"vilbert", "visual_bert", "lxmert"}) > 0:
             raise NotImplementedError()
 
         if "vilbert" in model_name or "visual_bert" in model_name:
@@ -94,7 +94,7 @@ class VilBertVisualBertModel(nn.Module):
         self.featurizer_type = featurizer
         if self.featurizer_type == "pass":
             self.num_classes = num_classes
-            if self.model.config.num_labels != num_classes:
+            if self.num_classes != 2 or "lxmert" in model_name or len(model_name) > 1:
                 lin0 = nn.Linear(pooled_dims, pooled_dims)
                 init_fc(lin0, "leaky_relu")
                 lin = nn.Linear(pooled_dims, num_classes)
