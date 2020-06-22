@@ -1,4 +1,4 @@
-_BASE_: "../Base-RCNN-C4.yaml"
+_BASE_: "Base-RCNN-C4.yaml"
 MODEL:
   CAFFE_MAXPOOL: True
   PIXEL_MEAN: [102.9801, 115.9465, 122.7717]
