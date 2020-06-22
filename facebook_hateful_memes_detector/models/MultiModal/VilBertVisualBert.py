@@ -403,11 +403,6 @@ class VilBertVisualBertModel(nn.Module):
 
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
         sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
-        try:
-            print("Sizes = ", sequence_output.size(), pooled_output.size())
-        except:
-            print("Exception", type(sequence_output),type(pooled_output),len(sequence_output), len(pooled_output), sequence_output, pooled_output)
-
         clean_memory()
         # GPUtil.showUtilization()
 
