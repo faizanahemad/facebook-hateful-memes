@@ -50,7 +50,7 @@ class VilBertVisualBertModel(nn.Module):
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
 
         if "lxmert" in model_name:
-            self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_length=max_seq_length)
+            self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length, 768, pooled_dims
             self.lxmert.to(get_device())
 
