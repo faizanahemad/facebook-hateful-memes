@@ -109,12 +109,15 @@ class LXRTEncoder(nn.Module):
         return 768
 
     def forward(self, sents, feats, visual_attention_mask=None):
-        train_features = convert_sents_to_features(
-            sents, self.max_seq_length, self.tokenizer)
+        if self.pretokenized:
+            input_ids, input_mask, segment_ids = sents
+        else:
+            train_features = convert_sents_to_features(
+                sents, self.max_seq_length, self.tokenizer)
 
-        input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long).cuda()
-        input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long).cuda()
-        segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long).cuda()
+            input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long).cuda()
+            input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long).cuda()
+            segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long).cuda()
 
         output = self.model(input_ids, segment_ids, input_mask,
                             visual_feats=feats,

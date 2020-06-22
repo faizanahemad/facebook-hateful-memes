@@ -19,6 +19,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvis
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer
+from ..external.lxrt import get_lxrt_model
 import GPUtil
 
 
@@ -35,7 +36,7 @@ class VilBertVisualBertModel(nn.Module):
         self.task = task
         max_seq_length = 64
         self.text_processor = get_tokenizer(max_seq_length)
-        n_tokens_in, pooled_dims = 0, 0, 0
+        n_tokens_in, pooled_dims = 0, 0
         model_name = [model_name] if type(model_name) ==  str else model_name
         self.model_name = model_name
         if "vilbert" in model_name:
@@ -48,13 +49,23 @@ class VilBertVisualBertModel(nn.Module):
             self.visual_bert = get_visual_bert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
 
+        if "lxmert" in model_name:
+            self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_length=max_seq_length)
+            n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length, 768, pooled_dims
+            self.lxmert.to(get_device())
+
         if len(model_name) > 1:
             assert featurizer == "transformer"
 
         if len(set(model_name) - {"vilbert", "visual_bert"}) > 0:
             raise NotImplementedError()
 
-        self.get_img_details = get_image_info_fn(enable_encoder_feats=True, device=get_device())["get_img_details"]
+        if "vilbert" in model_name or "visual_bert" in model_name:
+            self.get_img_details = get_image_info_fn(enable_encoder_feats=False, device=get_device())["get_img_details"]
+
+        if "lxmert" in model_name:
+            self.get_lxmert_details = get_image_info_fn(enable_encoder_feats=False, device=get_device())["get_lxmert_details"]
+
         if not finetune:
             if hasattr(self, 'model'):
                 for p in self.model.parameters():
@@ -76,6 +87,7 @@ class VilBertVisualBertModel(nn.Module):
         elif featurizer == "pass":
             assert n_tokens_in == n_tokens_out
             assert embedding_dims == classifier_dims
+            assert ("vilbert" in model_name or "visual_bert" in model_name) and "lxmert" not in model_name
         else:
             raise NotImplementedError()
 
@@ -112,10 +124,19 @@ class VilBertVisualBertModel(nn.Module):
             texts[k] = texts[k].to(get_device())
         return texts
 
+    def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
+        imgfs = [self.get_lxmert_details(im) for im in orig_image]
+        samples = [Sample(dict(feats=feats, boxes=boxes.pred_boxes.tensor)) for boxes, feats in imgfs]
+        sl = SampleList(samples)
+        sl.input_ids = textSampleList.input_ids
+        sl.input_mask = textSampleList.input_mask
+        sl.segment_ids = textSampleList.segment_ids
+        return sl
+
 
     def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList):
-        feat_list, info_list = zip(*[self.get_img_details(im) for im in orig_image])
-        samples = [Sample(dict(image_feature_0=f, image_info_0=i)) for f, i in zip(feat_list, info_list)]
+        imgfs = [self.get_img_details(im) for im in orig_image]
+        samples = [Sample(dict(image_feature_0=feat_list, image_info_0=info_list)) for feat_list, info_list in imgfs]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
@@ -315,8 +336,10 @@ class VilBertVisualBertModel(nn.Module):
         sample_weights = sampleList.sample_weight
 
         textSampleList = self.get_tokens(texts)
-        sl = self.build_vilbert_visual_bert_sample_list(orig_image, textSampleList)
+        if "vilbert" in self.model_name or "visual_bert" in self.model_name:
+            sl = self.build_vilbert_visual_bert_sample_list(orig_image, textSampleList)
         clean_memory()
+        del sampleList
         # GPUtil.showUtilization()
         pooled_output = []
         sequence_output = []
@@ -331,7 +354,12 @@ class VilBertVisualBertModel(nn.Module):
             clean_memory()
 
         if "lxmert" in self.model_name:
-            pass
+            lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
+            feat_seq, pooled = self.lxmert((lx_sl.input_ids, lx_sl.input_mask, lx_sl.segment_ids,), (lx_sl.feats, lx_sl.boxes))
+            pooled_output.append(pooled)
+            sequence_output.append(feat_seq)
+            del lx_sl
+            clean_memory()
 
         if "visual_bert" in self.model_name:
             params = self.__visual_bert_preprocessing__(sl)
@@ -340,9 +368,9 @@ class VilBertVisualBertModel(nn.Module):
             out = self.visual_bert_forward(params)
             sequence_output.append(out["sequence_output"])
 
-        # print("Sizes = ", {k: v.size() for k, v in out.items()})
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
         sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
+        print("Sizes = ", sequence_output.size(), pooled_output.size())
         logits = out["logits"]
         del out
         clean_memory()
