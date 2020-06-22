@@ -126,7 +126,6 @@ class VilBertVisualBertModel(nn.Module):
 
     def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
         imgfs = [self.get_lxmert_details(im) for im in orig_image]
-        print({i: (b.pred_boxes.tensor.size(), f.size()) for i, (b, f) in enumerate(imgfs)})
         samples = [Sample(dict(feats=pad_tensor(feats, 36),
                                boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
                                masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
