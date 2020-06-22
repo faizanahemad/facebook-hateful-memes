@@ -15,7 +15,7 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
-    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory
+    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer
@@ -127,7 +127,9 @@ class VilBertVisualBertModel(nn.Module):
     def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
         imgfs = [self.get_lxmert_details(im) for im in orig_image]
         print({i: (b.pred_boxes.tensor.size(), f.size()) for i, (b, f) in enumerate(imgfs)})
-        samples = [Sample(dict(feats=feats, boxes=boxes.pred_boxes.tensor)) for boxes, feats in imgfs]
+        samples = [Sample(dict(feats=pad_tensor(feats, 36),
+                               boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
+                               masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
@@ -210,7 +212,7 @@ class VilBertVisualBertModel(nn.Module):
         params = {k: v.to(get_device()) if type(v) == torch.Tensor else v for k, v in params.items()}
         return params
 
-    def vilbert_forward(self, sample_list: SampleList):
+    def vilbert_processor(self, sample_list: SampleList):
         params = self.__vilbert_preprocessing__(sample_list)
         clean_memory()
         # GPUtil.showUtilization()
@@ -306,7 +308,7 @@ class VilBertVisualBertModel(nn.Module):
                   "image_text_alignment": sample_list.image_text_alignment,}
         return params
 
-    def visual_bert_forward(self, params: Dict):
+    def visual_bert_processor(self, params: Dict):
         sequence_output, pooled_output, attention_weights = self.visual_bert.model.bert(
             params["input_ids"],
             params["attention_mask"],
@@ -327,6 +329,26 @@ class VilBertVisualBertModel(nn.Module):
         output_dict["logits"] = logits
         return output_dict
 
+
+    def visual_bert_forward(self, sl: SampleList):
+        params = self.__visual_bert_preprocessing__(sl)
+        del sl
+        clean_memory()
+        out = self.visual_bert_processor(params)
+        return out["sequence_output"], out["logits"]
+
+
+    def lxmert_forward(self, orig_image, textSampleList):
+        lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
+        for k, v in lx_sl.items():
+            if type(v) == torch.Tensor:
+                lx_sl[k] = v.to(get_device())
+        feat_seq, pooled = self.lxmert((lx_sl.input_ids, lx_sl.input_mask, lx_sl.segment_ids,), (lx_sl.feats, lx_sl.boxes), lx_sl.masks)
+
+        del lx_sl
+        clean_memory()
+        return feat_seq, pooled
+
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
@@ -337,43 +359,49 @@ class VilBertVisualBertModel(nn.Module):
         sample_weights = sampleList.sample_weight
 
         textSampleList = self.get_tokens(texts)
-        if "vilbert" in self.model_name or "visual_bert" in self.model_name:
-            sl = self.build_vilbert_visual_bert_sample_list(orig_image, textSampleList)
         del sampleList
         clean_memory()
         # GPUtil.showUtilization()
         pooled_output = []
         sequence_output = []
-        if "vilbert" in self.model_name:
-            out = self.vilbert_forward(sl)
-            if self.featurizer_type != "pass":
-                out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
-            else:
-                out["sequence_output_v"] = out["sequence_output_v"][:, :, :out["sequence_output_t"].size(-1)]
-            sequence_output.append(torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1))
-            pooled_output.append(out["pooled_output"])
+        logits = None
+        if "vilbert" in self.model_name or "visual_bert" in self.model_name:
+            sl = self.build_vilbert_visual_bert_sample_list(orig_image, textSampleList)
+            if "vilbert" in self.model_name:
+                out = self.vilbert_processor(sl)
+                if self.featurizer_type != "pass":
+                    out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
+                else:
+                    out["sequence_output_v"] = out["sequence_output_v"][:, :, :out["sequence_output_t"].size(-1)]
+                sequence_output.append(torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1))
+                pooled_output.append(out["pooled_output"])
+                logits = torch.softmax(out["logits"], dim=1)
+                del out
+                clean_memory()
+
+            if "visual_bert" in self.model_name:
+                seq, logit = self.visual_bert_forward(sl)
+                sequence_output.append(seq)
+                if logits is None:
+                    logits = torch.softmax(logit, dim=1)
+                else:
+                    logits = (torch.softmax(logit, dim=1) + logits) / 2
+
+            del sl
             clean_memory()
 
         if "lxmert" in self.model_name:
-            lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
-            feat_seq, pooled = self.lxmert((lx_sl.input_ids, lx_sl.input_mask, lx_sl.segment_ids,), (lx_sl.feats, lx_sl.boxes))
+            feat_seq, pooled = self.lxmert_forward(orig_image, textSampleList)
             pooled_output.append(pooled)
             sequence_output.append(feat_seq)
-            del lx_sl
-            clean_memory()
 
-        if "visual_bert" in self.model_name:
-            params = self.__visual_bert_preprocessing__(sl)
-            del sl
-            clean_memory()
-            out = self.visual_bert_forward(params)
-            sequence_output.append(out["sequence_output"])
+        del orig_image
+        del textSampleList
 
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
         sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
         print("Sizes = ", sequence_output.size(), pooled_output.size())
-        logits = out["logits"]
-        del out
+
         clean_memory()
         # GPUtil.showUtilization()
 
