@@ -56,6 +56,9 @@ pip install contractions
 pip install yacs
 pip install gpustat
 pip install gputil
+pip install gdown
+pip install fvcore
+pip install opencv-python
 ```
 
 ## Build Wikipedia TF-IDF

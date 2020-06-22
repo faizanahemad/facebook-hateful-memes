@@ -34,28 +34,29 @@ class VilBertVisualBertModel(nn.Module):
         super(VilBertVisualBertModel, self).__init__()
         self.model_name = model_name
         self.task = task
+        max_seq_length = 64
         if model_name == "vilbert":
-            m = get_vilbert(get_device())
-            n_tokens_in, embedding_dims, pooled_dims = 228, 768, 1024
+            m = get_vilbert(get_device(), max_seq_length)
+            n_tokens_in, embedding_dims, pooled_dims = 100 + max_seq_length, 768, 1024
             vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
             init_fc(vilbert_seq_v_conv, "leaky_relu")
             self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
             self.model, self.text_processor = m["model"], m["tokenizer"]
         elif model_name == "visual_bert":
-            m = get_visual_bert(get_device())
-            n_tokens_in, embedding_dims, pooled_dims = 228, 768, 768
+            m = get_visual_bert(get_device(), max_seq_length)
+            n_tokens_in, embedding_dims, pooled_dims = 100 + max_seq_length, 768, 768
             self.model, self.text_processor = m["model"], m["tokenizer"]
         elif model_name == "vilbert_and_visual_bert":
             assert featurizer == "transformer"
-            m1 = get_vilbert(get_device())
+            m1 = get_vilbert(get_device(), max_seq_length)
             vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
             init_fc(vilbert_seq_v_conv, "leaky_relu")
             self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
-            m2 = get_visual_bert(get_device())
+            m2 = get_visual_bert(get_device(), max_seq_length)
             self.vilbert = m1["model"]
             self.visual_bert = m2["model"]
             self.text_processor = m1["tokenizer"]
-            n_tokens_in, embedding_dims, pooled_dims = 228*2, 768, None
+            n_tokens_in, embedding_dims, pooled_dims = (100 + max_seq_length)*2, 768, None
 
         else:
             raise NotImplementedError()
