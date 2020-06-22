@@ -126,6 +126,7 @@ class VilBertVisualBertModel(nn.Module):
 
     def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
         imgfs = [self.get_lxmert_details(im) for im in orig_image]
+        print({i: (b.size(), f.size()) for i, (b, f) in enumerate(imgfs)})
         samples = [Sample(dict(feats=feats, boxes=boxes.pred_boxes.tensor)) for boxes, feats in imgfs]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
@@ -338,8 +339,8 @@ class VilBertVisualBertModel(nn.Module):
         textSampleList = self.get_tokens(texts)
         if "vilbert" in self.model_name or "visual_bert" in self.model_name:
             sl = self.build_vilbert_visual_bert_sample_list(orig_image, textSampleList)
-        clean_memory()
         del sampleList
+        clean_memory()
         # GPUtil.showUtilization()
         pooled_output = []
         sequence_output = []
