@@ -116,15 +116,10 @@ class LXMERTFeatureExtractor:
             feature_pooled = box_features.mean(dim=[2, 3])  # pooled to 1x1
             # Predict classes and boxes for each proposal.
             pred_class_logits, pred_attr_logits, pred_proposal_deltas = predictor.model.roi_heads.box_predictor(feature_pooled)
-            outputs = FastRCNNOutputs(
-                predictor.model.roi_heads.box2box_transform,
-                pred_class_logits,
-                pred_proposal_deltas,
-                proposals,
-                predictor.model.roi_heads.smooth_l1_beta,
-            )
-            probs = outputs.predict_probs()[0]
-            boxes = outputs.predict_boxes()[0]
+
+
+            probs = predictor.model.roi_heads.box_predictor.predict_probs((pred_class_logits, pred_proposal_deltas,), proposals)[0]
+            boxes = predictor.model.roi_heads.box_predictor.predict_boxes((pred_class_logits, pred_proposal_deltas,), proposals)[0]
 
             attr_prob = pred_attr_logits[..., :-1].softmax(-1)
             max_attr_prob, max_attr_label = attr_prob.max(-1)
