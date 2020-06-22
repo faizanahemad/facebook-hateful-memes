@@ -59,7 +59,7 @@ class LXMERTFeatureExtractor:
     def __init__(self, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')):
         from detectron2.config import get_cfg
         cfg = get_cfg()
-        cfg.merge_from_file(f"{DIR}/detectron2/configs/VG-Detection/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml")
+        cfg.merge_from_file(f"{DIR}/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml")
         cfg.MODEL.DEVICE = str(device)
         cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 300
         cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.6
