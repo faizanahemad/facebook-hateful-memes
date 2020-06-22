@@ -334,7 +334,7 @@ class VilBertVisualBertModel(nn.Module):
         del sl
         clean_memory()
         out = self.visual_bert_processor(params)
-        return out["sequence_output"], out["logits"]
+        return out
 
 
     def lxmert_forward(self, orig_image, textSampleList):
@@ -379,12 +379,16 @@ class VilBertVisualBertModel(nn.Module):
                 clean_memory()
 
             if "visual_bert" in self.model_name:
-                seq, logit = self.visual_bert_forward(sl)
+                out = self.visual_bert_forward(sl)
+                seq, logit, pool = out["sequence_output"], out["logits"], out["pooled_output"]
+                del out
                 sequence_output.append(seq)
+                pooled_output.append(pool)
                 if logits is None:
                     logits = torch.softmax(logit, dim=1)
                 else:
                     logits = (torch.softmax(logit, dim=1) + logits) / 2
+
 
             del sl
             clean_memory()
@@ -399,7 +403,10 @@ class VilBertVisualBertModel(nn.Module):
 
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
         sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
-        print("Sizes = ", sequence_output.size(), pooled_output.size())
+        try:
+            print("Sizes = ", sequence_output.size(), pooled_output.size())
+        except:
+            print("Exception", type(sequence_output),type(pooled_output),len(sequence_output), len(pooled_output), sequence_output, pooled_output)
 
         clean_memory()
         # GPUtil.showUtilization()
