@@ -426,10 +426,6 @@ class ImageCaptionFeatures:
         return m
 
 
-
-
-
-
 def get_image_info_fn(enable_encoder_feats=False,
                       enable_image_captions=False,
                       cachedir=None,
@@ -502,7 +498,7 @@ def get_image_info_fn(enable_encoder_feats=False,
                 return imcm.generate_captions(image_text)
 
     return {"get_img_details": get_img_details, "get_encoder_feats": get_encoder_feats,
-            "get_image_captions": persistent_caching_fn(get_image_captions, "get_image_captions"),
+            "get_image_captions": get_image_captions,
             "feature_extractor": persistent_caching_fn(feature_extractor, "feature_extractor"),
             "get_batch_encoder_feats": get_batch_encoder_feats, "get_lxmert_details": get_lxmert_details,
             "get_batch_img_roi_features": get_batch_img_roi_features, "get_batch_lxmert_roi_features": get_batch_lxmert_roi_features}
