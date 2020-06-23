@@ -354,9 +354,12 @@ def get_image2torchvision_transforms():
     ])
     return preprocess
 
+
 my_collate = BatchCollator("", "")
 
+
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
+                 train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
                  cache_images: bool = True, use_images: bool = True, dev: bool = False):
     use_dev = dev
@@ -388,6 +391,8 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
               submission_format=submission_format,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev,
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
+                            train_torchvision_image_transform=train_torchvision_image_transform,
+                            test_torchvision_image_transform=test_torchvision_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform,
                             data_dir=data_dir, augmented_data=augmented_data))
     return rd
@@ -408,6 +413,7 @@ class TextImageDataset(Dataset):
     def __init__(self, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
                  sample_weights: List[float] = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
+                 torchvision_image_transform=None,
                  keep_original_text: bool = True, keep_original_image: bool = True,):
         self.texts = list(texts)
         self.image_locations = image_locations
@@ -422,6 +428,7 @@ class TextImageDataset(Dataset):
         self.keep_original_text = keep_original_text
         self.keep_original_image = keep_original_image
         self.to_torchvision = get_image2torchvision_transforms()
+        self.torchvision_image_transform = torchvision_image_transform if torchvision_image_transform is not None else lambda x: x
 
     def __getitem__(self, item):
         text = self.texts[item]
@@ -438,7 +445,7 @@ class TextImageDataset(Dataset):
                 image = Image.open(l).convert('RGB')
             orig_im = image
             image = self.image_transform(image) if self.image_transform is not None else image
-            s = Sample({"text": text, "torchvision_image": self.to_torchvision(image),
+            s = Sample({"text": text, "torchvision_image": self.torchvision_image_transform(self.to_torchvision(image)),
                         "image": image,
                         "label": label, "sample_weight": sample_weight})
             if self.keep_original_image:

@@ -199,6 +199,7 @@ def convert_dataframe_to_dataset(df, metadata, train=True):
     sample_weights = df["sample_weights"].values if "sample_weights" in df else None
     ds = TextImageDataset(text, list(df.img), labels, sample_weights,
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
+                          torchvision_image_transform=metadata["train_torchvision_image_transform"] if train else metadata["test_torchvision_image_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
                           cache_images=metadata["cache_images"], use_images=metadata["use_images"])
     return ds
