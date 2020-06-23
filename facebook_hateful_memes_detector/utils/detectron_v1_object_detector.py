@@ -385,7 +385,7 @@ class ImageCaptionFeatures:
         encoder = self.model["encoder"]
 
         with torch.no_grad():
-            img_feature = self.get_img_details(image)[0]
+            img_feature = self.get_img_details(image)[0].to(self.device)
             att_feats = att_embed(img_feature[None])
             att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
             att_masks = att_masks.unsqueeze(-2)
@@ -393,13 +393,18 @@ class ImageCaptionFeatures:
             return em
 
     def generate_captions(self, image):
+        if not hasattr(self.__class__, "model"):
+            model = self.build_model(self.enable_image_captions)
+            setattr(self.__class__, "model", model)
+
         if self.enable_image_captions:
-            model = self.model["model"]
-            img_feature = self.get_img_details(image)[0]
-            processed_by_model = model(img_feature.mean(0)[None], img_feature[None], mode='sample',
-                                       opt={'beam_size': self.beam_size, 'sample_method': 'beam_search', 'sample_n': self.sample_n})
-            sents = model.decode_sequence(processed_by_model[0])
-            return sents
+            with torch.no_grad():
+                model = self.model["model"]
+                img_feature = self.get_img_details(image)[0].to(self.device)
+                processed_by_model = model(img_feature.mean(0)[None], img_feature[None], mode='sample',
+                                           opt={'beam_size': self.beam_size, 'sample_method': 'beam_search', 'sample_n': self.sample_n})
+                sents = model.decode_sequence(processed_by_model[0])
+                return sents
         else:
             raise ValueError("Error: enable_image_captions = ", self.enable_image_captions)
 
@@ -444,7 +449,7 @@ def get_image_info_fn(enable_encoder_feats=False,
         _ = gc.collect()
 
     feature_extractor = FeatureExtractor(**kwargs)
-    lxmert_feature_extractor = LXMERTFeatureExtractor(**kwargs)
+    lxmert_feature_extractor = LXMERTFeatureExtractor(device)
 
     if cachedir is None:
         global memory
