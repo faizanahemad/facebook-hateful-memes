@@ -216,6 +216,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
 
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.pos_encoder2d = PositionalEncoding2D(n_internal_dims, dropout)
+        self.global_layer_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
 
     def forward(self, idict: Dict[str, torch.Tensor]):
         vecs = []
@@ -229,14 +230,14 @@ class TransformerEnsembleFeaturizer(nn.Module):
                 v = self.pos_encoder2d(v * math.sqrt(self.n_internal_dims))
             else:
                 v = self.layer_norms[k](v)
-                v = v.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+                v = self.pos_encoder(v.transpose(0, 1) * math.sqrt(self.n_internal_dims))
             seq_label = self.em(torch.tensor(self.ensemble_id[k]))
             v = v + seq_label
             vecs.append(v)
         x = torch.cat(vecs, 0)
         assert x.size(0) == self.n_tokens_in
+        x = self.global_layer_norm(x)
         # x = x * math.sqrt(self.n_internal_dims)
-        x = self.pos_encoder(x)
         # Layernorm here?
         batch_size = x.size(1)
         transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())

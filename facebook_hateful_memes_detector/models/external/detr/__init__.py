@@ -93,7 +93,6 @@ class DETRdemo(nn.Module):
         else:
             raise NotImplementedError()
 
-
     def post_process(self, h, pred_boxes, pred_logits):
         out = torch.cat([h, pred_boxes, pred_logits], 2)
         probas = pred_logits[0, :, :-1]
@@ -102,7 +101,6 @@ class DETRdemo(nn.Module):
 
         return {'pred_logits': pred_logits[:, sorted_indices], 'h': h[:, sorted_indices], 'pred_boxes': pred_boxes[:, sorted_indices],
                 "seq": out[:, sorted_indices]}
-
 
     def forward(self, inputs):
         # propagate inputs through ResNet-50 up to avg-pool layer
@@ -134,8 +132,6 @@ class DETRdemo(nn.Module):
         pred_logits = self.linear_class(h).softmax(-1)
         pred_boxes = self.linear_bbox(h).sigmoid()
         return self.post_process(h, pred_boxes, pred_logits)
-
-
 
     def batch_forward(self, inputs):
         assert type(inputs) == list or type(inputs) == tuple or (type(inputs) == torch.Tensor and len(inputs.size()) == 4)
@@ -209,9 +205,8 @@ class DETR(DETRdemo):
         super().__init__(device, im_size, num_tokens_out)
         self.device = device
 
-        args = dict(dataset_file="coco", batch_size=1, backbone='resnet50', position_embedding="sine", no_aux_loss=True, device=str(device),
-                    resume="https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth", eval=True, num_workers=1)
-        args = SimpleNamespace(args)
+        args = SimpleNamespace(dataset_file="coco", batch_size=1, backbone='resnet50', position_embedding="sine", no_aux_loss=True, device=str(device),
+                               resume="https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth", eval=True, num_workers=1)
 
         from .detr.models import build_model
         model, _, postprocessors = build_model(args)
