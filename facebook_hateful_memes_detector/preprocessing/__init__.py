@@ -49,7 +49,13 @@ class QuadrantCut:
         shape = arr.shape
         x_half = int(shape[0] / 2)
         y_half = int(shape[1] / 2)
-        choice = random.randint(1, 8)
+
+        x_third = int(shape[0] / 3)
+        y_third = int(shape[1] / 3)
+        x_2third = shape[0] - x_third
+        y_2third = shape[1] - y_third
+
+        choice = random.randint(1, 12)
         if choice == 1:
             arr[:x_half, :y_half] = mean
         if choice == 2:
@@ -67,6 +73,17 @@ class QuadrantCut:
             arr[:, y_half:] = mean
         if choice == 8:
             arr[:, :y_half] = mean
+
+        if choice == 9:
+            arr[x_third:x_2third, :] = mean
+        if choice == 10:
+            arr[:, y_third:y_2third] = mean
+        if choice == 11:
+            arr[x_third:x_2third, y_third:y_2third] = mean
+        if choice == 12:
+            arr[x_third:x_2third, :] = mean
+            arr[:, y_third:y_2third] = mean
+            arr[x_third:x_2third, y_third:y_2third] = mean
 
         return Image.fromarray(arr)
 
