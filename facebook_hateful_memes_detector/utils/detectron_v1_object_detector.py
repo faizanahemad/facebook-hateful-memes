@@ -482,11 +482,7 @@ def get_image_info_fn(enable_encoder_feats=False,
 
     if enable_encoder_feats:
         imcm = ImageCaptionFeatures(get_img_details, device, enable_image_captions)
-
-        def get_encoder_feats(image_text):
-            return imcm(image_text)
-
-        get_encoder_feats = persistent_caching_fn(get_encoder_feats, "get_encoder_feats")
+        get_encoder_feats = persistent_caching_fn(imcm, "get_encoder_feats")
 
         def get_batch_encoder_feats(images):
             img_feats = [get_encoder_feats(i).squeeze() for i in images]
@@ -499,7 +495,7 @@ def get_image_info_fn(enable_encoder_feats=False,
 
     return {"get_img_details": get_img_details, "get_encoder_feats": get_encoder_feats,
             "get_image_captions": get_image_captions,
-            "feature_extractor": persistent_caching_fn(feature_extractor, "feature_extractor"),
+            "feature_extractor": feature_extractor,
             "get_batch_encoder_feats": get_batch_encoder_feats, "get_lxmert_details": get_lxmert_details,
             "get_batch_img_roi_features": get_batch_img_roi_features, "get_batch_lxmert_roi_features": get_batch_lxmert_roi_features}
 
