@@ -15,6 +15,8 @@ from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 from spacy import glossary
 from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache
 import os
+import torch
+import gc
 
 
 RE_D = re.compile('\d')
@@ -690,12 +692,7 @@ def dict2sampleList(samples: Dict, device: torch.device):
 
 
 def clean_memory():
-    import torch
-    import gc
     _ = gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     _ = gc.collect()
-
-
-

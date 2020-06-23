@@ -50,6 +50,17 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                     im_shape = (512, 100)
                     im_proc = nn.Identity()
 
+                elif imo == "faster_rcnn":
+                    im_shape = (2048, 100)
+                    im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=False)["get_batch_img_roi_features"])
+                    im_proc = nn.Identity()
+
+                elif imo == "lxmert_faster_rcnn":
+                    im_shape = (2048, 36)
+                    im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=False)["get_batch_lxmert_roi_features"])
+                    im_proc = nn.Identity()
+
+
 
                 else:
                     raise NotImplementedError(imo)

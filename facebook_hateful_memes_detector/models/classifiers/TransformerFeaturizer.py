@@ -5,7 +5,7 @@ import torch
 import torchnlp
 import torch.nn.functional as F
 from .BaseFeaturizer import BaseFeaturizer
-from ...utils import init_fc, GaussianNoise, ExpandContract
+from ...utils import init_fc, GaussianNoise, ExpandContract, LambdaLayer
 import math
 from .CNN1DFeaturizer import Residual1DConv
 from torch.nn.init import xavier_uniform_
@@ -174,6 +174,8 @@ class TransformerEnsembleFeaturizer(nn.Module):
         ensemble_id = dict()
         layer_norms = dict()
         # n_tokens_in n_channels_in is2d
+        channel_last = LambdaLayer(lambd=lambda x: x.permute(1, 3))  # (B, C, H, W) -> (B, H, W, C)
+        channel_first = LambdaLayer(lambd=lambda x: x.permute(3, 1))  # (B, H, W, C) -> (B, C, H, W)
         for i, (k, v) in enumerate(ensemble_config.items()):
             is2d, n_tokens_in, n_channels_in = v["is2d"], v["n_tokens_in"], v["n_channels_in"]
             # input_nn, embedding, position,
@@ -182,7 +184,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
                 init_fc(input_nn1, "leaky_relu")
                 input_nn2 = nn.Conv2d(n_internal_dims * 2, n_internal_dims, 1, groups=1)
                 init_fc(input_nn2, "linear")
-                input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU(), gn, input_nn2)
+                input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU(), gn, input_nn2, )
 
             else:
                 input_nn1 = nn.Linear(n_channels_in, n_internal_dims * 2)

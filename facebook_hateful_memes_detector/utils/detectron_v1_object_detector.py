@@ -69,9 +69,10 @@ class LXMERTFeatureExtractor:
         self.cfg = cfg
 
     def __call__(self, url):
-        if not hasattr(self, 'predictor'):
+        if not hasattr(self.__class__, 'predictor'):
             from detectron2.engine import DefaultPredictor
-            self.predictor = DefaultPredictor(self.cfg)
+            predictor = DefaultPredictor(self.cfg)
+            setattr(self.__class__, "predictor", predictor)
         detectron_features = self.doit(url)
         return detectron_features
 
@@ -160,8 +161,9 @@ class FeatureExtractor:
         # torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def __call__(self, url):
-        if not hasattr(self, 'detection_model'):
-            self.detection_model = self._build_detection_model()
+        if not hasattr(self.__class__, 'detection_model'):
+            detection_model = self._build_detection_model()
+            setattr(self.__class__, "detection_model", detection_model)
         with torch.no_grad():
             detectron_features = self.get_detectron_features(url)
 
@@ -355,7 +357,7 @@ class FeatureExtractor:
     def get_lxmert_features(self, image_path):
         from maskrcnn_benchmark.structures.image_list import to_image_list
         _ = gc.collect()
-        im, im_scale, im_info = self._image_transform(image_path)
+        im, im_scale, im_info = self._image_transform(image_path) # try lxmert image transform
         img_tensor, im_scales = [im], [im_scale]
         current_img_list = to_image_list(img_tensor, size_divisible=32)
         current_img_list = current_img_list.to(self.device)
@@ -365,16 +367,81 @@ class FeatureExtractor:
         return feat_list[0], info_list[0]
 
 
+class ImageCaptionFeatures:
+    def __init__(self, get_img_details, device=torch.device('cpu'),
+                 enable_image_captions=False, beam_size=5, sample_n=5):
+        self.get_img_details = get_img_details
+        self.enable_image_captions = enable_image_captions
+        self.device = device
+        self.beam_size = beam_size
+        self.sample_n = sample_n
+
+    def __call__(self, image):
+        if not hasattr(self.__class__, "model"):
+            model = self.build_model(self.enable_image_captions)
+            setattr(self.__class__, "model", model)
+
+        att_embed = self.model["att_embed"]
+        encoder = self.model["encoder"]
+
+        with torch.no_grad():
+            img_feature = self.get_img_details(image)[0]
+            att_feats = att_embed(img_feature[None])
+            att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
+            att_masks = att_masks.unsqueeze(-2)
+            em = encoder(att_feats, att_masks)
+            return em
+
+    def generate_captions(self, image):
+        if self.enable_image_captions:
+            model = self.model["model"]
+            img_feature = self.get_img_details(image)[0]
+            processed_by_model = model(img_feature.mean(0)[None], img_feature[None], mode='sample',
+                                       opt={'beam_size': self.beam_size, 'sample_method': 'beam_search', 'sample_n': self.sample_n})
+            sents = model.decode_sequence(processed_by_model[0])
+            return sents
+        else:
+            raise ValueError("Error: enable_image_captions = ", self.enable_image_captions)
+
+    def build_model(self, enable_image_captions):
+        import captioning
+        import captioning.utils.misc
+        import captioning.models
+        infos = captioning.utils.misc.pickle_load(open(f'{DIR}/infos_trans12-best.pkl', 'rb'))
+        infos['opt'].vocab = infos['vocab']
+        model = captioning.models.setup(infos['opt'])
+        _ = model.to(self.device)
+        _ = model.load_state_dict(torch.load(f'{DIR}/model-best.pth', map_location=self.device))
+        _ = model.eval()
+        att_embed = model.att_embed
+        encoder = model.model.encoder
+        m = dict(att_embed=att_embed, encoder=encoder)
+        if enable_image_captions:
+            m["model"] = model
+        return m
+
+
+
+
+
+
 def get_image_info_fn(enable_encoder_feats=False,
                       enable_image_captions=False,
                       cachedir=None,
                       device=None,
                       **kwargs):
     import gc
+    import torch
     if device is not None:
         kwargs["device"] = device
     else:
         device = get_device()
+
+    def clean_memory():
+        _ = gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        _ = gc.collect()
 
     feature_extractor = FeatureExtractor(**kwargs)
     lxmert_feature_extractor = LXMERTFeatureExtractor(**kwargs)
@@ -396,6 +463,16 @@ def get_image_info_fn(enable_encoder_feats=False,
 
     get_img_details = persistent_caching_fn(get_img_details, "get_img_details")
 
+    def get_batch_img_roi_features(images):
+        img_feats = [get_img_details(i)[0].squeeze() for i in images]
+        clean_memory()
+        return torch.stack(img_feats, 0).to(device)
+
+    def get_batch_lxmert_roi_features(images):
+        img_feats = [get_lxmert_details(i)[1].squeeze() for i in images]
+        clean_memory()
+        return torch.stack(img_feats, 0).to(device)
+
 
     get_encoder_feats = None
     get_image_captions = None
@@ -403,46 +480,27 @@ def get_image_info_fn(enable_encoder_feats=False,
     assert enable_encoder_feats or not enable_image_captions
 
     if enable_encoder_feats:
-        import captioning
-        import captioning.utils.misc
-        import captioning.models
-        infos = captioning.utils.misc.pickle_load(open(f'{DIR}/infos_trans12-best.pkl', 'rb'))
-        infos['opt'].vocab = infos['vocab']
-        model = captioning.models.setup(infos['opt'])
-        _ = model.to(device)
-        _ = model.load_state_dict(torch.load(f'{DIR}/model-best.pth', map_location=device))
-        _ = model.eval()
-        att_embed = model.att_embed
-        encoder = model.model.encoder
+        imcm = ImageCaptionFeatures(get_img_details, device, enable_image_captions)
 
         def get_encoder_feats(image_text):
-            with torch.no_grad():
-                img_feature = get_img_details(image_text)[0]
-                att_feats = att_embed(img_feature[None])
-                att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
-                att_masks = att_masks.unsqueeze(-2)
-                em = encoder(att_feats, att_masks)
-                return em
+            return imcm(image_text)
 
         get_encoder_feats = persistent_caching_fn(get_encoder_feats, "get_encoder_feats")
 
         def get_batch_encoder_feats(images):
             img_feats = [get_encoder_feats(i).squeeze() for i in images]
-            _ = gc.collect()
+            clean_memory()
             return torch.stack(img_feats, 0).to(device)
 
         if enable_image_captions:
             def get_image_captions(image_text):
-                img_feature = get_img_details(image_text)[0]
-                processed_by_model = model(img_feature.mean(0)[None], img_feature[None], mode='sample',
-                                           opt={'beam_size': 5, 'sample_method': 'beam_search', 'sample_n': 5})
-                sents = model.decode_sequence(processed_by_model[0])
-                return sents
+                return imcm.generate_captions(image_text)
 
     return {"get_img_details": get_img_details, "get_encoder_feats": get_encoder_feats,
             "get_image_captions": persistent_caching_fn(get_image_captions, "get_image_captions"),
             "feature_extractor": persistent_caching_fn(feature_extractor, "feature_extractor"),
-            "get_batch_encoder_feats": get_batch_encoder_feats, "get_lxmert_details": get_lxmert_details}
+            "get_batch_encoder_feats": get_batch_encoder_feats, "get_lxmert_details": get_lxmert_details,
+            "get_batch_img_roi_features": get_batch_img_roi_features, "get_batch_lxmert_roi_features": get_batch_lxmert_roi_features}
 
 
 
