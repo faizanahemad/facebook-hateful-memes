@@ -13,15 +13,13 @@ import random
 
 
 class DETRTransferBase(nn.Module):
-    def __init__(self, model_name,  device, im_size=360,
-                 num_tokens_out=64):
+    def __init__(self, model_name,  device, im_size=360):
         super().__init__()
         self.to_tensor = T.Compose([
             T.Resize(im_size),
             T.ToTensor(),
             T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
-        self.num_tokens_out = num_tokens_out
         self.model_name = model_name
         self.device = device
 
@@ -51,15 +49,6 @@ class DETRTransferBase(nn.Module):
         else:
             raise NotImplementedError()
 
-    def post_process(self, h, pred_boxes, pred_logits, pred_masks=None):
-        out = torch.cat([h, pred_boxes, pred_logits], 2)
-        probas = pred_logits[0, :, :-1]
-        sorted_scores, sorted_indices = torch.sort(probas.max(-1).values, descending=True)
-        sorted_scores, sorted_indices = sorted_scores[: self.num_tokens_out], sorted_indices[: self.num_tokens_out]
-
-        return {'pred_logits': pred_logits[:, sorted_indices], 'h': h[:, sorted_indices], 'pred_boxes': pred_boxes[:, sorted_indices],
-                "seq": out[:, sorted_indices], "pred_masks": pred_masks[:, sorted_indices] if pred_masks is not None else None}
-
     @classmethod
     def box_cxcywh_to_xyxy(cls, x):
         x_c, y_c, w, h = x.unbind(1)
@@ -74,12 +63,12 @@ class DETRTransferBase(nn.Module):
         b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32)
         return b
 
-    def plot_objects(self, image, n_objects=8, conf=0.7):
+    def plot_objects(self, image, conf=0.7):
         image = self.read_image(image)
         outputs = self.forward(image)
 
-        pred_logits = outputs['pred_logits'][:, :n_objects]
-        pred_boxes = outputs['pred_boxes'][:, :n_objects]
+        pred_logits = outputs['pred_logits'].softmax(-1)
+        pred_boxes = outputs['pred_boxes']
 
         probas = pred_logits[0, :, :-1]
         keep = probas.max(-1).values > conf
@@ -123,7 +112,6 @@ class DETRTransferBase(nn.Module):
         plt.show()
 
     def plot_panoptic(self, image, conf=0.85):
-        assert self.enable_panoptic_plot
         image = self.read_image(image)
         out = self.forward(image)
 
@@ -234,10 +222,8 @@ class DETRdemo(DETRTransferBase):
     detr.show_boxes('http://images.cocodataset.org/val2017/000000039769.jpg', 8, 0.5)
     """
 
-    def __init__(self, device, im_size=360,
-                 num_tokens_out=64):
-        super().__init__("demo", device, im_size, num_tokens_out)
-        self.num_tokens_out = num_tokens_out
+    def __init__(self, device, im_size=360, enable_plot=True):
+        super().__init__("demo", device, im_size)
         # create ResNet-50 backbone
         self.backbone = resnet50()
         del self.backbone.fc
@@ -262,6 +248,7 @@ class DETRdemo(DETRTransferBase):
         self.load_state_dict(state_dict)
         self.to(self.device)
         self.eval()
+        self.enable_plot = enable_plot
         for p in self.parameters():
             p.requires_grad = False
 
@@ -294,9 +281,12 @@ class DETRdemo(DETRTransferBase):
         h = self.transformer(pos + 0.1 * h.flatten(2).permute(2, 0, 1),
                              self.query_pos.unsqueeze(1)).transpose(0, 1)
 
-        pred_logits = self.linear_class(h).softmax(-1)
-        pred_boxes = self.linear_bbox(h).sigmoid()
-        return self.post_process(h, pred_boxes, pred_logits)
+        if self.enable_plot:
+            pred_logits = self.linear_class(h)
+            pred_boxes = self.linear_bbox(h).sigmoid()
+            return {'pred_logits': pred_logits, 'h': h, 'pred_boxes': pred_boxes}
+        else:
+            return h
 
     def batch_forward(self, inputs):
         assert type(inputs) == list or type(inputs) == tuple or (type(inputs) == torch.Tensor and len(inputs.size()) == 4)
@@ -354,20 +344,20 @@ def nested_tensor_from_tensor_list(tensor_list: List[torch.Tensor]):
 
 
 class DETR(DETRTransferBase):
-    def __init__(self, device: torch.device, resnet='resnet50',
+    def __init__(self, device: torch.device, resnet='detr_resnet50',
                  decoder_layer=-3, im_size=360,
-                 num_tokens_out=64,
-                 enable_panoptic_plot=True):
-        assert num_tokens_out < 400 and num_tokens_out % 4 == 0
-        super().__init__(resnet, device, im_size, num_tokens_out)
+                 enable_plot=True):
+        super().__init__(resnet, device, im_size)
         self.device = device
         if "panoptic" in resnet:
-            model, postprocessor = torch.hub.load('facebookresearch/detr', 'detr_%s' % resnet, pretrained=True, return_postprocessor=True,
+            model, postprocessor = torch.hub.load('facebookresearch/detr', resnet, pretrained=True, return_postprocessor=True,
                                                   num_classes=250)
             self.model = model
             self.postprocessor = postprocessor
+        elif "demo" in resnet:
+            pass
         else:
-            self.model = torch.hub.load('facebookresearch/detr', 'detr_%s' % resnet, pretrained=True)
+            self.model = torch.hub.load('facebookresearch/detr', resnet, pretrained=True)
         self.model.to(device)
         # model, postprocessor = torch.hub.load('facebookresearch/detr', 'detr_resnet101_panoptic', pretrained=True, return_postprocessor=True, num_classes=250)
         n_parameters = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
@@ -375,48 +365,49 @@ class DETR(DETRTransferBase):
         for p in self.model.parameters():
             p.requires_grad = False
         self.decoder_layer = decoder_layer
-        self.enable_panoptic_plot = enable_panoptic_plot
+        self.enable_plot = enable_plot
 
     def forward(self, images):
         samples = self.get_pil_image(images)
         samples = nested_tensor_from_tensor_list(samples)
         samples.to(self.device)
         pred_masks = None
+        outputs_class = None
+        outputs_coord = None
         self.set_seeds()
-        if "panoptic" in self.model_name:
-            features, pos = self.model.detr.backbone(samples)
+        with torch.no_grad():
+            if "panoptic" in self.model_name:
+                features, pos = self.model.detr.backbone(samples)
 
-            bs = features[-1].tensors.shape[0]
+                bs = features[-1].tensors.shape[0]
 
-            src, mask = features[-1].decompose()
-            assert mask is not None
-            src_proj = self.model.detr.input_proj(src)
-            hs, enc_repr = self.model.detr.transformer(src_proj, mask, self.model.detr.query_embed.weight, pos[-1])
+                src, mask = features[-1].decompose()
+                assert mask is not None
+                src_proj = self.model.detr.input_proj(src)
+                hs, enc_repr = self.model.detr.transformer(src_proj, mask, self.model.detr.query_embed.weight, pos[-1])
 
-            outputs_class = self.model.detr.class_embed(hs[-1])
-            if self.enable_panoptic_plot:
-                bbox_mask = self.model.bbox_attention(hs[-1], enc_repr, mask=mask)
-                seg_masks = self.model.mask_head(src_proj, bbox_mask, [features[2].tensors, features[1].tensors, features[0].tensors])
-                outputs_seg_masks = seg_masks.view(bs, self.model.detr.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
-                pred_masks = outputs_seg_masks
+                if self.enable_plot:
+                    outputs_class = self.model.detr.class_embed(hs[-1])
+                    bbox_mask = self.model.bbox_attention(hs[-1], enc_repr, mask=mask)
+                    seg_masks = self.model.mask_head(src_proj, bbox_mask, [features[2].tensors, features[1].tensors, features[0].tensors])
+                    outputs_seg_masks = seg_masks.view(bs, self.model.detr.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
+                    pred_masks = outputs_seg_masks
+
+                outputs_coord = self.model.detr.bbox_embed(hs[-1]).sigmoid()
+                h, pred_boxes, pred_logits = hs[self.decoder_layer], outputs_coord, outputs_class
+                return {'pred_logits': pred_logits, 'pred_boxes': pred_boxes, "pred_masks": pred_masks if pred_masks is not None else None}
             else:
-                outputs_class = outputs_class.softmax(-1)
-            outputs_coord = self.model.detr.bbox_embed(hs[-1]).sigmoid()
-            h, pred_boxes, pred_logits = hs[self.decoder_layer], outputs_coord, outputs_class
-        else:
-            features, pos = self.model.backbone(samples)
-            src, mask = features[-1].decompose()
-            assert mask is not None
-            hs, enc_repr = self.model.transformer(self.model.input_proj(src), mask, self.model.query_embed.weight, pos[-1])
-            hs = hs[self.decoder_layer]
-            outputs_class = self.model.class_embed(hs).softmax(-1)
-            outputs_coord = self.model.bbox_embed(hs).sigmoid()
-
-            h, pred_boxes, pred_logits = hs, outputs_coord, outputs_class
-        enc_repr = enc_repr.flatten(2, 3).transpose(1, 2)
-        outs = self.post_process(h, pred_boxes, pred_logits, pred_masks)
-        return outs
-
+                features, pos = self.model.backbone(samples)
+                src, mask = features[-1].decompose()
+                assert mask is not None
+                hs, enc_repr = self.model.transformer(self.model.input_proj(src), mask, self.model.query_embed.weight, pos[-1])
+                h = hs[self.decoder_layer]
+                if self.enable_plot:
+                    outputs_class = self.model.class_embed(hs[-1])
+                    outputs_coord = self.model.bbox_embed(hs[-1]).sigmoid()
+                    return {'pred_logits': outputs_class, 'pred_boxes': outputs_coord}
+            # enc_repr = enc_repr.flatten(2, 3).transpose(1, 2)
+            return h
 
 
 if __name__ == "__main__":
@@ -427,19 +418,33 @@ if __name__ == "__main__":
                         'detr_resnet50_dc5',
                         'detr_resnet50_dc5_panoptic',
                         'detr_resnet50_panoptic']
-    detr = DETR(torch.device('cpu'), 'resnet101_panoptic', decoder_layer=-3, im_size=360, num_tokens_out=64)
-    import time
-    s = time.time()
     image_url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
     # "http://images.cocodataset.org/val2017/000000281759.jpg"
     # 'http://images.cocodataset.org/val2017/000000039769.jpg'
+
+    detr = DETR(torch.device('cpu'), 'detr_resnet50', decoder_layer=-1, im_size=360)
+    detrd = DETRdemo(torch.device('cpu'), im_size=360)
+    import time
+    s = time.time()
     detr.show(image_url)
     e = time.time() - s
     print("Time Taken For DETR = %.4f" % e)
 
-    # s = time.time()
-    # detrd = DETRdemo(torch.device('cpu'))
-    # detrd.show(image_url)
-    # e = time.time() - s
-    # print("Time Taken For DETR Demo = %.4f" % e)
+    s = time.time()
+    detrd.show(image_url)
+    e = time.time() - s
+    print("Time Taken For DETR Demo = %.4f" % e)
+
+    # Measure time without display
+    detr.enable_plot = False
+    detrd.enable_plot = False
+    s = time.time()
+    h = detr(image_url)
+    e = time.time() - s
+    print("Time Taken For DETR Calc = %.4f" % e, h.size())
+
+    s = time.time()
+    h = detrd(image_url)
+    e = time.time() - s
+    print("Time Taken For DETR Demo Calc = %.4f" % e, h.size())
 
