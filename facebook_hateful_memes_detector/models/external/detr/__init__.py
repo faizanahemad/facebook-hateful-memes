@@ -127,14 +127,16 @@ class DETRTransferBase(nn.Module):
         image = self.read_image(image)
         out = self.forward(image)
 
-        scores = out["pred_logits"][..., :-1].max(-1)[0]
+        scores = out["pred_logits"].softmax(-1)[..., :-1].max(-1)[0]
         # threshold the confidence
         keep = scores > conf
         import matplotlib.pyplot as plt
         import math
         # Plot all the remaining masks
         ncols = 4
-        fig, axs = plt.subplots(ncols=ncols, nrows=math.ceil(keep.sum().item() / ncols), figsize=(18, 10))
+        nrows = math.ceil(keep.sum().item() / ncols)
+        nrows = max(nrows, 2)
+        fig, axs = plt.subplots(ncols=ncols, nrows=nrows, figsize=(18, 10))
         for line in axs:
             for a in line:
                 a.axis('off')
@@ -145,8 +147,8 @@ class DETRTransferBase(nn.Module):
         fig.tight_layout()
         plt.show()
 
-        result = self.postprocessor(out, torch.as_tensor(np.array(image).shape[-2:]).unsqueeze(0))[0]
-
+        img = self.get_pil_image(image)
+        result = self.postprocessor(out, torch.as_tensor(np.array(img).shape[-2:]).unsqueeze(0))[0]
         import panopticapi
         from panopticapi.utils import id2rgb, rgb2id
         import io
@@ -378,6 +380,7 @@ class DETR(DETRTransferBase):
     def forward(self, images):
         samples = self.get_pil_image(images)
         samples = nested_tensor_from_tensor_list(samples)
+        samples.to(self.device)
         pred_masks = None
         self.set_seeds()
         if "panoptic" in self.model_name:
@@ -390,22 +393,18 @@ class DETR(DETRTransferBase):
             src_proj = self.model.detr.input_proj(src)
             hs, enc_repr = self.model.detr.transformer(src_proj, mask, self.model.detr.query_embed.weight, pos[-1])
 
-            outputs_class = self.model.detr.class_embed(hs[-1]).softmax(-1)
-            outputs_coord = self.model.detr.bbox_embed(hs[-1]).sigmoid()
-            h, pred_boxes, pred_logits = hs[self.decoder_layer], outputs_coord, outputs_class
+            outputs_class = self.model.detr.class_embed(hs[-1])
             if self.enable_panoptic_plot:
                 bbox_mask = self.model.bbox_attention(hs[-1], enc_repr, mask=mask)
                 seg_masks = self.model.mask_head(src_proj, bbox_mask, [features[2].tensors, features[1].tensors, features[0].tensors])
                 outputs_seg_masks = seg_masks.view(bs, self.model.detr.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
                 pred_masks = outputs_seg_masks
-                return {'pred_logits': pred_logits, 'pred_boxes': pred_boxes,
-                        "pred_masks": pred_masks}
-
-
+            else:
+                outputs_class = outputs_class.softmax(-1)
+            outputs_coord = self.model.detr.bbox_embed(hs[-1]).sigmoid()
+            h, pred_boxes, pred_logits = hs[self.decoder_layer], outputs_coord, outputs_class
         else:
-            samples.to(self.device)
             features, pos = self.model.backbone(samples)
-
             src, mask = features[-1].decompose()
             assert mask is not None
             hs, enc_repr = self.model.transformer(self.model.input_proj(src), mask, self.model.query_embed.weight, pos[-1])
@@ -419,24 +418,28 @@ class DETR(DETRTransferBase):
         return outs
 
 
-class DETRPanoptic(nn.Module):
-    pass
-
 
 if __name__ == "__main__":
-    detr = DETR(torch.device('cpu'), 'resnet101_panoptic', decoder_layer=-3, im_size=640, num_tokens_out=100)
+    avialable_models = ['detr_resnet101',
+                        'detr_resnet101_dc5',
+                        'detr_resnet101_panoptic',
+                        'detr_resnet50',
+                        'detr_resnet50_dc5',
+                        'detr_resnet50_dc5_panoptic',
+                        'detr_resnet50_panoptic']
+    detr = DETR(torch.device('cpu'), 'resnet101_panoptic', decoder_layer=-3, im_size=360, num_tokens_out=64)
     import time
     s = time.time()
-    image_url = "http://images.cocodataset.org/val2017/000000281759.jpg"
+    image_url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
     # "http://images.cocodataset.org/val2017/000000281759.jpg"
     # 'http://images.cocodataset.org/val2017/000000039769.jpg'
     detr.show(image_url)
     e = time.time() - s
     print("Time Taken For DETR = %.4f" % e)
 
-    s = time.time()
-    detrd = DETRdemo(torch.device('cpu'))
-    detrd.show(image_url)
-    e = time.time() - s
-    print("Time Taken For DETR Demo = %.4f" % e)
+    # s = time.time()
+    # detrd = DETRdemo(torch.device('cpu'))
+    # detrd.show(image_url)
+    # e = time.time() - s
+    # print("Time Taken For DETR Demo = %.4f" % e)
 
