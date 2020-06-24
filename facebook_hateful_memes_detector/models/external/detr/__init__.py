@@ -202,96 +202,6 @@ class DETRTransferBase(nn.Module):
         else:
             self.plot_objects(image, **kwargs)
 
-
-class DETRdemo(DETRTransferBase):
-    """
-    Demo DETR implementation.
-
-    Demo implementation of DETR in minimal number of lines, with the
-    following differences wrt DETR in the paper:
-    * learned positional encoding (instead of sine)
-    * positional encoding is passed at input (instead of attention)
-    * fc bbox predictor (instead of MLP)
-    The model achieves ~40 AP on COCO val5k and runs at ~28 FPS on Tesla V100.
-    Only batch size 1 supported.
-
-    https://colab.research.google.com/github/facebookresearch/detr/blob/colab/notebooks/detr_demo.ipynb
-
-    Usage:
-    detr = DETRdemo(device=torch.device('cuda'), num_tokens_out=16)
-    detr.show_boxes('http://images.cocodataset.org/val2017/000000039769.jpg', 8, 0.5)
-    """
-
-    def __init__(self, device, im_size=360, enable_plot=True):
-        super().__init__("demo", device, im_size)
-        # create ResNet-50 backbone
-        self.backbone = resnet50()
-        del self.backbone.fc
-        hidden_dim = 256
-        nheads = 8
-        num_encoder_layers = 6
-        num_decoder_layers = 6
-        self.conv = nn.Conv2d(2048, hidden_dim, 1)
-
-        # create a default PyTorch transformer
-        self.transformer = nn.Transformer(
-            hidden_dim, nheads, num_encoder_layers, num_decoder_layers)
-        self.linear_class = nn.Linear(hidden_dim, 91 + 1)
-        self.linear_bbox = nn.Linear(hidden_dim, 4)
-        self.query_pos = nn.Parameter(torch.rand(100, hidden_dim))
-        self.row_embed = nn.Parameter(torch.rand(50, hidden_dim // 2))
-        self.col_embed = nn.Parameter(torch.rand(50, hidden_dim // 2))
-
-        state_dict = torch.hub.load_state_dict_from_url(
-            url='https://dl.fbaipublicfiles.com/detr/detr_demo-da2a99e9.pth',
-            map_location=device, check_hash=True)
-        self.load_state_dict(state_dict)
-        self.to(self.device)
-        self.eval()
-        self.enable_plot = enable_plot
-        for p in self.parameters():
-            p.requires_grad = False
-
-    def forward(self, inputs):
-        # propagate inputs through ResNet-50 up to avg-pool layer
-        self.set_seeds()
-        inputs = self.get_pil_image(inputs)
-        inputs = inputs.to(self.device)
-        x = self.backbone.conv1(inputs)
-        x = self.backbone.bn1(x)
-        x = self.backbone.relu(x)
-        x = self.backbone.maxpool(x)
-
-        x = self.backbone.layer1(x)
-        x = self.backbone.layer2(x)
-        x = self.backbone.layer3(x)
-        x = self.backbone.layer4(x)
-
-        # convert from 2048 to 256 feature planes for the transformer
-        h = self.conv(x)
-
-        # construct positional encodings
-        H, W = h.shape[-2:]
-        pos = torch.cat([
-            self.col_embed[:W].unsqueeze(0).repeat(H, 1, 1),
-            self.row_embed[:H].unsqueeze(1).repeat(1, W, 1),
-        ], dim=-1).flatten(0, 1).unsqueeze(1)
-
-        # propagate through the transformer
-        h = self.transformer(pos + 0.1 * h.flatten(2).permute(2, 0, 1),
-                             self.query_pos.unsqueeze(1)).transpose(0, 1)
-
-        if self.enable_plot:
-            pred_logits = self.linear_class(h)
-            pred_boxes = self.linear_bbox(h).sigmoid()
-            return {'pred_logits': pred_logits, 'h': h, 'pred_boxes': pred_boxes}
-        else:
-            return h
-
-    def batch_forward(self, inputs):
-        assert type(inputs) == list or type(inputs) == tuple or (type(inputs) == torch.Tensor and len(inputs.size()) == 4)
-
-
 class NestedTensor(object):
     def __init__(self, tensors, mask: Optional[torch.Tensor]):
         self.tensors = tensors
@@ -354,15 +264,39 @@ class DETR(DETRTransferBase):
                                                   num_classes=250)
             self.model = model
             self.postprocessor = postprocessor
+            self.model.to(device)
         elif "demo" in resnet:
-            pass
+            self.backbone = resnet50()
+            del self.backbone.fc
+            hidden_dim = 256
+            nheads = 8
+            num_encoder_layers = 6
+            num_decoder_layers = 6
+            self.conv = nn.Conv2d(2048, hidden_dim, 1)
+
+            # create a default PyTorch transformer
+            self.transformer = nn.Transformer(
+                hidden_dim, nheads, num_encoder_layers, num_decoder_layers)
+            self.linear_class = nn.Linear(hidden_dim, 91 + 1)
+            self.linear_bbox = nn.Linear(hidden_dim, 4)
+            self.query_pos = nn.Parameter(torch.rand(100, hidden_dim))
+            self.row_embed = nn.Parameter(torch.rand(50, hidden_dim // 2))
+            self.col_embed = nn.Parameter(torch.rand(50, hidden_dim // 2))
+
+            state_dict = torch.hub.load_state_dict_from_url(
+                url='https://dl.fbaipublicfiles.com/detr/detr_demo-da2a99e9.pth',
+                map_location=device, check_hash=True)
+            self.load_state_dict(state_dict)
+            self.to(self.device)
+            self.eval()
+            self.enable_plot = enable_plot
         else:
             self.model = torch.hub.load('facebookresearch/detr', resnet, pretrained=True)
-        self.model.to(device)
+            self.model.to(device)
         # model, postprocessor = torch.hub.load('facebookresearch/detr', 'detr_resnet101_panoptic', pretrained=True, return_postprocessor=True, num_classes=250)
-        n_parameters = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        n_parameters = sum(p.numel() for p in self.parameters() if p.requires_grad)
         print('number of params:', n_parameters)
-        for p in self.model.parameters():
+        for p in self.parameters():
             p.requires_grad = False
         self.decoder_layer = decoder_layer
         self.enable_plot = enable_plot
@@ -371,9 +305,6 @@ class DETR(DETRTransferBase):
         samples = self.get_pil_image(images)
         samples = nested_tensor_from_tensor_list(samples)
         samples.to(self.device)
-        pred_masks = None
-        outputs_class = None
-        outputs_coord = None
         self.set_seeds()
         with torch.no_grad():
             if "panoptic" in self.model_name:
@@ -392,10 +323,37 @@ class DETR(DETRTransferBase):
                     seg_masks = self.model.mask_head(src_proj, bbox_mask, [features[2].tensors, features[1].tensors, features[0].tensors])
                     outputs_seg_masks = seg_masks.view(bs, self.model.detr.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
                     pred_masks = outputs_seg_masks
+                    outputs_coord = self.model.detr.bbox_embed(hs[-1]).sigmoid()
+                    h, pred_boxes, pred_logits = hs[self.decoder_layer], outputs_coord, outputs_class
+                    return {'pred_logits': pred_logits, 'pred_boxes': pred_boxes, "pred_masks": pred_masks if pred_masks is not None else None}
+            elif "demo" in self.model_name:
+                x = self.backbone.conv1(samples.tensors)
+                x = self.backbone.bn1(x)
+                x = self.backbone.relu(x)
+                x = self.backbone.maxpool(x)
 
-                outputs_coord = self.model.detr.bbox_embed(hs[-1]).sigmoid()
-                h, pred_boxes, pred_logits = hs[self.decoder_layer], outputs_coord, outputs_class
-                return {'pred_logits': pred_logits, 'pred_boxes': pred_boxes, "pred_masks": pred_masks if pred_masks is not None else None}
+                x = self.backbone.layer1(x)
+                x = self.backbone.layer2(x)
+                x = self.backbone.layer3(x)
+                x = self.backbone.layer4(x)
+
+                # convert from 2048 to 256 feature planes for the transformer
+                h = self.conv(x)
+
+                # construct positional encodings
+                H, W = h.shape[-2:]
+                pos = torch.cat([
+                    self.col_embed[:W].unsqueeze(0).repeat(H, 1, 1),
+                    self.row_embed[:H].unsqueeze(1).repeat(1, W, 1),
+                ], dim=-1).flatten(0, 1).unsqueeze(1)
+
+                # propagate through the transformer
+                h = self.transformer(pos + 0.1 * h.flatten(2).permute(2, 0, 1),
+                                     self.query_pos.unsqueeze(1)).transpose(0, 1)
+                if self.enable_plot:
+                    pred_logits = self.linear_class(h)
+                    pred_boxes = self.linear_bbox(h).sigmoid()
+                    return {'pred_logits': pred_logits, 'h': h, 'pred_boxes': pred_boxes}
             else:
                 features, pos = self.model.backbone(samples)
                 src, mask = features[-1].decompose()
@@ -423,7 +381,8 @@ if __name__ == "__main__":
     # 'http://images.cocodataset.org/val2017/000000039769.jpg'
 
     detr = DETR(torch.device('cpu'), 'detr_resnet50', decoder_layer=-1, im_size=360)
-    detrd = DETRdemo(torch.device('cpu'), im_size=360)
+    detrd = DETR(torch.device('cpu'), 'demo', decoder_layer=-1, im_size=360)
+    detrp = DETR(torch.device('cpu'), 'detr_resnet50_panoptic', decoder_layer=-1, im_size=360)
     import time
     s = time.time()
     detr.show(image_url)
@@ -432,6 +391,11 @@ if __name__ == "__main__":
 
     s = time.time()
     detrd.show(image_url)
+    e = time.time() - s
+    print("Time Taken For DETR Demo = %.4f" % e)
+
+    s = time.time()
+    detrp.show(image_url)
     e = time.time() - s
     print("Time Taken For DETR Demo = %.4f" % e)
 
