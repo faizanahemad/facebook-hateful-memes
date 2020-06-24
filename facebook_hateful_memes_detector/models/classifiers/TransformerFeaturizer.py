@@ -138,12 +138,14 @@ class TransformerFeaturizer(nn.Module):
 
         self.transformer = nn.Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims*4, dropout)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
+        self.global_layer_norm = nn.LayerNorm(n_internal_dims, eps=1e-06)
 
     def forward(self, x):
         x = self.input_nn(x) if self.input_nn is not None else x
 
         x = x.transpose(0, 1) * math.sqrt(self.n_internal_dims)
         x = self.pos_encoder(x)
+        x = self.global_layer_norm(x)
         batch_size = x.size(1)
         transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
         transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
@@ -202,11 +204,10 @@ class TransformerEnsembleFeaturizer(nn.Module):
         self.em = nn.Embedding(len(ensemble_config), n_internal_dims)
         nn.init.normal_(self.em.weight, std=1 / n_internal_dims)
 
-        output_nn1 = nn.Linear(n_internal_dims, n_internal_dims * 2)
-        init_fc(output_nn1, "leaky_relu")
-        output_nn2 = nn.Linear(n_internal_dims * 2, n_channels_out)
-        init_fc(output_nn2, "linear")
-        self.output_nn = nn.Sequential(dp, output_nn1, nn.LeakyReLU(), gn, output_nn2)
+        self.output_nn = None
+        if n_internal_dims != n_channels_out:
+            self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
+            init_fc(self.output_nn, "linear")
 
         self.transformer = nn.Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims * 4, dropout)
 
@@ -238,14 +239,13 @@ class TransformerEnsembleFeaturizer(nn.Module):
         x = torch.cat(vecs, 0)
         assert x.size(0) == self.n_tokens_in
         x = self.global_layer_norm(x)
-        # x = x * math.sqrt(self.n_internal_dims)
-        # Layernorm here?
         batch_size = x.size(1)
         transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1)
+        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+        transformer_tgt = self.pos_encoder(transformer_tgt)
         x = self.transformer(x, transformer_tgt)
         x = x.transpose(0, 1)
-        x = self.output_nn(x)
+        x = self.output_nn(x) if self.output_nn is not None else x
         assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
         return x
 
