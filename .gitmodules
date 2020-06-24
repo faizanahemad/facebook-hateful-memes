@@ -1,3 +1,0 @@
-[submodule "facebook_hateful_memes_detector/models/external/detr/detr"]
-	path = facebook_hateful_memes_detector/models/external/detr/detr
-	url = https://github.com/facebookresearch/detr.git
