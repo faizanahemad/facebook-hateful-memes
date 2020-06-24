@@ -143,7 +143,7 @@ def generate_predictions(model, batch_size, dataset):
         for batch in test_loader:
             clean_memory()
             logits, _, _, _ = model(batch)
-            labels = batch.label
+            labels = batch["batch"]
             labels_list.extend(labels)
             logits = logits.cpu().detach()
             top_class = logits.max(dim=1).indices
