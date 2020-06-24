@@ -59,6 +59,8 @@ pip install gputil
 pip install gdown
 pip install fvcore
 pip install opencv-python
+pip install git+https://github.com/cocodataset/panopticapi.git
+
 ```
 
 ## Build Wikipedia TF-IDF

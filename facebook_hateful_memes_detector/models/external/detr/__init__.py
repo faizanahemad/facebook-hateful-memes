@@ -9,7 +9,6 @@ from PIL import Image
 import requests
 import numpy as np
 import random
-# from ....utils import persistent_caching_fn
 
 
 class DETRTransferBase(nn.Module):
@@ -368,6 +367,23 @@ class DETR(DETRTransferBase):
             return h
 
 
+def get_detr_model(device: torch.device, model_name: str, decoder_layer=-2, im_size=360):
+    from ....utils import persistent_caching_fn, clean_memory
+    model = DETR(device, model_name, decoder_layer, im_size, False)
+
+    def detr_fn(image):
+        clean_memory()
+        return model(image)
+
+    detr_fn = persistent_caching_fn(detr_fn, model_name)
+
+    def batch_detr_fn(images: List):
+        results = [detr_fn(i) for i in images]
+        return torch.stack(results)
+
+    return {"model": model, "detr_fn": detr_fn, "batch_detr_fn": batch_detr_fn}
+
+
 if __name__ == "__main__":
     avialable_models = ['detr_resnet101',
                         'detr_resnet101_dc5',
@@ -375,29 +391,30 @@ if __name__ == "__main__":
                         'detr_resnet50',
                         'detr_resnet50_dc5',
                         'detr_resnet50_dc5_panoptic',
-                        'detr_resnet50_panoptic']
+                        'detr_resnet50_panoptic',
+                        "detr_demo"]
     image_url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
     # "http://images.cocodataset.org/val2017/000000281759.jpg"
     # 'http://images.cocodataset.org/val2017/000000039769.jpg'
 
     detr = DETR(torch.device('cpu'), 'detr_resnet50', decoder_layer=-1, im_size=360)
-    detrd = DETR(torch.device('cpu'), 'demo', decoder_layer=-1, im_size=360)
+    detrd = DETR(torch.device('cpu'), 'detr_demo', decoder_layer=-1, im_size=360)
     detrp = DETR(torch.device('cpu'), 'detr_resnet50_panoptic', decoder_layer=-1, im_size=360)
     import time
     s = time.time()
     detr.show(image_url)
     e = time.time() - s
-    print("Time Taken For DETR = %.4f" % e)
+    print("Time Taken For DETR Display = %.4f" % e)
 
     s = time.time()
     detrd.show(image_url)
     e = time.time() - s
-    print("Time Taken For DETR Demo = %.4f" % e)
+    print("Time Taken For DETR Demo Display = %.4f" % e)
 
     s = time.time()
     detrp.show(image_url)
     e = time.time() - s
-    print("Time Taken For DETR Demo = %.4f" % e)
+    print("Time Taken For DETR Panoptic Display = %.4f" % e)
 
     # Measure time without display
     detr.enable_plot = False

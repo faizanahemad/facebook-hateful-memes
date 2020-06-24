@@ -18,6 +18,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvis
     dict2sampleList, clean_memory
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
+from ..external.detr import get_detr_model
 
 
 class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
@@ -72,10 +73,10 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 im_shape = (2048, 36)
                 im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=False)["get_batch_lxmert_roi_features"])
                 im_proc = nn.Identity()
-            elif imo == "detr":
-                pass
-            elif imo == "ssd":
-                pass
+            elif "detr" in imo:
+                im_shape = (256, 100)
+                im_model = LambdaLayer(get_detr_model(get_device(), imo)["batch_detr_fn"])
+                im_proc = nn.Identity()
             else:
                 raise NotImplementedError(imo)
 
@@ -88,7 +89,8 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         self.im_procs = nn.ModuleDict(dict(zip(names, im_procs)))
         self.im_finetune = nn.ModuleDict(dict(zip(names, im_finetune)))
         self.im_shapes = dict(zip(names, im_shapes))
-        self.require_raw_img = {"detr", "ssd", "faster_rcnn", "lxmert_faster_rcnn", "caption_features"}
+        self.require_raw_img = {"detr_demo", 'detr_resnet50', 'detr_resnet50_panoptic', 'detr_resnet101', 'detr_resnet101_panoptic',
+                                "ssd", "faster_rcnn", "lxmert_faster_rcnn", "caption_features"}
 
         assert type(text_models) == list
         tx_models, tx_names = [], []

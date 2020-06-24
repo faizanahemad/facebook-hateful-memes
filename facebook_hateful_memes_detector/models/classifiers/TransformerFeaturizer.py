@@ -100,16 +100,17 @@ class PositionalEncoding2D(nn.Module):
         """
         b = x.size(0)
         assert x.size(-1) == self.d_model
-        x = x.transpose(0, 1).transpose(1, 2) # H, W, B, C
+        x = x.permute(0, 2)  # H, W, B, C
         pe = self.pe[:x.size(0), :] # H, C
+        pe_abs = self.pe[:x.size(0) * x.size(1), :]
         # print("2D PE", pe.size(), self.pe.size(), torch.max(pe))
         # pe = pe.expand(pe.size(0), b, self.d_model) # H, B, C
         pe1 = pe.unsqueeze(1)
         pe2 = pe.unsqueeze(0)
         # print("2D PE", x.size(), pe.size(), pe1.size(), pe2.size())
         # sys.stdout.flush()
-        x = x + pe1 + pe2
-        x = x.flatten(0, 1)
+        x = x + (pe1 + pe2)/3
+        x = x.flatten(0, 1) + pe_abs/3
         return self.dropout(x)
 
 
@@ -225,7 +226,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
             sys.stdout.flush()
             v = self.ensemble_inp[k](v)
             if conf["is2d"]:
-                v = v.transpose(1, 2).transpose(2, 3)  # B, H, W, C
+                v = v.permute(1, 3)  # B, H, W, C
                 v = self.layer_norms[k](v)
                 v = self.pos_encoder2d(v * math.sqrt(self.n_internal_dims))
             else:
