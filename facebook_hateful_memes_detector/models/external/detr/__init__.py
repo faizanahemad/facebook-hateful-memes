@@ -1,3 +1,6 @@
+from pprint import pprint
+from typing import Optional, List
+
 import torch
 from torch import nn
 from torchvision.models import resnet50
@@ -199,26 +202,94 @@ class DETRdemo(nn.Module):
         plt.show()
 
 
+class NestedTensor(object):
+    def __init__(self, tensors, mask: Optional[torch.Tensor]):
+        self.tensors = tensors
+        self.mask = mask
+
+    def to(self, device):
+        # type: (Device) -> NestedTensor # noqa
+        cast_tensor = self.tensors.to(device)
+        mask = self.mask
+        if mask is not None:
+            assert mask is not None
+            cast_mask = mask.to(device)
+        else:
+            cast_mask = None
+        return NestedTensor(cast_tensor, cast_mask)
+
+    def decompose(self):
+        return self.tensors, self.mask
+
+    def __repr__(self):
+        return str(self.tensors)
+
+
+def _max_by_axis(the_list):
+    # type: (List[List[int]]) -> List[int]
+    maxes = the_list[0]
+    for sublist in the_list[1:]:
+        for index, item in enumerate(sublist):
+            maxes[index] = max(maxes[index], item)
+    return maxes
+
+
+def nested_tensor_from_tensor_list(tensor_list: List[torch.Tensor]):
+    if tensor_list[0].ndim == 3:
+        # TODO make it support different-sized images
+        max_size = _max_by_axis([list(img.shape) for img in tensor_list])
+        # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
+        batch_shape = [len(tensor_list)] + max_size
+        b, c, h, w = batch_shape
+        dtype = tensor_list[0].dtype
+        device = tensor_list[0].device
+        tensor = torch.zeros(batch_shape, dtype=dtype, device=device)
+        mask = torch.ones((b, h, w), dtype=torch.bool, device=device)
+        for img, pad_img, m in zip(tensor_list, tensor, mask):
+            pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
+            m[: img.shape[1], :img.shape[2]] = False
+    else:
+        raise ValueError('not supported')
+    return NestedTensor(tensor, mask)
+
+
 class DETR(DETRdemo):
-    def __init__(self, device, im_size=360,
+    def __init__(self, device: torch.device, resnet='resnet50',
+                 decoder_layer=-1, im_size=360,
                  num_tokens_out=64):
+        assert num_tokens_out < 400 and num_tokens_out % 4 == 0
         super().__init__(device, im_size, num_tokens_out)
         self.device = device
-
-        args = SimpleNamespace(dataset_file="coco", batch_size=1, backbone='resnet50', position_embedding="sine", no_aux_loss=True, device=str(device),
-                               resume="https://dl.fbaipublicfiles.com/detr/detr-r50-e632da11.pth", eval=True, num_workers=1)
-
-        from .detr.models import build_model
-        model, _, postprocessors = build_model(args)
-        model.to(self.device)
-        self.model = model
-
-        n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        self.model = torch.hub.load('facebookresearch/detr', 'detr_%s' % resnet, pretrained=True)
+        n_parameters = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print('number of params:', n_parameters)
-        for p in model.parameters():
+        for p in self.model.parameters():
             p.requires_grad = False
+        self.decoder_layer = decoder_layer
 
     def forward(self, images):
-        inputs = self.get_pil_image(images)
-        out = self.model(inputs)
-        print(type(out), out)
+        samples = self.get_pil_image(images)
+        samples = nested_tensor_from_tensor_list(samples)
+        features, pos = self.model.backbone(samples)
+
+        src, mask = features[-1].decompose()
+        assert mask is not None
+        hs, enc_repr = self.model.transformer(self.model.input_proj(src), mask, self.model.query_embed.weight, pos[-1])
+        hs = hs[self.decoder_layer]
+        enc_repr = enc_repr.flatten(2, 3).transpose(1, 2)
+        outputs_class = self.model.class_embed(hs).softmax(-1)
+        outputs_coord = self.model.bbox_embed(hs).sigmoid()
+
+        h, pred_boxes, pred_logits = hs, outputs_coord, outputs_class
+        outs = self.post_process(h, pred_boxes, pred_logits)
+        return outs
+
+
+if __name__ == "__main__":
+    detr = DETR(torch.device('cpu'), 'resnet50', decoder_layer=-1, im_size=360)
+    import time
+    s = time.time()
+    detr.show_boxes('http://images.cocodataset.org/val2017/000000039769.jpg')
+    e = time.time() - s
+    print("Time Taken = %.4f" % e)
+

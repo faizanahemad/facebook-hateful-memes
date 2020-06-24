@@ -141,7 +141,7 @@ def generate_predictions(model, batch_size, dataset):
 
     with torch.no_grad():
         for batch in test_loader:
-            batch = dict2sampleList(batch, device=get_device())
+            clean_memory()
             logits, _, _, _ = model(batch)
             labels = batch.label
             labels_list.extend(labels)
