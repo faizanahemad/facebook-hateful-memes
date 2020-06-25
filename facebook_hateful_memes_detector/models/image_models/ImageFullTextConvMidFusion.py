@@ -54,7 +54,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         self.featurizer = nn.Sequential(nn.Dropout(dropout), l2, nn.LeakyReLU(), GaussianNoise(gaussian_noise), l3,
                                         nn.LeakyReLU(), nn.Dropout(dropout), l4, nn.LeakyReLU())  # 5x5 for resnet18 from 7x7
 
-        self.final_layer = final_layer_builder(classifier_dims, num_classes, dropout, )
+        self.final_layer = final_layer_builder(classifier_dims, (self.imf_width - 2) ** 2, num_classes, dropout, )
         self.num_classes = num_classes
         self.finetune_image_model = finetune_image_model
         self.text_layer_norm = nn.LayerNorm(text_in_channels)
