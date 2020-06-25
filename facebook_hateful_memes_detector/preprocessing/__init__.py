@@ -10,7 +10,7 @@ import jsonlines
 import abc
 from typing import List, Tuple, Dict, Set, Union
 from PIL import Image
-from ..utils import read_json_lines_into_df
+from ..utils import read_json_lines_into_df, clean_memory
 
 import torch as th
 import math
@@ -355,7 +355,13 @@ def get_image2torchvision_transforms():
     return preprocess
 
 
-my_collate = BatchCollator("", "")
+def my_collate(batch):
+    # Create and return sample list with proper name and type set
+    sample_list = SampleList(batch)
+    sample_list.dataset_name = ""
+    sample_list.dataset_type = ""
+    clean_memory()
+    return sample_list
 
 
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
@@ -414,14 +420,15 @@ class TextImageDataset(Dataset):
                  sample_weights: List[float] = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
                  torchvision_image_transform=None,
-                 keep_original_text: bool = True, keep_original_image: bool = True,):
+                 keep_original_text: bool = False, keep_original_image: bool = False,
+                 keep_processed_image: bool = False, keep_torchvision_image: bool = False):
         self.texts = list(texts)
         self.image_locations = image_locations
         if use_images:
-            self.images = {l: Image.open(l).convert('RGB') for l in image_locations} if cache_images else dict()
+            self.images = {l: Image.open(l).convert('RGB') for l in set(image_locations)} if cache_images else dict()
         self.labels = labels
-        self.text_transform = text_transform
-        self.image_transform = image_transform
+        self.text_transform = text_transform if text_transform is not None else lambda x: x
+        self.image_transform = image_transform if image_transform is not None else lambda x: x
         self.use_images = use_images
         self.sample_weights = [1.0] * len(texts) if sample_weights is None else sample_weights
         assert len(self.sample_weights) == len(self.image_locations) == len(self.texts)
@@ -429,6 +436,8 @@ class TextImageDataset(Dataset):
         self.keep_original_image = keep_original_image
         self.to_torchvision = get_image2torchvision_transforms()
         self.torchvision_image_transform = torchvision_image_transform if torchvision_image_transform is not None else lambda x: x
+        self.keep_processed_image = keep_processed_image
+        self.keep_torchvision_image = keep_torchvision_image
 
     def __getitem__(self, item):
         text = self.texts[item]
@@ -436,24 +445,21 @@ class TextImageDataset(Dataset):
         sample_weight = self.sample_weights[item]
         # clean_text
         orig_text = text
-        if self.text_transform is not None:
-            text = self.text_transform(text)
-        if self.use_images:
+        text = self.text_transform(text)
+        s = Sample({"text": text, "label": label, "sample_weight": sample_weight})
+        if self.use_images and (self.keep_torchvision_image or self.keep_original_image or self.keep_processed_image):
             l = self.image_locations[item]
             image = self.images.get(l)
             if image is None:
                 image = Image.open(l).convert('RGB')
-            orig_im = image
-            image = self.image_transform(image) if self.image_transform is not None else image
-            s = Sample({"text": text, "torchvision_image": self.torchvision_image_transform(self.to_torchvision(image)),
-                        "image": image,
-                        "label": label, "sample_weight": sample_weight})
             if self.keep_original_image:
-                s.original_image = orig_im
-        else:
-            s = Sample({"text": text, "torchvision_image": None,
-                        "image": None,
-                        "label": label, "sample_weight": sample_weight})
+                s.original_image = image
+            if self.keep_processed_image:
+                image = self.image_transform(image.copy())
+                s.image = image
+            if self.keep_torchvision_image:
+                torchvision_image = self.torchvision_image_transform(self.to_torchvision(image))
+                s.torchvision_image = torchvision_image
 
         if self.keep_original_text:
             s.original_text = orig_text
