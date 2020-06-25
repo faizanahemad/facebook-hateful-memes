@@ -25,13 +25,14 @@ class ImageFullTextConvMidFusionModel(nn.Module):
                  gaussian_noise, dropout,
                  internal_dims, classifier_dims,
                  final_layer_builder,
+                 large_rf,
                  finetune_image_model=False,
                  **kwargs):
         super(ImageFullTextConvMidFusionModel, self).__init__()
         if type(image_model) == str:
             if "torchvision" in image_model:
                 net = image_model.split("_")[-1]
-                im_model, im_shape = get_torchvision_classification_models(net, finetune_image_model)
+                im_model, im_shape = get_torchvision_classification_models(net, large_rf, finetune_image_model)
             else:
                 raise NotImplementedError(image_model)
             self.im_model = im_model
