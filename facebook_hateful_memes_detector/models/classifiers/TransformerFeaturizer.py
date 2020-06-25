@@ -100,7 +100,7 @@ class PositionalEncoding2D(nn.Module):
         """
         b = x.size(0)
         assert x.size(-1) == self.d_model
-        x = x.permute(0, 2)  # H, W, B, C
+        x = x.transpose(0, 1).transpose(1, 2)  # H, W, B, C
         pe = self.pe[:x.size(0), :] # H, C
         pe_abs = self.pe[:x.size(0) * x.size(1), :]
         # print("2D PE", pe.size(), self.pe.size(), torch.max(pe))
@@ -177,8 +177,6 @@ class TransformerEnsembleFeaturizer(nn.Module):
         ensemble_id = dict()
         layer_norms = dict()
         # n_tokens_in n_channels_in is2d
-        channel_last = LambdaLayer(lambd=lambda x: x.permute(1, 3))  # (B, C, H, W) -> (B, H, W, C)
-        channel_first = LambdaLayer(lambd=lambda x: x.permute(3, 1))  # (B, H, W, C) -> (B, C, H, W)
         for i, (k, v) in enumerate(ensemble_config.items()):
             is2d, n_tokens_in, n_channels_in = v["is2d"], v["n_tokens_in"], v["n_channels_in"]
             # input_nn, embedding, position,
@@ -227,7 +225,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
             sys.stdout.flush()
             v = self.ensemble_inp[k](v)
             if conf["is2d"]:
-                v = v.permute(1, 3)  # B, H, W, C
+                v = v.transpose(1, 2).transpose(2, 3)  # B, H, W, C
                 v = self.layer_norms[k](v)
                 v = self.pos_encoder2d(v * math.sqrt(self.n_internal_dims))
             else:
