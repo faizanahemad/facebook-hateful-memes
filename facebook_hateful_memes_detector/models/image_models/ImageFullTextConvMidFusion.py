@@ -46,7 +46,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
 
         self.text_model = text_model_class(**text_model_params)
         # Normalize on 2nd dim for both text and img
-        l2 = nn.Conv2d(internal_dims + text_in_channels, int((internal_dims + text_in_channels) * 2), 1, 1, padding=1, groups=1, bias=False)
+        l2 = nn.Conv2d(internal_dims + text_in_channels, int((internal_dims + text_in_channels) * 2), 1, 1, padding=0, groups=1, bias=False)
         init_fc(l2, "leaky_relu")
         l3 = nn.Conv2d(int((internal_dims + text_in_channels) * 2), internal_dims, 1, 1, padding=0, groups=1, bias=False)
         init_fc(l3, "leaky_relu")
