@@ -22,7 +22,6 @@ pip install pycontractions
 python -m spacy download en_core_web_sm
 python -m spacy download en_core_web_md
 python -m spacy download en_core_web_lg
-pip install stanza
 python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon');nltk.download('treebank');nltk.download('wordnet');import gensim.downloader as api;api.load(\"glove-twitter-25\");api.load(\"glove-twitter-50\");api.load(\"glove-wiki-gigaword-50\");api.load(\"word2vec-google-news-300\");api.load(\"conceptnet-numberbatch-17-06-300\");"
 python -m spacy download en_trf_distilbertbaseuncased_lg
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install -e . && python scripts/download_weights.py
@@ -31,8 +30,12 @@ git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip in
 pip install -U maxfw
 pip install pytextrank # https://github.com/DerwenAI/pytextrank
 pip install git+https://github.com/LIAAD/yake
+
+# Requires GLIBC 2.18
 CFLAGS="-Wno-narrowing" pip install cld2-cffi
 pip install multi-rake
+
+
 pip install textblob
 pip install rake-nltk
 pip install nlpaug
@@ -40,19 +43,15 @@ pip install annoy
 pip install fastBPE regex requests sacremoses subword_nmt
 pip install mosestokenizer
 pip install torch_optimizer
-wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"
+# wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"
 pip install vaderSentiment
 pip install git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git
 pip install git+https://github.com/ruotianluo/meshed-memory-transformer.git
 pip install fcache
-pip install --upgrade diskcache
+pip install diskcache
 pip install jsonlines
-pip install pytorch-pretrained-bert
-git clone https://github.com/facebookresearch/mmf.git
-cd mmf
-pip install --no-dependencies --editable .
-pip install pycontractions
-pip install contractions
+pip install "pytorch-pretrained-bert>=0.6.1"
+git clone https://github.com/facebookresearch/mmf.git && cd mmf && pip install --no-dependencies --editable .
 pip install yacs
 pip install gpustat
 pip install gputil
@@ -60,6 +59,11 @@ pip install gdown
 pip install fvcore
 pip install opencv-python
 pip install git+https://github.com/cocodataset/panopticapi.git
+git clone https://gitlab.com/vedanuj/vqa-maskrcnn-benchmark.git && cd vqa-maskrcnn-benchmark && python setup.py build && python setup.py develop
+cd ~
+pip install 'git+https://github.com/faizanahemad/detectron2.git'
+# MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
+
 
 ```
 

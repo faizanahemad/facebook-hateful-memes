@@ -118,8 +118,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.keyphrase_nn = ExpandContract(keyphrases_dim, cap_to_dim_map["key_phrases"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else "wiki-news-300d-1M-subword.bin"
-        assert fasttext_file is not None
-        if fasttext_file is not None:
+        if not set(capabilities).isdisjoint({"key_phrases", "full_view", "nltk"}):
             self.text_model = fasttext.load_model(fasttext_file)
 
         self.pdict = get_all_tags()

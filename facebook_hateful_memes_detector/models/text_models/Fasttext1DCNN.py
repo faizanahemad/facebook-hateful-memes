@@ -34,7 +34,6 @@ class Fasttext1DCNNModel(nn.Module):
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
 
-
         if not use_as_super:
             if fasttext_file is not None:
                 self.text_model = fasttext.load_model(fasttext_file)
@@ -66,10 +65,9 @@ class Fasttext1DCNNModel(nn.Module):
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
-        img = sampleList.image
         labels = torch.tensor(sampleList.label).to(get_device())
         # sample_weights = torch.tensor(sampleList.sample_weight, dtype=float).to(get_device())
-
+        del sampleList
         vectors = self.get_word_vectors(texts)
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
