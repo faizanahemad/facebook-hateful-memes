@@ -54,7 +54,6 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 l1 = nn.Conv2d(im_shape[0], im_shape[0], 3, 1, padding=1, groups=16, bias=False)
                 init_fc(l1, "leaky_relu")
                 im_proc = nn.Sequential(nn.Dropout(dropout), l1, nn.LeakyReLU())
-                im_shape = (internal_dims, im_shape[1], im_shape[2])
 
             elif imo == "caption_features":
                 im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"])
