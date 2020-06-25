@@ -84,7 +84,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
             im_procs.append(im_proc)
         self.im_models = nn.ModuleDict(dict(zip(names, im_models)))
         self.im_procs = nn.ModuleDict(dict(zip(names, im_procs)))
-        self.im_finetune = nn.ModuleDict(dict(zip(names, im_finetune)))
+        self.im_finetune = dict(zip(names, im_finetune))
         self.im_shapes = dict(zip(names, im_shapes))
         self.require_raw_img = {"detr_demo", 'detr_resnet50', 'detr_resnet50_panoptic', 'detr_resnet101', 'detr_resnet101_panoptic',
                                 "ssd", "faster_rcnn", "lxmert_faster_rcnn", "caption_features"}

@@ -96,7 +96,7 @@ class LXMERTFeatureExtractor:
         with torch.no_grad():
             NUM_OBJECTS = 36
             raw_height, raw_width = raw_image.shape[:2]
-            image = predictor.transform_gen.get_transform(raw_image).apply_image(raw_image)
+            image = predictor.aug.get_transform(raw_image).apply_image(raw_image)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
             inputs = [{"image": image, "height": raw_height, "width": raw_width}]
             images = predictor.model.preprocess_image(inputs)

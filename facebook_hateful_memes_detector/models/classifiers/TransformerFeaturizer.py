@@ -5,7 +5,7 @@ import torch
 import torchnlp
 import torch.nn.functional as F
 from .BaseFeaturizer import BaseFeaturizer
-from ...utils import init_fc, GaussianNoise, ExpandContract, LambdaLayer
+from ...utils import init_fc, GaussianNoise, ExpandContract, LambdaLayer, get_device
 import math
 from .CNN1DFeaturizer import Residual1DConv
 from torch.nn.init import xavier_uniform_
@@ -197,7 +197,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
                 input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU(), gn, input_nn2)
             layer_norms[k] = nn.LayerNorm(n_internal_dims, eps=1e-06)
             ensemble_inp[k] = input_nn
-            ensemble_id[k] = i
+            ensemble_id[k] = torch.tensor(i).long().to(get_device())
         self.ensemble_inp = nn.ModuleDict(ensemble_inp)
         self.ensemble_id = ensemble_id
         self.layer_norms = nn.ModuleDict(layer_norms)
