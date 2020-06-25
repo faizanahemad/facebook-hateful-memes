@@ -122,7 +122,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
 
         color = 'tab:blue'
         ax2.set_ylabel('Learning Rate', color=color)  # we already handled the x-label with ax1
-        ax2.enable_plot(t, learning_rates, color=color)
+        ax2.plot(t, learning_rates, color=color)
         ax2.tick_params(axis='y', labelcolor=color)
 
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
