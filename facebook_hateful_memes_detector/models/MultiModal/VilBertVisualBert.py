@@ -351,9 +351,7 @@ class VilBertVisualBertModel(nn.Module):
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
-        img = sampleList.torchvision_image
         image = sampleList.image # orig_image = sampleList.original_image
-        labels = sampleList.label
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
 

@@ -35,7 +35,10 @@ pip install git+https://github.com/LIAAD/yake
 CFLAGS="-Wno-narrowing" pip install cld2-cffi
 pip install multi-rake
 
-
+pip install lmdb
+pip install demjson
+pip install omegaconf
+pip install torchtext
 pip install textblob
 pip install rake-nltk
 pip install nlpaug
