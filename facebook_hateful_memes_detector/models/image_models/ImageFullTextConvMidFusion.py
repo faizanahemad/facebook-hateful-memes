@@ -58,6 +58,9 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         self.final_layer = final_layer_builder(classifier_dims, num_classes, dropout, )
         self.num_classes = num_classes
         self.finetune_image_model = finetune_image_model
+        self.text_layer_norm = nn.LayerNorm(text_in_channels)
+        self.im_layer_norm = nn.LayerNorm(internal_dims)
+
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
@@ -68,6 +71,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
         _, _, text_repr, _ = self.text_model(sampleList)
+        text_repr = self.text_layer_norm(text_repr)
         text_repr = text_repr.mean(1).unsqueeze(2)
         text_repr = text_repr.expand((*text_repr.size()[:-1], self.imf_width)).unsqueeze(3)
         text_repr = text_repr.expand((*text_repr.size()[:-1], self.imf_width))
@@ -78,6 +82,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         else:
             image_repr = self.im_model(img)
         image_repr = self.im_proc(image_repr)
+        image_repr = self.im_layer_norm(image_repr.permute(1, 3)).permute(1, 3)
         repr = torch.cat((image_repr, text_repr), dim=1)
         vectors = self.featurizer(repr)
         logits, loss = self.final_layer(vectors, labels)
