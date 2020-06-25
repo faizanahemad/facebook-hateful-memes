@@ -51,12 +51,9 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 net = imo.split("_")[-1]
                 im_model, im_shape = get_torchvision_classification_models(net, large_rf, finetune)
 
-                l1 = nn.Conv2d(im_shape[0], int(im_shape[0] / 2), 1, 1, padding=0, groups=4, bias=False)
+                l1 = nn.Conv2d(im_shape[0], im_shape[0], 3, 1, padding=1, groups=16, bias=False)
                 init_fc(l1, "leaky_relu")
-                l2 = nn.Conv2d(int(im_shape[0] / 2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
-                init_fc(l2, "leaky_relu")
-                im_proc = nn.Sequential(nn.Dropout(dropout), l1, nn.LeakyReLU(),
-                                        GaussianNoise(gaussian_noise), l2, nn.LeakyReLU())
+                im_proc = nn.Sequential(nn.Dropout(dropout), l1, nn.LeakyReLU())
                 im_shape = (internal_dims, im_shape[1], im_shape[2])
 
             elif imo == "caption_features":
