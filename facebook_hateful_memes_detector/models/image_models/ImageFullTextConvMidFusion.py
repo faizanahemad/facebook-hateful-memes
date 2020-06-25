@@ -36,24 +36,23 @@ class ImageFullTextConvMidFusionModel(nn.Module):
                 raise NotImplementedError(image_model)
             self.im_model = im_model
             self.imf_width = im_shape[-1]
-            l1 = nn.Conv2d(im_shape[0], int(im_shape[0] / 2), 1, 1, padding=0, groups=1, bias=False)
+            l1 = nn.Conv2d(im_shape[0], internal_dims * 2, 1, 1, padding=0, groups=4, bias=False)
             init_fc(l1, "leaky_relu")
-            l2 = nn.Conv2d(int(im_shape[0] / 2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
+            l2 = nn.Conv2d(internal_dims * 2, internal_dims, 1, 1, padding=0, groups=1, bias=False)
             init_fc(l2, "leaky_relu")
             self.im_proc = nn.Sequential(nn.Dropout(dropout), l1, nn.LeakyReLU(),
                                          GaussianNoise(gaussian_noise), l2, nn.LeakyReLU())
 
         self.text_model = text_model_class(**text_model_params)
         # Normalize on 2nd dim for both text and img
-        l2 = nn.Conv2d(internal_dims + text_in_channels, int((internal_dims + text_in_channels)/2), 1, 1, padding=0, groups=1, bias=False)
+        l2 = nn.Conv2d(internal_dims + text_in_channels, int((internal_dims + text_in_channels) * 2), 1, 1, padding=1, groups=1, bias=False)
         init_fc(l2, "leaky_relu")
-        l3 = nn.Conv2d(int((internal_dims + text_in_channels)/2), internal_dims, 3, 1, padding=1, groups=1, bias=False)
+        l3 = nn.Conv2d(int((internal_dims + text_in_channels) * 2), internal_dims, 1, 1, padding=0, groups=1, bias=False)
         init_fc(l3, "leaky_relu")
         l4 = nn.Conv2d(internal_dims, classifier_dims, 3, 1, padding=0, groups=1, bias=False)
         init_fc(l4, "leaky_relu")
         self.featurizer = nn.Sequential(nn.Dropout(dropout), l2, nn.LeakyReLU(), GaussianNoise(gaussian_noise), l3,
-                                        nn.LeakyReLU(), nn.Dropout(dropout), l4, nn.LeakyReLU()) # 5x5 for resnet18 from 7x7
-
+                                        nn.LeakyReLU(), nn.Dropout(dropout), l4, nn.LeakyReLU())  # 5x5 for resnet18 from 7x7
 
         self.final_layer = final_layer_builder(classifier_dims, num_classes, dropout, )
         self.num_classes = num_classes
@@ -88,6 +87,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         del text_repr
         clean_memory()
         vectors = self.featurizer(repr)
+        vectors = vectors.transpose(1, 2).transpose(2, 3).flatten(1, 2)  # N,C,H,W -> N,HxW,C
         logits, loss = self.final_layer(vectors, labels)
         return logits, vectors.mean(1), vectors, loss
 
