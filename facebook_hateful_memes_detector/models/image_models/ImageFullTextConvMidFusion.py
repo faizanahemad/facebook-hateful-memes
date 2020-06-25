@@ -14,7 +14,7 @@ from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, dict2sampleList, get_device
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, dict2sampleList, get_device, clean_memory
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 
@@ -61,16 +61,14 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         self.text_layer_norm = nn.LayerNorm(text_in_channels)
         self.im_layer_norm = nn.LayerNorm(internal_dims)
 
-
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
-        texts = sampleList.text
-        img = sampleList.torchvision_image
-        orig_image = sampleList.original_image
-        labels = sampleList.label
+        img = sampleList.torchvision_image.to(get_device())
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
         _, _, text_repr, _ = self.text_model(sampleList)
+        del sampleList
+        clean_memory()
         text_repr = self.text_layer_norm(text_repr)
         text_repr = text_repr.mean(1).unsqueeze(2)
         text_repr = text_repr.expand((*text_repr.size()[:-1], self.imf_width)).unsqueeze(3)
@@ -81,9 +79,13 @@ class ImageFullTextConvMidFusionModel(nn.Module):
                 image_repr = self.im_model(img)
         else:
             image_repr = self.im_model(img)
+        del img
         image_repr = self.im_proc(image_repr)
         image_repr = self.im_layer_norm(image_repr.permute(1, 3)).permute(1, 3)
         repr = torch.cat((image_repr, text_repr), dim=1)
+        del image_repr
+        del text_repr
+        clean_memory()
         vectors = self.featurizer(repr)
         logits, loss = self.final_layer(vectors, labels)
         return logits, vectors.mean(1), vectors, loss
