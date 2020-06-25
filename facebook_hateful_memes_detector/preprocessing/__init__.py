@@ -367,7 +367,9 @@ def my_collate(batch):
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
                  train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
-                 cache_images: bool = True, use_images: bool = True, dev: bool = False):
+                 cache_images: bool = True, use_images: bool = True, dev: bool = False,
+                 keep_original_text: bool = False, keep_original_image: bool = False,
+                 keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     use_dev = dev
     from functools import partial
     joiner = partial(os.path.join, data_dir)
@@ -396,6 +398,8 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
               train_augmented=train_augmented, dev_augmented=dev_augmented, test_augmented=test_augmented,
               submission_format=submission_format,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev,
+                            keep_original_text=keep_original_text, keep_original_image=keep_original_image,
+                            keep_processed_image=keep_processed_image, keep_torchvision_image=keep_torchvision_image,
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
                             train_torchvision_image_transform=train_torchvision_image_transform,
                             test_torchvision_image_transform=test_torchvision_image_transform,

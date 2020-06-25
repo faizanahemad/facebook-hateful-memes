@@ -202,7 +202,9 @@ def convert_dataframe_to_dataset(df, metadata, train=True):
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
                           torchvision_image_transform=metadata["train_torchvision_image_transform"] if train else metadata["test_torchvision_image_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
-                          cache_images=metadata["cache_images"], use_images=metadata["use_images"])
+                          cache_images=metadata["cache_images"], use_images=metadata["use_images"],
+                          keep_original_text=metadata["keep_original_text"], keep_original_image=metadata["keep_original_image"],
+                          keep_processed_image=metadata["keep_processed_image"], keep_torchvision_image=metadata["keep_torchvision_image"])
     return ds
 
 
