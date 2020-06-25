@@ -60,6 +60,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
         self.finetune_image_model = finetune_image_model
         self.text_layer_norm = nn.LayerNorm(text_in_channels)
         self.im_layer_norm = nn.LayerNorm(internal_dims)
+        self.internal_dims = internal_dims
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
@@ -81,7 +82,7 @@ class ImageFullTextConvMidFusionModel(nn.Module):
             image_repr = self.im_model(img)
         del img
         image_repr = self.im_proc(image_repr)
-        image_repr = self.im_layer_norm(image_repr.permute(1, 3)).permute(1, 3)
+        image_repr = self.im_layer_norm(image_repr.transpose(1, 2).transpose(2, 3)).transpose(2, 3).transpose(1, 2)
         repr = torch.cat((image_repr, text_repr), dim=1)
         del image_repr
         del text_repr
