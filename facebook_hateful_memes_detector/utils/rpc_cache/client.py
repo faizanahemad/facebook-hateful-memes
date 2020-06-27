@@ -80,14 +80,6 @@ class RpcCacheClient:
         else:
             return self.__exec_zrpc__(args)
 
-    def __exec_greendb__(self, *args):
-        # Green DB
-        # client = Client(host=self.server, port=self.port)
-        # # print(client is not None and not client.is_closed())
-        # result = client[args[1]]
-        # client.close()
-        # # Green DB
-        pass
 
     def get_batch(self, items: List):
         results = self.pool.map(self.__exec_zrpc__, [("get", c) for c in chunked(items, 2)])
@@ -100,18 +92,19 @@ class RpcCacheClient:
         assert results
 
 
-client = RpcCacheClient('dev-dsk-ahemf-cache-r5-12x-e48a86de.us-west-2.amazon.com', 4242, 6000, 32)
-import time
+if __name__ == "__main__":
+    client = RpcCacheClient('dev-dsk-ahemf-cache-r5-12x-e48a86de.us-west-2.amazon.com', 4242, 6000, 32)
+    import time
 
-s = time.time()
-print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
-e = time.time() - s
-print(e)
+    s = time.time()
+    print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
+    e = time.time() - s
+    print(e)
 
-s = time.time()
-print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
-e = time.time() - s
-print(e)
+    s = time.time()
+    print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
+    e = time.time() - s
+    print(e)
 
 
 
