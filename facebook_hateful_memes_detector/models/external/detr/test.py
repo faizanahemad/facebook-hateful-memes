@@ -8,13 +8,13 @@ import threading
 from threading import current_thread
 # from gevent import monkey
 # monkey.patch_all()
-
-
-from gsocketpool.exceptions import ConnectionNotFoundError, PoolExhaustedError
+import zerorpc
+import random
+from greendb import Client
+from more_itertools import chunked
 from typing import List, Dict
 import asyncio
 import random
-from mprpc import RPCClient, RPCPoolClient
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from threading import Lock
 
@@ -24,15 +24,11 @@ def htime():
 
 
 class RpcCacheClient:
-    def __init__(self, server, port, pool_size=1):
+    def __init__(self, server, zrpc_port, mprpc_port, pool_size=1):
         self.server = server
-        self.port = port
-        # self.client_pool = Pool(RPCPoolClient, dict(host=server, port=port), pool_size) # RPCPoolClient
-        # self.pool = ThreadPoolExecutor(pool_size, thread_name_prefix='cache_')
-        self._free = collections.deque(list(range(pool_size)))
-        # self.lock = Lock()
-        self.thread2Conn = dict()
-        self.pool = ProcessPoolExecutor(pool_size)
+        self.zrpc_port = zrpc_port
+        self.mprpc_port = mprpc_port
+        self.pool = ThreadPoolExecutor(pool_size, thread_name_prefix='cache_')
 
     def __getitem__(self, item):
         assert type(item) == str
@@ -42,52 +38,16 @@ class RpcCacheClient:
         assert type(key) == str
         return self.__exec__("set", key, value)
 
-    def __get_connection__(self):
-        name = current_thread().name
-        client = None
-        if name in self.thread2Conn:
-            conn_data = self.thread2Conn[name]
-            assert len(conn_data) == 2
-            client = conn_data[0]
-            port = conn_data[1]
-            assert port not in self._free
-            print(name, port, client, client.is_connected())
-            if client.is_connected():
-                return client
-            else:
-                del conn_data
-                del self.thread2Conn[name]
-                self._free.append(port)
+    def __exec_mprpc__(self, args):
+        from mprpc import RPCClient, RPCPoolClient
 
-        if client is None:
-            port = self._free.popleft()
-            # print((name, port, self.thread2Conn.keys()))
-            client = RPCClient(self.server, self.port + port)
-            self.thread2Conn[name] = (client, port)
-            print(name, port, client, client.is_connected())
-            return client
-
-    def __exec__(self, *args):
-        assert len(args) > 1
-        assert type(args[0]) == str
-
-        t = htime()
+        method = args[0]
+        args = args[1]
+        assert method in ["get", "set"]
         try:
-            # self.lock.acquire()
-            client = self.__get_connection__()
-            # self.lock.release()
-            # port = self._free.popleft()
-            # client = RPCClient(self.server, self.port + port)
-
-            result = client.call(*args)
-            # with self.client_pool.connection() as client:
-            #     result = client.call(*args)
-            e = htime()
-            tot = e - t
-
-            # print((args[1], t, e, "%.3f" % tot))
+            client = RPCClient(self.server, self.mprpc_port)
+            result = client.call(method, args)
             client.close()
-            # self._free.append(port)
             return result
         except Exception as e:
             print(e)
@@ -96,48 +56,60 @@ class RpcCacheClient:
             except:
                 pass
 
-    def get_batch(self, items: List):
-        results = self.pool.map(self.__getitem__, items)
-        return dict(zip(items, results))
-        # loop = asyncio.get_event_loop()
-        # futures = [(i, loop.run_in_executor(self.pool, self.__getitem__, i)) for i in items]
-        # waiter = asyncio.wait([f for i, f in futures])
-        # res, exceptions = loop.run_until_complete(waiter)
-        # results = dict([(i, f.result()) for i, f in futures])
-        # assert results.keys() == set(items)
-        # return results
+    def __exec_zrpc__(self, args):
+        method = args[0]
+        args = args[1]
+        assert method in ["get", "set"]
+        try:
+            client = zerorpc.Client(heartbeat=None)
+            client.connect("tcp://%s:%s" % (self.server, self.zrpc_port))
+            result = client.get(args) if method == "get" else client.set(args)
+            client.close()
+            return result
+        except Exception as e:
+            print(e)
+            try:
+                client.close()
+            except:
+                pass
 
-    def set_batch(self, item_dict: Dict):
-        self.client_pool.drop_expired()
-        loop = asyncio.get_event_loop()
-        futures = [(k, loop.run_in_executor(self.pool, self.__setitem__, k, v)) for k, v in item_dict.items()]
-        waiter = asyncio.wait([f for i, f in futures])
-        loop.run_until_complete(waiter)
-        results = all([f.result() for i, f in futures])
-        assert results
+    def __clever_exec__(self, args):
+        choice = random.randint(0, 1)
+        if choice == 0:
+            return self.__exec_mprpc__(args)
+        else:
+            return self.__exec_zrpc__(args)
+
+    def __exec_greendb__(self, *args):
+        # Green DB
+        # client = Client(host=self.server, port=self.port)
+        # # print(client is not None and not client.is_closed())
+        # result = client[args[1]]
+        # client.close()
+        # # Green DB
+        pass
+
+    def get_batch(self, items: List):
+        results = self.pool.map(self.__exec_zrpc__, [("get", c) for c in chunked(items, 2)])
+        results = {k: v for d in results for k, v in d.items()}
         return results
 
+    def set_batch(self, item_dict: Dict):
+        results = self.pool.map(self.__exec_zrpc__, [("set", dict(c)) for c in chunked(item_dict.items(), 2)])
+        results = all(results)
+        assert results
 
-client = RpcCacheClient('dev-dsk-ahemf-cache-r5-12x-e48a86de.us-west-2.amazon.com', 6000, 2)
+
+client = RpcCacheClient('dev-dsk-ahemf-cache-r5-12x-e48a86de.us-west-2.amazon.com', 4242, 6000, 32)
 import time
-s = time.time()
-print(type(client.get_batch(["a"])))
-e = time.time() - s
-print(e)
-
 
 s = time.time()
-print(type(client.get_batch(["a", "b", "c", "d", "e", "f", "g", "h"])))
+print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
 e = time.time() - s
 print(e)
 
 s = time.time()
-print(type(client.get_batch(list(map(str, range(32))))))
-e = time.time() - s
-print(e)
-
-s = time.time()
-print(type(client.get_batch(list(map(str, range(32))))))
+print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
 e = time.time() - s
 print(e)
 
