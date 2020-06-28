@@ -53,6 +53,3 @@ if __name__ == "__main__":
     print(left_out_names)
     pprint(confs)
 
-confs, names, left_out_names = group_wise_lr(model, {"layer4": {"lr": 0.3},
-                                                     "layer3": {"0": {"conv2": {"lr": 0.001}},
-                                                                "1": {"lr": 0.003}}})
