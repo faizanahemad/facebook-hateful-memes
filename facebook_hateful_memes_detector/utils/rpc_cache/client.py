@@ -17,6 +17,7 @@ import asyncio
 import random
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from threading import Lock
+import requests
 
 
 def htime():
@@ -24,10 +25,11 @@ def htime():
 
 
 class RpcCacheClient:
-    def __init__(self, server, zrpc_port, mprpc_port, pool_size=1):
+    def __init__(self, server, zrpc_port, mprpc_port, http_port, pool_size=1):
         self.server = server
         self.zrpc_port = zrpc_port
         self.mprpc_port = mprpc_port
+        self.http_port = http_port
         self.pool = ThreadPoolExecutor(pool_size, thread_name_prefix='cache_')
 
     def __getitem__(self, item):
@@ -73,13 +75,18 @@ class RpcCacheClient:
             except:
                 pass
 
+    def __exec_http__(self, args):
+        method = args[0]
+        args = args[1]
+        assert method in ["get", "set"]
+        return requests.post('http://%s:%s/%s' % (self.server, self.http_port, method), json=args).json()
+
     def __clever_exec__(self, args):
         choice = random.randint(0, 1)
         if choice == 0:
-            return self.__exec_mprpc__(args)
+            return self.__exec_http__(args)
         else:
             return self.__exec_zrpc__(args)
-
 
     def get_batch(self, items: List):
         results = self.pool.map(self.__exec_zrpc__, [("get", c) for c in chunked(items, 2)])
@@ -93,7 +100,7 @@ class RpcCacheClient:
 
 
 if __name__ == "__main__":
-    client = RpcCacheClient('dev-dsk-ahemf-cache-r5-12x-e48a86de.us-west-2.amazon.com', 4242, 6000, 32)
+    client = RpcCacheClient('dev-dsk-ahemf-cache-r5-12x-e48a86de.us-west-2.amazon.com', 4242, 6000, 5000, 32)
     import time
 
     s = time.time()
