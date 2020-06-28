@@ -48,7 +48,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 raise NotImplementedError()
 
             if "torchvision" in imo:
-                net = imo.split("_")[-1]
+                net = "_".join(imo.split("_")[1:])
                 im_model, im_shape = get_torchvision_classification_models(net, large_rf, finetune)
 
                 l1 = nn.Conv2d(im_shape[0], im_shape[0], 3, 1, padding=1, groups=16, bias=False)
