@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import jsonlines
 import abc
-from typing import List, Tuple, Dict, Set, Union
+from typing import List, Tuple, Dict, Set, Union, Callable
 from PIL import Image
 from ..utils import read_json_lines_into_df, clean_memory
 
@@ -88,6 +88,64 @@ class QuadrantCut:
         return Image.fromarray(arr)
 
 
+class DefinedAffine(torchvision.transforms.RandomAffine):
+    def __init__(self, degrees, translate=None, scale=None, shear=None,):
+        super().__init__(degrees, translate, scale, shear)
+
+    @staticmethod
+    def get_params(degrees, translate, scale_ranges, shears, img_size):
+        angle = random.sample(list(degrees), k=1)[0]
+        if translate is not None:
+            max_dx = translate[0] * img_size[0]
+            max_dy = translate[1] * img_size[1]
+            translations = (random.sample((-max_dx, 0.0, max_dx), k=1)[0],
+                            random.sample((-max_dy, 0.0, max_dy), k=1)[0])
+        else:
+            translations = (0, 0)
+
+        if scale_ranges is not None:
+            scale = random.sample((scale_ranges[0], 1.0, scale_ranges[1]), k=1)[0]
+        else:
+            scale = 1.0
+
+        if shears is not None:
+            if len(shears) == 2:
+                shear = [random.sample((shears[0], 0., shears[1]), k=1)[0], 0.]
+            elif len(shears) == 4:
+                shear = [random.sample((shears[0], 0., shears[1]), k=1)[0],
+                         random.sample((shears[2], 0., shears[3]), k=1)[0]]
+        else:
+            shear = 0.0
+        return angle, translations, scale, shear
+
+
+class ImageAugment:
+    def __init__(self, count_proba: List[float], augs_dict: Dict[str, Callable], choice_probas: Dict[str, float]):
+        self.count_proba = count_proba
+        assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
+        assert len(count_proba) >= 1
+        assert (len(count_proba) - 1) < sum([v > 0 for v in choice_probas.values()])
+        choice_probas = {k: v for k, v in choice_probas.items() if v > 0}
+        assert set(choice_probas.keys()).issubset(augs_dict.keys())
+        self.augs = list(augs_dict.keys())
+        choices_arr = np.array([choice_probas[c] if c in choice_probas else 0.0 for c in self.augs])
+        self.choice_probas = choices_arr / np.linalg.norm(choices_arr, ord=1)
+
+        self.choice_probas = choice_probas
+        self.augments = augs_dict
+
+    def __call__(self, image):
+        count = np.random.choice(list(range(len(self.count_proba))), 1, replace=False, p=self.count_proba)[0]
+        augs = np.random.choice(self.augs, count, replace=False, p=self.choice_probas)
+        for aug in augs:
+            try:
+                image = self.augments[aug](image)
+
+            except Exception as e:
+                print("Exception for: ", aug, "|", "|", augs, e)
+        return image
+
+
 def clean_text(text):
     # https://stackoverflow.com/questions/6202549/word-tokenization-using-python-regular-expressions
     # https://stackoverflow.com/questions/44263446/python-regex-to-add-space-after-dot-or-comma/44263500
@@ -127,7 +185,7 @@ from nltk.corpus import stopwords
 
 
 class TextAugment:
-    def __init__(self, count_proba: List[float], choice_probas: Dict[str, int], fasttext_file: str = None):
+    def __init__(self, count_proba: List[float], choice_probas: Dict[str, float], fasttext_file: str = None):
         self.count_proba = count_proba
         assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
         assert len(count_proba) >= 1

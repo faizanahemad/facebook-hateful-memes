@@ -22,8 +22,12 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None):
+def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cache_allow_writes=True):
     cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
+    try:
+        cache_allow_writes = get_global("cache_allow_writes")
+    except:
+        pass
     from diskcache import Cache, Index
     import joblib
     if check_cache_exists:
@@ -56,7 +60,8 @@ def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None):
             except KeyError as ke:
                 pass
         r = fn(*args, **kwargs)
-        cache[hsh] = r
+        if cache_allow_writes:
+            cache[hsh] = r
         return r
 
     return cfn
