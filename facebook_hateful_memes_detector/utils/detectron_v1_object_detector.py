@@ -16,20 +16,26 @@ import torchvision.transforms as transforms
 
 from PIL import Image
 from io import BytesIO
-from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache
+from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, set_global, get_global
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, cache_dir=os.path.join(os.getcwd(), 'cache')):
+def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=get_global("cache_dir")):
     from diskcache import Cache, Index
     import joblib
-    if os.path.exists(cache_dir):
-        assert os.path.isdir(cache_dir)
+    if check_cache_exists:
+        assert os.path.exists(cache_dir) and os.path.isdir(cache_dir)
+        cache_file = os.path.join(cache_dir, "cache.db")
+        assert os.path.exists(cache_file) and os.path.isfile(cache_file)
     else:
-        os.mkdir(cache_dir)
-    cache = Index(cache_dir, sqlite_cache_size=2 ** 13, sqlite_mmap_size=2 ** 26)
+        if os.path.exists(cache_dir):
+            assert os.path.isdir(cache_dir)
+        else:
+            os.mkdir(cache_dir)
+    args = dict(eviction_policy='none', sqlite_cache_size=2 ** 16, sqlite_mmap_size=2 ** 28, disk_min_file_size=2 ** 18)
+    cache = Cache(cache_dir, **args)
     try:
         import inspect
         fnh = joblib.hashing.hash(name, 'sha1') + joblib.hashing.hash(inspect.getsourcelines(fn)[0], 'sha1') + joblib.hashing.hash(fn.__name__, 'sha1')
