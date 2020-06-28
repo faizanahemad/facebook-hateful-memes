@@ -22,7 +22,8 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=get_global("cache_dir")):
+def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None):
+    cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
     from diskcache import Cache, Index
     import joblib
     if check_cache_exists:
