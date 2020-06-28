@@ -31,6 +31,7 @@ class RpcCacheClient:
         self.mprpc_port = mprpc_port
         self.http_port = http_port
         self.pool = ThreadPoolExecutor(pool_size, thread_name_prefix='cache_')
+        self.pool_size = pool_size
 
     def __getitem__(self, item):
         assert type(item) == str
@@ -89,7 +90,8 @@ class RpcCacheClient:
             return self.__exec_zrpc__(args)
 
     def get_batch(self, items: List):
-        results = self.pool.map(self.__exec_zrpc__, [("get", c) for c in chunked(items, 2)])
+        chunk_size = int(len(items) / self.pool_size)  # 2
+        results = self.pool.map(self.__exec_zrpc__, [("get", c) for c in chunked(items, chunk_size)])
         results = {k: v for d in results for k, v in d.items()}
         return results
 
@@ -102,16 +104,37 @@ class RpcCacheClient:
 if __name__ == "__main__":
     client = RpcCacheClient('dev-dsk-ahemf-cache-r5-12x-e48a86de.us-west-2.amazon.com', 4242, 6000, 5000, 32)
     import time
+    kl = list(map(str, range(32)))
+    kl2 = kl + kl
+    kl4 = kl2 + kl2
+    kl8 = kl4 + kl4
+    kl16 = kl8 + kl8
+
+    iters = 5
+    s = time.time()
+    res = all([all([v is not None for v in client.get_batch(kl).values()]) for _ in range(iters)])
+    e = time.time() - s
+    print(len(kl), res, "%.3f" % (e / iters))
 
     s = time.time()
-    print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
+    res = all([all([v is not None for v in client.get_batch(kl2).values()]) for _ in range(iters)])
     e = time.time() - s
-    print(e)
+    print(len(kl2), res, "%.3f" % (e / iters))
 
     s = time.time()
-    print(type(client.get_batch(list(map(str, range(32))) + list(map(str, range(32))))))
+    res = all([all([v is not None for v in client.get_batch(kl4).values()]) for _ in range(iters)])
     e = time.time() - s
-    print(e)
+    print(len(kl4), res, "%.3f" % (e / iters))
+
+    s = time.time()
+    res = all([all([v is not None for v in client.get_batch(kl8).values()]) for _ in range(iters)])
+    e = time.time() - s
+    print(len(kl8), res, "%.3f" % (e / iters))
+
+    s = time.time()
+    res = all([all([v is not None for v in client.get_batch(kl16).values()]) for _ in range(iters)])
+    e = time.time() - s
+    print(len(kl16), res, "%.3f" % (e / iters))
 
 
 
