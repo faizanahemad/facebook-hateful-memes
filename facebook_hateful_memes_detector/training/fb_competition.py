@@ -25,12 +25,6 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout,):
     return mtf
 
 
-def fb_2d_loss_builder(n_dims, n_out, dropout,):
-    cnn = CNN2DHead(n_dims, n_out, dropout, "classification")
-    mtf = MultiTaskForward([cnn])
-    return mtf
-
-
 def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weights: Dict[str, float],
                       multi_eval=False, scheduler_init_fn=None):
     train_df = datadict["train"]

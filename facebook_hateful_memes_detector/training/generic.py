@@ -181,13 +181,28 @@ def validate(model, batch_size, dataset, test_df):
 
 
 def model_builder(model_class, model_params,
-                  optimiser_class=torch.optim.Adam, optimiser_params=dict(lr=0.001, weight_decay=1e-5)):
+                  optimiser_class=torch.optim.AdamW, per_param_opts_fn=None,
+                  optimiser_params=dict(lr=0.001, weight_decay=1e-5)):
     def builder(**kwargs):
         prams = dict(model_params)
         prams.update(kwargs)
         model = model_class(**prams)
         model.to(get_device())
-        optimizer = optimiser_class(filter(lambda p: p.requires_grad, model.parameters()), **optimiser_params)
+        all_params = filter(lambda p: p.requires_grad, model.parameters())
+
+        if per_param_opts_fn is not None:
+            # https://pytorch.org/docs/master/optim.html#per-parameter-options
+            if type(per_param_opts_fn) == list:
+                params_conf = per_param_opts_fn
+            else:
+                params_conf = per_param_opts_fn(model)
+            assert type(params_conf) == list
+            assert len(params_conf) > 0
+            assert all(["params" in p for p in params_conf])
+
+            all_params = params_conf
+
+        optimizer = optimiser_class(all_params, **optimiser_params)
         return model, optimizer
 
     return builder
