@@ -16,7 +16,7 @@ import gc
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
 from transformers import optimization
-
+from .model_params import group_wise_lr
 
 def get_multistep_lr(milestones, gamma=0.2):
     def scheduler_init_fn(optimizer, epochs, batch_size, n_samples):
@@ -194,6 +194,8 @@ def model_builder(model_class, model_params,
             # https://pytorch.org/docs/master/optim.html#per-parameter-options
             if type(per_param_opts_fn) == list:
                 params_conf = per_param_opts_fn
+            elif type(per_param_opts_fn) == dict:
+                params_conf, _, _ = group_wise_lr(model, per_param_opts_fn)
             else:
                 params_conf = per_param_opts_fn(model)
             assert type(params_conf) == list
