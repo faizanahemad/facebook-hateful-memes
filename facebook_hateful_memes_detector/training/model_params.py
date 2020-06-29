@@ -4,61 +4,102 @@ from torchvision import models
 
 
 def group_wise_lr(model, group_lr_conf: Dict, path=""):
-    assert path is not None
-    path = path.strip()
-    assert type(group_lr_conf) == dict
+    """
+    Refer https://pytorch.org/docs/master/optim.html#per-parameter-options
 
+
+    torch.optim.SGD([
+        {'params': model.base.parameters()},
+        {'params': model.classifier.parameters(), 'lr': 1e-3}
+    ], lr=1e-2, momentum=0.9)
+
+
+    to
+
+
+    cfg = {"classifier": {"lr": 1e-3},
+           "lr":1e-2, "momentum"=0.9}
+    confs, names = group_wise_lr(model, cfg)
+    torch.optim.SGD([confs], lr=1e-2, momentum=0.9)
+
+
+
+    :param model:
+    :param group_lr_conf:
+    :return:
+    """
+    assert type(group_lr_conf) == dict
     confs = []
     nms = []
-    for k, v in group_lr_conf.items():
-        param_names = []
-        assert hasattr(model, k)
-        assert type(k) == str
-        assert type(v) == dict
-        # Separate the primitives and objects
-        # Process the objects first
-        # Process primitives with remaining names
-        for kl, vl in v.items():
-            if type(vl) == dict:
-                cfs, names = group_wise_lr(getattr(model, k), {kl: vl}, path=path + k + ".")
-                confs.extend(cfs)
-                param_names.extend(names)
+    for kl, vl in group_lr_conf.items():
+        assert type(kl) == str
+        assert type(vl) == dict or type(vl) == float or type(vl) == int
 
-        primitives = {kl: vl for kl, vl in v.items() if type(vl) == float or type(vl) == int}
-        attr = getattr(model, k)
-        remaining_params = [(k, p) for k, p in attr.named_parameters() if k not in param_names]
-        if len(remaining_params) > 0:
-            names, params = zip(*remaining_params)
-            conf = dict(params=params, **primitives)
-            confs.append(conf)
-            param_names.extend(names)
+        if type(vl) == dict:
+            assert hasattr(model, kl)
+            cfs, names = group_wise_lr(getattr(model, kl), vl, path=path + kl + ".")
+            confs.extend(cfs)
+            names = list(map(lambda n: kl + "." + n, names))
+            nms.extend(names)
 
-        param_names = list(map(lambda n: k + "." + n, param_names))
-        nms.extend(param_names)
+    primitives = {kk: vk for kk, vk in group_lr_conf.items() if type(vk) == float or type(vk) == int}
+    remaining_params = [(k, p) for k, p in model.named_parameters() if k not in nms]
+    if len(remaining_params) > 0:
+        names, params = zip(*remaining_params)
+        conf = dict(params=params, **primitives)
+        confs.append(conf)
+        nms.extend(names)
 
-
-    assert sum([len(d["params"]) for d in confs]) == len(nms)
+    plen = sum([len(list(c["params"])) for c in confs])
+    assert len(list(model.parameters())) == plen
+    assert set(list(zip(*model.named_parameters()))[0]) == set(nms)
+    assert plen == len(nms)
     if path == "":
-        left_out_names, left_out_params = zip(*[(k, p) for k, p in model.named_parameters() if k not in nms])
-        model_param_names = set(list(zip(*model.named_parameters()))[0])
-        assert set(list(left_out_names) + nms) == model_param_names
-        confs.append({"params": left_out_params})
         for c in confs:
             c["params"] = (n for n in c["params"])
-        return confs, nms, left_out_names
-    else:
-        return confs, nms
+    return confs, nms
 
 
 if __name__ == "__main__":
     model = models.resnet18(pretrained=True)
-    confs, names, left_out_names = group_wise_lr(model, {"layer4": {"lr": 0.3},
-                                                         "layer3": {"0": {"conv2": {"lr": 0.001}},
-                                                                    "1": {"lr": 0.003}}})
-    confs, names, left_out_names = group_wise_lr(model, {"layer4": {"lr": 0.3},
-                                                         "layer3": {"0": {"conv2": {"lr": 0.001}},
-                                                                    "lr": 0.003}})
 
-    print(left_out_names)
-    pprint(confs)
+    test_configs = [
+        # Give same Lr to all model params
+        {"lr": 0.3},
+
+        # For the below 3 cases, you will need to pass the optimiser overall optimiser params for remaining model params.
+        # This is because we did not specify optimiser params for all top-level submodules, so defaults need to be supplied
+        # Refer https://pytorch.org/docs/master/optim.html#per-parameter-options
+
+        # Give same Lr to layer4 only
+        {"layer4": {"lr": 0.3}},
+
+        # Give one LR to layer4 and another to rest of model. We can do this recursively too.
+        {"layer4": {"lr": 0.3},
+         "lr": 0.5},
+
+        # Give one LR to layer4.0 and another to rest of layer4
+        {"layer4": {"0": {"lr": 0.001},
+                    "lr": 0.3}},
+
+        # More examples
+        {"layer4": {"lr": 0.3,
+                    "0": {"lr": 0.001}}},
+
+        {"layer3": {"0": {"conv2": {"lr": 0.001}},
+                    "1": {"lr": 0.003}}},
+
+        {"layer4": {"lr": 0.3},
+         "layer3": {"0": {"conv2": {"lr": 0.001}},
+                    "lr": 0.003},
+         "lr": 0.001}
+    ]
+
+    for cfg in test_configs:
+        confs, names = group_wise_lr(model, cfg)
+        print("#" * 140)
+        pprint(cfg)
+        print("-" * 80)
+        pprint(confs)
+        print("#" * 140)
 
