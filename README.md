@@ -79,9 +79,27 @@ mkdir enwiki
 wget https://raw.githubusercontent.com/attardi/wikiextractor/master/WikiExtractor.py
 python WikiExtractor.py -o enwiki --compress --json enwikisource-20200520-pages-articles.xml.bz2
 # Change Line 57 of src/wikipediaidf.py: stems, token_to_stem_mapping = stem(tokens) if stemmer else None, None => stems, token_to_stem_mapping = stem(tokens) if stemmer else (None, None)
+
+# Replace wikipediaidf.py with models/external/wikipediaidf.py
+
 python wikipediaidf.py -i enwiki/**/*.bz2 -o tfidf -s english -c 64
 
 
+```
+
+File Structure inside wiki-idf cloned dir
+```
+.
+├── enwiki
+├── LICENSE.md
+├── README.md
+└── src
+    ├── enwiki
+    ├── enwikisource-20200520-pages-articles.xml.bz2
+    ├── tfidf_stems.csv
+    ├── tfidf_terms.csv
+    ├── WikiExtractor.py
+    └── wikipediaidf.py
 ```
 
 # TODO

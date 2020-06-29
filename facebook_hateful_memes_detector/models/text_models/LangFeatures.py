@@ -44,6 +44,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                  internal_dims, n_layers,
                  featurizer, final_layer_builder,
                  n_tokens_in=64, n_tokens_out=16,
+                 capabilities2dims=dict(),
                  use_as_super=False,
                  **kwargs):
         super(LangFeaturesModel, self).__init__(classifier_dims, num_classes, embedding_dims, gaussian_noise, dropout,
@@ -52,6 +53,8 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                                                 n_tokens_in, n_tokens_out, use_as_super=True, **kwargs)
         assert "capabilities" in kwargs
         capabilities = kwargs["capabilities"]
+        kwargs["rake_dims"] = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
+        kwargs["yake_dims"] = kwargs["yake_dims"] if "yake_dims" in kwargs else 32
         assert "key_phrases" not in capabilities or ("key_phrases" in capabilities and "spacy" in capabilities)
         use_layer_norm = kwargs["use_layer_norm"] if "use_layer_norm" in kwargs else True
         self.capabilities = capabilities
@@ -59,6 +62,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         cap_to_dim_map = {"spacy": 128, "snlp": 32,
                           "key_phrases": 64, "nltk": 192, "full_view": 64,
                           "tmoji": 32, "ibm_max": 16, "gensim": 256, "fasttext_crawl": 192}
+        cap_to_dim_map.update(capabilities2dims)
         all_dims = sum([cap_to_dim_map[c] for c in capabilities])
         self.cap_to_dim_map = cap_to_dim_map
         self.all_dims = all_dims
@@ -95,7 +99,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                                           use_layer_norm=use_layer_norm)
         if "key_phrases" in capabilities:
             import yake
-            from multi_rake import Rake
             self.kw_extractor = yake.KeywordExtractor(lan="en", n=3, dedupLim=0.9,
                                                  dedupFunc='seqm', windowsSize=3,
                                                  top=10, features=None)
@@ -109,12 +112,16 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.yake_dims = yake_dims
             self.yake_nn = ExpandContract(300, yake_dims, dropout, use_layer_norm=use_layer_norm, groups=(2, 2))
 
-            rake_dims = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
-            self.rake_dims = rake_dims
-            self.rake_nn = ExpandContract(300, rake_dims, dropout, use_layer_norm=use_layer_norm, groups=(2, 2))
-            self.rake = Rake(language_code="en")
-
-            keyphrases_dim = 2*embedding_dim + rake_dims + yake_dims
+            try:
+                from multi_rake import Rake
+                rake_dims = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
+                self.rake_dims = rake_dims
+                self.rake_nn = ExpandContract(300, rake_dims, dropout, use_layer_norm=use_layer_norm, groups=(2, 2))
+                self.rake = Rake(language_code="en")
+                keyphrases_dim = 2 * embedding_dim + rake_dims + yake_dims
+            except:
+                self.rake = None
+                keyphrases_dim = 2 * embedding_dim + yake_dims
             self.keyphrase_nn = ExpandContract(keyphrases_dim, cap_to_dim_map["key_phrases"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         fasttext_file = kwargs["fasttext_file"] if "fasttext_file" in kwargs else "wiki-news-300d-1M-subword.bin"
@@ -412,21 +419,23 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         key_wc_pytextrank, key_occ_cnt_pytextrank = zip(*results)
         key_wc_pytextrank = stack_and_pad_tensors(key_wc_pytextrank, self.n_tokens_in)
         key_occ_cnt_pytextrank = stack_and_pad_tensors(key_occ_cnt_pytextrank, self.n_tokens_in)
-        pytextrank_vectors = torch.cat((self.key_wc_pytextrank(key_wc_pytextrank), self.key_occ_cnt_pytextrank(key_occ_cnt_pytextrank)), 2) # 16
+        pytextrank_vectors = torch.cat((self.key_wc_pytextrank(key_wc_pytextrank), self.key_occ_cnt_pytextrank(key_occ_cnt_pytextrank)), 2)  # 16
 
         yake_ke = self.kw_extractor
         yake_embs = [[tm.get_sentence_vector(s) for s in map(itemgetter(0), yake_ke.extract_keywords(t))] if has_words(t) else [np.zeros(300)] for t in texts]
         yake_embs = torch.tensor([np.average(yk, axis=0, weights=softmax(list(range(len(yk), 0, -1)))).astype(np.float32) if len(yk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for yk in yake_embs])
         yake_embs = self.yake_nn(yake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.yake_dims)
 
-        rake_ke = self.rake
-        rake_embs = [[tm.get_sentence_vector(s) for s in map(itemgetter(0), rake_ke.apply(t))] if has_words(t) else [np.zeros(300)] for
-                     t in texts]
-        rake_embs = torch.tensor(
-            [np.average(rk, axis=0, weights=softmax(list(range(len(rk), 0, -1)))).astype(np.float32) if len(rk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for rk in rake_embs])
-        rake_embs = self.rake_nn(rake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.rake_dims)
-
-        result = torch.cat([pytextrank_vectors, yake_embs, rake_embs], 2)
+        if self.rake is not None:
+            rake_ke = self.rake
+            rake_embs = [[tm.get_sentence_vector(s) for s in map(itemgetter(0), rake_ke.apply(t))] if has_words(t) else [np.zeros(300)] for
+                         t in texts]
+            rake_embs = torch.tensor(
+                [np.average(rk, axis=0, weights=softmax(list(range(len(rk), 0, -1)))).astype(np.float32) if len(rk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for rk in rake_embs])
+            rake_embs = self.rake_nn(rake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.rake_dims)
+            result = torch.cat([pytextrank_vectors, yake_embs, rake_embs], 2)
+        else:
+            result = torch.cat([pytextrank_vectors, yake_embs], 2)
         result = result.to(get_device())
         result = self.keyphrase_nn(result)
         return result
