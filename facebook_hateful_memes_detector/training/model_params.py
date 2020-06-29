@@ -11,26 +11,31 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
     confs = []
     nms = []
     for k, v in group_lr_conf.items():
+        param_names = []
         assert hasattr(model, k)
         assert type(k) == str
         assert type(v) == dict
-        all_primitives = all([type(vl) == float or type(vl) == int for vl in v.values()])
-        all_dicts = all([type(vl) == dict for vl in v.values()])
-        assert all_primitives or all_dicts
-        if all_primitives:
-            attr = getattr(model, k)
+        # Separate the primitives and objects
+        # Process the objects first
+        # Process primitives with remaining names
+        for kl, vl in v.items():
+            if type(vl) == dict:
+                cfs, names = group_wise_lr(getattr(model, k), {kl: vl}, path=path + k + ".")
+                confs.extend(cfs)
+                param_names.extend(names)
 
-            named_params = attr.named_parameters()
-            names, params = zip(*named_params)
-            conf = dict(params=params, **v)
-            names = list(map(lambda n: k + "." + n, names))
+        primitives = {kl: vl for kl, vl in v.items() if type(vl) == float or type(vl) == int}
+        attr = getattr(model, k)
+        remaining_params = [(k, p) for k, p in attr.named_parameters() if k not in param_names]
+        if len(remaining_params) > 0:
+            names, params = zip(*remaining_params)
+            conf = dict(params=params, **primitives)
             confs.append(conf)
-            nms.extend(names)
-        else:
-            cfs, names = group_wise_lr(getattr(model, k), v, path=path + k + ".")
-            names = list(map(lambda n: k + "." + n, names))
-            confs.extend(cfs)
-            nms.extend(names)
+            param_names.extend(names)
+
+        param_names = list(map(lambda n: k + "." + n, param_names))
+        nms.extend(param_names)
+
 
     assert sum([len(d["params"]) for d in confs]) == len(nms)
     if path == "":
@@ -50,6 +55,10 @@ if __name__ == "__main__":
     confs, names, left_out_names = group_wise_lr(model, {"layer4": {"lr": 0.3},
                                                          "layer3": {"0": {"conv2": {"lr": 0.001}},
                                                                     "1": {"lr": 0.003}}})
+    confs, names, left_out_names = group_wise_lr(model, {"layer4": {"lr": 0.3},
+                                                         "layer3": {"0": {"conv2": {"lr": 0.001}},
+                                                                    "lr": 0.003}})
+
     print(left_out_names)
     pprint(confs)
 
