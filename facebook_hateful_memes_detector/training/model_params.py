@@ -6,6 +6,7 @@ from torchvision import models
 def group_wise_lr(model, group_lr_conf: Dict, path=""):
     """
     Refer https://pytorch.org/docs/master/optim.html#per-parameter-options
+    Refer https://discuss.pytorch.org/t/different-learning-rate-for-a-specific-layer/33670/11?u=faizan
 
 
     torch.optim.SGD([
@@ -92,7 +93,11 @@ if __name__ == "__main__":
         {"layer4": {"lr": 0.3},
          "layer3": {"0": {"conv2": {"lr": 0.001}},
                     "lr": 0.003},
-         "lr": 0.001}
+         "lr": 0.001},
+
+        {"layer4": {"lr": 0.3},
+         "layer3": {"0": {"conv2": {"lr": 0.001}},
+                    "1": {"lr": 0.003}}}
     ]
 
     for cfg in test_configs:
