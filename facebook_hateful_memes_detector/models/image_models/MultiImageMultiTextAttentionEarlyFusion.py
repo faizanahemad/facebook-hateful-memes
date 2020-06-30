@@ -89,16 +89,19 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                                 "ssd", "faster_rcnn", "lxmert_faster_rcnn", "caption_features"}
 
         assert type(text_models) == list
-        tx_models, tx_names = [], []
+        tx_models, tx_names, tx_methods = [], [], []
         for i, tm in enumerate(text_models):
             assert type(tm) == dict
             text_model_class, text_model_params, text_in_channels, text_in_tokens = tm["cls"], tm["params"], tm["in_channels"], tm["in_tokens"]
+            text_fwd = tm["forward"] if "forward" in tm else "__call__"
             text_model = text_model_class(**text_model_params)
             tx_models.append(text_model)
             tx_names.append("tx_" + str(i))
+            tx_methods.append(text_fwd)
 
         self.tx_models = nn.ModuleDict(dict(zip(tx_names, tx_models)))
         self.text_models = dict(zip(tx_names, text_models))
+        self.tx_methods = dict(zip(tx_names, tx_methods))
 
         ensemble_conf = {k: dict(is2d=len(v) == 3, n_tokens_in=(v[-1] * v[-1]) if len(v) == 3 else v[-1], n_channels_in=v[0]) for k, v in self.im_shapes.items()}
         text_ensemble_conf = {k: dict(is2d=False, n_tokens_in=v["in_tokens"], n_channels_in=v["in_channels"]) for k, v in
@@ -119,7 +122,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
 
         vectors = dict()
         for k, m in self.tx_models.items():
-            _, _, text_repr, _ = m(sampleList)
+            _, _, text_repr, _ = getattr(m, self.tx_methods[k])(sampleList)
             vectors[k] = text_repr.to(get_device())
             clean_memory()
 

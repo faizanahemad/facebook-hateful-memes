@@ -25,7 +25,7 @@ from nltk.chunk import ne_chunk
 import spacy
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
-    get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract, get_device
+    get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract, get_device, clean_memory
 from ...utils import get_universal_deps_indices, has_digits
 from ..external import get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
@@ -483,14 +483,17 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         if "spacy" in self.capabilities:
             r, spt = self.get_spacy_nlp_vectors(texts)
             results.append(r)
+            clean_memory()
         if "key_phrases" in self.capabilities and "spacy" in self.capabilities:
             r = self.get_keyphrases(texts, spt)
             results.append(r)
+            clean_memory()
         for c in self.capabilities:
             if c == "spacy" or c == "key_phrases":
                 continue
             r = cap_method[c](texts)
             results.append(r)
+            clean_memory()
 
         result = torch.cat(results, 2)
         result = result.to(get_device())

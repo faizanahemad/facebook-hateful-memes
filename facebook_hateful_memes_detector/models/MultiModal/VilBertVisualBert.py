@@ -30,7 +30,9 @@ class VilBertVisualBertModel(nn.Module):
                  featurizer, final_layer_builder,
                  n_tokens_out, n_layers,
                  task,
-                 finetune=False,
+                 finetune_vilbert=False,
+                 finetune_lxmert=False,
+                 finetune_visual_bert=False,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
         self.task = task
@@ -66,19 +68,15 @@ class VilBertVisualBertModel(nn.Module):
         if "lxmert" in model_name:
             self.get_lxmert_details = get_image_info_fn(enable_encoder_feats=False, device=get_device())["get_lxmert_details"]
 
-        if not finetune:
-            if hasattr(self, 'model'):
-                for p in self.model.parameters():
-                    p.requires_grad = False
-            if hasattr(self, 'vilbert'):
-                for p in self.vilbert.parameters():
-                    p.requires_grad = False
-            if hasattr(self, 'visual_bert'):
-                for p in self.visual_bert.parameters():
-                    p.requires_grad = False
-            if hasattr(self, 'lxmert'):
-                for p in self.lxmert.parameters():
-                    p.requires_grad = False
+        if hasattr(self, 'vilbert'):
+            for p in self.vilbert.parameters():
+                p.requires_grad = finetune_vilbert
+        if hasattr(self, 'visual_bert'):
+            for p in self.visual_bert.parameters():
+                p.requires_grad = finetune_visual_bert
+        if hasattr(self, 'lxmert'):
+            for p in self.lxmert.parameters():
+                p.requires_grad = finetune_lxmert
 
         if featurizer == "transformer":
             self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
@@ -103,18 +101,11 @@ class VilBertVisualBertModel(nn.Module):
                 ll = nn.LayerNorm(pooled_dims)
                 self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, lin)
             else:
-                assert finetune
+                assert (finetune_visual_bert or finetune_vilbert)
             self.loss = get_loss_by_task(task)
         else:
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 
-
-        # ensemble_conf = text_ensemble_conf
-        # self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
-        #                                                 n_layers, gaussian_noise, dropout)
-        #
-
-        self.finetune = finetune
 
     def get_tokens(self, texts):
         keys = ["input_ids", "input_mask", "segment_ids"]
