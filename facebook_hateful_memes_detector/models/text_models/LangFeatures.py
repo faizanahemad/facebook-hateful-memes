@@ -261,32 +261,41 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         nltk_texts = [word_tokenize(text) for text in texts]
         textblob_sentiments = [[sentiment.polarity, sentiment.subjectivity] for sentiment in [TextBlob(text).sentiment for text in texts]]
         textblob_sentiments = torch.tensor(textblob_sentiments).unsqueeze(1).expand(len(texts), n_tokens_in, 2)
+        textblob_sentiments = textblob_sentiments.to(get_device())
 
         mask = stack_and_pad_tensors(list(map(lambda x: torch.ones(len(x), dtype=int), nltk_texts)), n_tokens_in)
+        mask = mask.to(get_device())
         mask = self.is_mask_em(mask)
         has_digit = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([has_digits(str(t)) for t in x]), nltk_texts)), n_tokens_in)
+        has_digit = has_digit.to(get_device())
         has_digit = self.has_digit_em(has_digit)
 
         m = self.text_model
         nltk_emb = stack_and_pad_tensors([torch.tensor([m[t] for t in sent]) for sent in nltk_texts], n_tokens_in) # if t in m else np.zeros(m.vector_size)
+        nltk_emb = nltk_emb.to(get_device())
         sid_vec = torch.tensor([list(sid.polarity_scores(t).values()) for t in texts])
         sid_vec = sid_vec.unsqueeze(1).expand(len(texts), n_tokens_in, sid_vec.size(1))
+        sid_vec = sid_vec.to(get_device())
         vsid_vec = torch.tensor([list(vsid.polarity_scores(t).values()) for t in texts])
         vsid_vec = vsid_vec.unsqueeze(1).expand(len(texts), n_tokens_in, vsid_vec.size(1))
+        vsid_vec = vsid_vec.to(get_device())
         conlltags = [[ptags for ptags in nltk.tree2conlltags(ne_chunk(pos_tag(x)))] for x in nltk_texts]
 
         pos = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[tag.lower()] for token, tag, ne in x]), conlltags)), n_tokens_in)
+        pos = pos.to(get_device())
         pos_emb = self.tag_em(pos)
         ner = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[ne.lower().split("-")[-1]] for token, tag, ne in x]), conlltags)), n_tokens_in)
+        ner = ner.to(get_device())
         ner_emb = self.tag_em(ner)
 
         phrases = [get_rake_nltk_phrases(rake, t) for t in texts]
 
         key_wc_rake_nltk = [get_rake_nltk_wc(tokens, phr) for tokens, phr in zip(nltk_texts, phrases)]
         key_wc_rake_nltk = stack_and_pad_tensors(key_wc_rake_nltk, self.n_tokens_in)
+        key_wc_rake_nltk = key_wc_rake_nltk.to(get_device())
         nltk_rake_vectors = self.key_wc_rake_nltk(key_wc_rake_nltk)
 
         result = torch.cat([vsid_vec, nltk_emb, textblob_sentiments, pos_emb, ner_emb, nltk_rake_vectors, sid_vec, mask, has_digit], 2)
@@ -349,46 +358,60 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             text_tensors = list(map(lambda x: torch.tensor(x.tensor), spacy_texts))
             text_tensors = stack_and_pad_tensors(text_tensors, n_tokens_in)
             head_tensors = stack_and_pad_tensors(list(map(lambda x: torch.tensor([t.head.tensor for t in x]), spacy_texts)), n_tokens_in)
+            text_tensors = text_tensors.to(get_device())
+            head_tensors = head_tensors.to(get_device())
         wl = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([len(token) - 1 for token in x]).clamp(0, 15), spacy_texts)), n_tokens_in)
+        wl = wl.to(get_device())
         wl_emb = self.w_len(wl)
         wc = (torch.tensor(list(map(len, spacy_texts))) / 10).long().unsqueeze(1).expand(len(texts), n_tokens_in)
+        wc = wc.to(get_device())
         wc_emb = self.wc_emb(wc)
 
         mask = stack_and_pad_tensors(list(map(lambda x: torch.ones(len(x), dtype=int), spacy_texts)), n_tokens_in)
+        mask = mask.to(get_device())
         mask = self.is_mask_em(mask)
         has_digit = stack_and_pad_tensors(list(map(lambda x: torch.tensor([has_digits(str(t)) for t in x]), spacy_texts)), n_tokens_in)
+        has_digit = has_digit.to(get_device())
         has_digit = self.has_digit_em(has_digit)
 
         pos = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[token.pos_.lower()] for token in x]), spacy_texts)), n_tokens_in)
+        pos = pos.to(get_device())
         pos_emb = self.tag_em(pos)
         tag = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[token.tag_.lower()] for token in x]), spacy_texts)), n_tokens_in)
+        tag = tag.to(get_device())
         tag_emb = self.tag_em(tag)
         dep = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[token.dep_.lower()] for token in x]), spacy_texts)), n_tokens_in)
+        dep = dep.to(get_device())
         dep_emb = self.tag_em(dep)
         sw = stack_and_pad_tensors(list(map(lambda x: torch.tensor([int(token.is_stop) for token in x]), spacy_texts)),
                                    n_tokens_in)
+        sw = sw.to(get_device())
         sw_emb = self.sw_em(sw)
         ner = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([pdict[token.ent_type_.lower()] for token in x]), spacy_texts)), n_tokens_in)
+        ner = ner.to(get_device())
         ner_emb = self.tag_em(ner)
 
         is_oov = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([int(token.is_oov) for token in x]), spacy_texts)),
             n_tokens_in)
+        is_oov = is_oov.to(get_device())
         is_oov_em = self.is_oov_em(is_oov)
 
         sent_start = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([int(token.sent_start) for token in x]), spacy_texts)),
             n_tokens_in)
+        sent_start = sent_start.to(get_device())
         sent_start_em = self.sent_start_em(sent_start)
 
         head_dist = stack_and_pad_tensors(
             list(map(lambda x: torch.tensor([float(token.idx - token.head.idx) for token in x]), spacy_texts)),
             n_tokens_in)
+        head_dist = head_dist.to(get_device())
         head_dist = head_dist.unsqueeze(2).expand(len(texts), n_tokens_in, 2)
 
         result = torch.cat(
@@ -420,10 +443,11 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         key_wc_pytextrank = stack_and_pad_tensors(key_wc_pytextrank, self.n_tokens_in)
         key_occ_cnt_pytextrank = stack_and_pad_tensors(key_occ_cnt_pytextrank, self.n_tokens_in)
         pytextrank_vectors = torch.cat((self.key_wc_pytextrank(key_wc_pytextrank), self.key_occ_cnt_pytextrank(key_occ_cnt_pytextrank)), 2)  # 16
-
+        pytextrank_vectors = pytextrank_vectors.to(get_device())
         yake_ke = self.kw_extractor
         yake_embs = [[tm.get_sentence_vector(s) for s in map(itemgetter(0), yake_ke.extract_keywords(t))] if has_words(t) else [np.zeros(300)] for t in texts]
         yake_embs = torch.tensor([np.average(yk, axis=0, weights=softmax(list(range(len(yk), 0, -1)))).astype(np.float32) if len(yk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for yk in yake_embs])
+        yake_embs = yake_embs.to(get_device())
         yake_embs = self.yake_nn(yake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.yake_dims)
 
         if self.rake is not None:
@@ -432,6 +456,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                          t in texts]
             rake_embs = torch.tensor(
                 [np.average(rk, axis=0, weights=softmax(list(range(len(rk), 0, -1)))).astype(np.float32) if len(rk) > 0 else np.zeros(tm.get_dimension(), dtype=np.float32) for rk in rake_embs])
+            rake_embs = rake_embs.to(get_device())
             rake_embs = self.rake_nn(rake_embs).unsqueeze(1).expand(len(texts), self.n_tokens_in, self.rake_dims)
             result = torch.cat([pytextrank_vectors, yake_embs, rake_embs], 2)
         else:
