@@ -122,7 +122,8 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
 
         vectors = dict()
         for k, m in self.tx_models.items():
-            _, _, text_repr, _ = getattr(m, self.tx_methods[k])(sampleList if self.tx_methods[k]=="__call__" else sampleList.text)
+            r = getattr(m, self.tx_methods[k])(sampleList if self.tx_methods[k]=="__call__" else sampleList.text)
+            text_repr = r[2] if self.tx_methods[k] == "__call__" else r
             vectors[k] = text_repr.to(get_device())
             clean_memory()
 
