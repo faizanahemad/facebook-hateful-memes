@@ -4,7 +4,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer
+from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
 from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
@@ -43,6 +43,10 @@ class AlbertClassifer(Fasttext1DCNNModel):
                 self.featurizer = BasicFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                   classifier_dims,
                                                   internal_dims, n_layers, gaussian_noise, dropout)
+            elif featurizer == "transformer":
+                self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
+                                                        classifier_dims,
+                                                        internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 

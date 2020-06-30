@@ -28,7 +28,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_
     get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract, get_device
 from ...utils import get_universal_deps_indices, has_digits
 from ..external import get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
-from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer
+from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
 from .Fasttext1DCNN import Fasttext1DCNNModel
 import pytextrank
 import gensim.downloader as api
@@ -199,6 +199,11 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                 self.featurizer = BasicFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                   classifier_dims,
                                                   internal_dims, n_layers, gaussian_noise, dropout)
+
+            elif featurizer == "transformer":
+                self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
+                                                        classifier_dims,
+                                                        internal_dims, n_layers, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 
