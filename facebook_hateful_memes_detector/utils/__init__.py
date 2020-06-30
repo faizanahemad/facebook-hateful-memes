@@ -593,6 +593,29 @@ class AveragedLinearHead(CNNHead):
         self.classifier = nn.Sequential(dp, Average(1), lin0, nn.LeakyReLU(), ll, lin)
 
 
+class LinearHead(CNNHead):
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 task, loss=None, ):
+        """
+        Expected input in format (Batch, Seq, Embedding_dims)
+        :param n_dims: Embedding_dims
+        :param n_tokens: Sequence Length
+        :param n_out:
+        :param dropout:
+        :param task:
+        :param loss:
+        """
+        super().__init__(n_dims, n_tokens, n_out, dropout,
+                         task, loss)
+        lin0 = nn.Linear(n_dims, n_dims)
+        init_fc(lin0, "leaky_relu")
+        lin = nn.Linear(n_dims, n_out)
+        init_fc(lin, "linear")
+        dp = nn.Dropout(dropout)
+        ll = nn.LayerNorm(n_dims)
+        self.classifier = nn.Sequential(ll, dp, lin0, nn.LeakyReLU(), lin)
+
+
 class PositionExtract(nn.Module):
     def __init__(self, pos):
         super().__init__()

@@ -85,7 +85,7 @@ class VilBertVisualBertModel(nn.Module):
         elif featurizer == "pass":
             assert n_tokens_in == n_tokens_out
             assert embedding_dims == classifier_dims
-            assert ("vilbert" in model_name or "visual_bert" in model_name) and "lxmert" not in model_name
+            assert ("vilbert" in model_name or "visual_bert" in model_name)
         else:
             raise NotImplementedError()
 
@@ -99,7 +99,7 @@ class VilBertVisualBertModel(nn.Module):
                 init_fc(lin, "linear")
                 dp = nn.Dropout(dropout)
                 ll = nn.LayerNorm(pooled_dims)
-                self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, lin)
+                self.final_layer = nn.Sequential(ll, dp, lin0, nn.LeakyReLU(), lin)
             else:
                 assert (finetune_visual_bert or finetune_vilbert)
             self.loss = get_loss_by_task(task)
@@ -319,14 +319,12 @@ class VilBertVisualBertModel(nn.Module):
         output_dict["logits"] = logits
         return output_dict
 
-
     def visual_bert_forward(self, sl: SampleList):
         params = self.__visual_bert_preprocessing__(sl)
         del sl
         clean_memory()
         out = self.visual_bert_processor(params)
         return out
-
 
     def lxmert_forward(self, orig_image, textSampleList):
         lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
@@ -401,6 +399,8 @@ class VilBertVisualBertModel(nn.Module):
             num_labels_pretrained = self.visual_bert.config.num_labels
         elif hasattr(self, "vilbert"):
             num_labels_pretrained = self.vilbert.config.num_labels
+
+        num_labels_pretrained = -1 if hasattr(self, "lxmert") else num_labels_pretrained
 
         if self.featurizer_type == "pass":
             if num_labels_pretrained != self.num_classes:
