@@ -364,6 +364,7 @@ class VilBertVisualBertModel(nn.Module):
         logits = None
         if "vilbert" in self.model_name or "visual_bert" in self.model_name:
             sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
+            logit = []
             if "vilbert" in self.model_name:
                 out = self.vilbert_processor(sl)
                 if self.featurizer_type != "pass":
@@ -372,20 +373,19 @@ class VilBertVisualBertModel(nn.Module):
                     out["sequence_output_v"] = out["sequence_output_v"][:, :, :out["sequence_output_t"].size(-1)]
                 sequence_output.append(torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1))
                 pooled_output.append(out["pooled_output"])
-                logits = torch.softmax(out["logits"], dim=1)
+                logit.append(out["logits"])
                 del out
                 clean_memory()
 
             if "visual_bert" in self.model_name:
                 out = self.visual_bert_forward(sl)
-                seq, logit, pool = out["sequence_output"], out["logits"], out["pooled_output"]
+                seq, pool = out["sequence_output"], out["pooled_output"]
+                logit.append(out["logits"])
                 del out
                 sequence_output.append(seq)
                 pooled_output.append(pool)
-                if logits is None:
-                    logits = torch.softmax(logit, dim=1)
-                else:
-                    logits = (torch.softmax(logit, dim=1) + logits) / 2
+
+            logits = torch.softmax(torch.stack(logit).mean(0), dim=1)
 
 
             del sl
