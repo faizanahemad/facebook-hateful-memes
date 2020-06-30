@@ -442,6 +442,8 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         key_wc_pytextrank, key_occ_cnt_pytextrank = zip(*results)
         key_wc_pytextrank = stack_and_pad_tensors(key_wc_pytextrank, self.n_tokens_in)
         key_occ_cnt_pytextrank = stack_and_pad_tensors(key_occ_cnt_pytextrank, self.n_tokens_in)
+        key_occ_cnt_pytextrank = key_occ_cnt_pytextrank.to(get_device())
+        key_wc_pytextrank = key_wc_pytextrank.to(get_device())
         pytextrank_vectors = torch.cat((self.key_wc_pytextrank(key_wc_pytextrank), self.key_occ_cnt_pytextrank(key_occ_cnt_pytextrank)), 2)  # 16
         pytextrank_vectors = pytextrank_vectors.to(get_device())
         yake_ke = self.kw_extractor
