@@ -46,6 +46,8 @@ class AlbertClassifer(Fasttext1DCNNModel):
             else:
                 raise NotImplementedError()
 
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
         n_tokens_in = self.n_tokens_in

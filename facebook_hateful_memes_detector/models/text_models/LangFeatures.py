@@ -202,6 +202,8 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             else:
                 raise NotImplementedError()
 
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+
     def get_one_crawl_sentence_vector(self, tm, sentence):
         tokens = word_tokenize(sentence)
         if isinstance(tm, fasttext.FastText._FastText):
