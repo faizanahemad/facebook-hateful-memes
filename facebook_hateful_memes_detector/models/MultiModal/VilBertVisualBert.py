@@ -385,7 +385,8 @@ class VilBertVisualBertModel(nn.Module):
                 sequence_output.append(seq)
                 pooled_output.append(pool)
 
-            logits = torch.softmax(torch.stack(logit).mean(0), dim=1)
+            if self.featurizer_type == "pass":
+                logits = torch.softmax(torch.stack(logit).mean(0), dim=1)
 
 
             del sl
@@ -404,8 +405,14 @@ class VilBertVisualBertModel(nn.Module):
         clean_memory()
         # GPUtil.showUtilization()
 
+        num_labels_pretrained = -1
+        if hasattr(self, "visual_bert"):
+            num_labels_pretrained = self.visual_bert.config.num_labels
+        elif hasattr(self, "vilbert"):
+            num_labels_pretrained = self.vilbert.config.num_labels
+
         if self.featurizer_type == "pass":
-            if self.model.config.num_labels != self.num_classes:
+            if num_labels_pretrained != self.num_classes:
                 logits = self.final_layer(pooled_output)
             logits, loss = loss_calculator(logits, labels, self.task, self.loss)
         else:
