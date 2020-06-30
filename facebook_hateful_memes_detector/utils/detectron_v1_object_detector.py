@@ -17,6 +17,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 from io import BytesIO
 from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, set_global, get_global
+from torch.cuda.amp import autocast
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
@@ -119,10 +120,15 @@ class LXMERTFeatureExtractor:
             # Generate proposals with RPN
             proposals, _ = predictor.model.proposal_generator(images, features, None)
             proposal = proposals[0]
-
-            # Run RoI head for each proposal (RoI Pooling + Res5)
             proposal_boxes = [x.proposal_boxes for x in proposals]
             features = [features[f] for f in predictor.model.roi_heads.in_features]
+            if "cuda" in str(get_device()):
+                # Half precision casting for fp16
+                for box in proposal_boxes:
+                    box.tensor = box.tensor.type(torch.cuda.HalfTensor)
+                features = [f.type(torch.cuda.HalfTensor) for f in features]
+                # Run RoI head for each proposal (RoI Pooling + Res5)
+
             box_features = predictor.model.roi_heads._shared_roi_transform(
                 features, proposal_boxes
             )
@@ -301,82 +307,11 @@ class FeatureExtractor:
         current_img_list = to_image_list(img_tensor, size_divisible=32)
         current_img_list = current_img_list.to(self.device)
         with torch.no_grad():
-            output = self.detection_model(current_img_list)
+            with autocast(enabled=False):
+                output = self.detection_model(current_img_list)
         feat_list, info_list = self._process_feature_extraction_v2(output, im_scales, [im_info], 'fc6')
         return feat_list[0], info_list[0]
         # return {"image_feature": feat_list[0], "image_info": info_list[0]}
-
-    def _process_feature_extraction_lxmert(
-            self, output, im_scales, im_infos, feature_name="fc6", conf_thresh=0.2
-    ):
-        from maskrcnn_benchmark.layers import nms
-        num_features = 36
-        batch_size = len(output[0]["proposals"])
-        n_boxes_per_image = [len(boxes) for boxes in output[0]["proposals"]]
-        score_list = output[0]["scores"].split(n_boxes_per_image)
-        score_list = [torch.nn.functional.softmax(x, -1) for x in score_list]
-        feats = output[0][feature_name].split(n_boxes_per_image)
-        cur_device = score_list[0].device
-
-        feat_list = []
-        info_list = []
-
-        for i in range(batch_size):
-            dets = output[0]["proposals"][i].bbox / im_scales[i]
-            scores = score_list[i]
-            max_conf = torch.zeros((scores.shape[0])).to(cur_device)
-            conf_thresh_tensor = torch.full_like(max_conf, conf_thresh)
-            start_index = 1
-            # Column 0 of the scores matrix is for the background class
-            for cls_ind in range(start_index, scores.shape[1]):
-                cls_scores = scores[:, cls_ind]
-                keep = nms(dets, cls_scores, 0.6)
-                max_conf[keep] = torch.where(
-                    # Better than max one till now and minimally greater than conf_thresh
-                    (cls_scores[keep] > max_conf[keep])
-                    & (cls_scores[keep] > conf_thresh_tensor[keep])
-                    , cls_scores[keep],
-                    max_conf[keep],
-                )
-
-            sorted_scores, sorted_indices = torch.sort(max_conf, descending=True)
-            num_boxes = (sorted_scores[: num_features] != 0).sum()
-            keep_boxes = sorted_indices[: num_features]
-            feat_list.append(feats[i][keep_boxes])
-            bbox = output[0]["proposals"][i][keep_boxes].bbox / im_scales[i]
-            # Predict the class label using the scores
-            objects = torch.argmax(scores[keep_boxes][start_index:], dim=1)
-            cls_prob = torch.max(scores[keep_boxes][start_index:], dim=1)
-
-            info_list.append(
-                {
-                    "bbox": bbox.cpu().numpy(),
-                    "boxes": bbox.cpu().numpy(),
-                    "num_boxes": num_boxes.item(),
-                    "objects": objects.cpu().numpy(),
-                    "image_width": im_infos[i]["width"],
-                    "image_height": im_infos[i]["height"],
-                    "image_h": im_infos[i]["height"],
-                    "image_w": im_infos[i]["width"],
-                    "cls_prob": scores[keep_boxes].cpu().numpy(),
-                    "max_features": num_boxes.item(),
-                }
-            )
-
-        return feat_list, info_list
-
-
-    def get_lxmert_features(self, image_path):
-        from maskrcnn_benchmark.structures.image_list import to_image_list
-        _ = gc.collect()
-        im, im_scale, im_info = self._image_transform(image_path) # try lxmert image transform
-        img_tensor, im_scales = [im], [im_scale]
-        current_img_list = to_image_list(img_tensor, size_divisible=32)
-        current_img_list = current_img_list.to(self.device)
-        with torch.no_grad():
-            output = self.detection_model(current_img_list)
-        feat_list, info_list = self._process_feature_extraction_lxmert(output, im_scales, [im_info], 'fc6')
-        return feat_list[0], info_list[0]
 
 
 class ImageCaptionFeatures:

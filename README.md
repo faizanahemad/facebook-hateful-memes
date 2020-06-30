@@ -14,12 +14,11 @@ mv *.png img
 
 ```bash
 conda install -y -c anaconda openjdk
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict transformers contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict transformers contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance lmdb fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git'
 
 pip install torch torchvision # pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html 
 pip install fasttext
 
-pip install git+https://github.com/myint/language-check.git 
 python -m spacy download en_core_web_sm
 python -m spacy download en_core_web_md
 python -m spacy download en_core_web_lg
@@ -27,27 +26,16 @@ python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.down
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install --no-deps -e . && python scripts/download_weights.py
 # edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
 # look at: https://github.com/huggingface/torchMoji/blob/master/examples/score_texts_emojis.py
-pip install git+https://github.com/LIAAD/yake
 
 # Requires GLIBC 2.18
 CFLAGS="-Wno-narrowing" pip install cld2-cffi
 pip install multi-rake
 
-pip install lmdb
-pip install fastBPE regex requests sacremoses subword_nmt mosestokenizer
 # wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"
-pip install git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git
-pip install git+https://github.com/ruotianluo/meshed-memory-transformer.git
-pip install fcache
-pip install diskcache
-pip install "pytorch-pretrained-bert>=0.6.1"
 git clone https://github.com/facebookresearch/mmf.git && cd mmf && pip install --no-dependencies --editable .
 cd ..
-pip install gpustat gputil
-pip install gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git
-git clone https://gitlab.com/vedanuj/vqa-maskrcnn-benchmark.git && cd vqa-maskrcnn-benchmark && python setup.py build && python setup.py develop
+git clone https://gitlab.com/vedanuj/vqa-maskrcnn-benchmark.git && cd vqa-maskrcnn-benchmark && python setup.py clean && python setup.py build && python setup.py develop
 cd ~
-pip install 'git+https://github.com/faizanahemad/detectron2.git'
 # MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
 
 

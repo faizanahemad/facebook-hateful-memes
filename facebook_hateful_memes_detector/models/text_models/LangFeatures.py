@@ -364,7 +364,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             list(map(lambda x: torch.tensor([len(token) - 1 for token in x]).clamp(0, 15), spacy_texts)), n_tokens_in)
         wl = wl.to(get_device())
         wl_emb = self.w_len(wl)
-        wc = (torch.tensor(list(map(len, spacy_texts))) / 10).long().unsqueeze(1).expand(len(texts), n_tokens_in)
+        wc = (torch.tensor(list(map(len, spacy_texts))) // 10).long().unsqueeze(1).expand(len(texts), n_tokens_in)
         wc = wc.to(get_device())
         wc_emb = self.wc_emb(wc)
 
