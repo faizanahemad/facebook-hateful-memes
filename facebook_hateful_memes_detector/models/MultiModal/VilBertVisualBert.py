@@ -56,8 +56,6 @@ class VilBertVisualBertModel(nn.Module):
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
 
-        if len(model_name) > 1:
-            assert featurizer == "transformer"
 
         if len(set(model_name) - {"vilbert", "visual_bert", "lxmert"}) > 0:
             raise NotImplementedError()
