@@ -35,7 +35,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
         if not use_as_super:
             if featurizer == "cnn":
                 self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
-                                                  classifier_dims, internal_dims, None, gaussian_noise, dropout)
+                                                  classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
             elif featurizer == "gru":
                 self.featurizer = GRUFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims,
                                                 internal_dims, n_layers, gaussian_noise, dropout)

@@ -192,7 +192,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                                           use_layer_norm=True, unit_norm=False, groups=(4, 4))
         if not use_as_super:
             if featurizer == "cnn":
-                self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, None, gaussian_noise, dropout)
+                self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
             elif featurizer == "gru":
                 self.featurizer = GRUFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
             elif featurizer == "basic":
