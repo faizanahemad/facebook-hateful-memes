@@ -44,9 +44,6 @@ class VilBertVisualBertModel(nn.Module):
         if "vilbert" in model_name:
             self.vilbert = get_vilbert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
-            vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
-            init_fc(vilbert_seq_v_conv, "leaky_relu")
-            self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
         if "visual_bert" in model_name:
             self.visual_bert = get_visual_bert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
@@ -89,15 +86,21 @@ class VilBertVisualBertModel(nn.Module):
 
         self.featurizer_type = featurizer
         if self.featurizer_type == "pass":
+            if "vilbert" in model_name:
+                vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
+                init_fc(vilbert_seq_v_conv, "leaky_relu")
+                self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
             self.num_classes = num_classes
             if self.num_classes != 2 or "lxmert" in model_name or len(model_name) > 1:
-                lin0 = nn.Linear(pooled_dims, pooled_dims)
+                lin0 = nn.Linear(pooled_dims, pooled_dims * 2)
                 init_fc(lin0, "leaky_relu")
-                lin = nn.Linear(pooled_dims, num_classes)
+                lin1 = nn.Linear(pooled_dims * 2, 512)
+                init_fc(lin1, "leaky_relu")
+                lin = nn.Linear(512, num_classes)
                 init_fc(lin, "linear")
                 dp = nn.Dropout(dropout)
                 ll = nn.LayerNorm(pooled_dims)
-                self.final_layer = nn.Sequential(ll, dp, lin0, nn.LeakyReLU(), lin)
+                self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), lin)
             else:
                 assert (finetune_visual_bert or finetune_vilbert)
             self.loss = get_loss_by_task(task)
