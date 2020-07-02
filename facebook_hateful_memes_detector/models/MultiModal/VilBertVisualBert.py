@@ -99,7 +99,7 @@ class VilBertVisualBertModel(nn.Module):
                 lin = nn.Linear(512, num_classes)
                 init_fc(lin, "linear")
                 dp = nn.Dropout(dropout)
-                ll = nn.LayerNorm(pooled_dims)
+                ll = nn.LayerNorm(pooled_dims * 2)
                 self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), lin)
             else:
                 assert (finetune_visual_bert or finetune_vilbert)
