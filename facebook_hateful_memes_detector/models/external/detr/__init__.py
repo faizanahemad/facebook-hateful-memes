@@ -379,7 +379,7 @@ def get_detr_model(device: torch.device, model_name: str, decoder_layer=-2, im_s
 
     def batch_detr_fn(images: List):
         results = [detr_fn(i) for i in images]
-        return torch.stack(results)
+        return torch.cat(results, 0)
 
     return {"model": model, "detr_fn": detr_fn, "batch_detr_fn": batch_detr_fn}
 
