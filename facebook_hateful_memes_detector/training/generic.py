@@ -146,7 +146,8 @@ def generate_predictions(model, batch_size, dataset):
         clean_memory()
         for batch in test_loader:
             clean_memory()
-            logits, _, _, _ = model(batch)
+            with autocast():
+                logits, _, _, _ = model(batch)
             labels = batch["label"]
             labels_list.extend(labels)
             logits = logits.cpu().detach()
@@ -264,7 +265,7 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           augmentation_weights: Dict[str, float],
                           multi_eval=False, kfold=False, scheduler_init_fn=None,
-                          random_state=None, validation_epochs=None):
+                          random_state=None, validation_epochs=None, show_model_stats=False):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
     if in_notebook():
@@ -274,7 +275,6 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     results_list = []
     prfs_list = []
     index = ["map", "accuracy", "auc"]
-    model_stats_shown = False
 
     for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data, augmentation_weights,
                                                                                                                                     multi_eval=multi_eval,
@@ -282,15 +282,15 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         model, optimizer = model_fn(dataset=training_fold_dataset)
         model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
         params = sum([np.prod(p.size()) for p in model_parameters])
-        if not model_stats_shown:
-            print("Model Params = %s" % (params), "\n", model)
-            model_stats_shown = True
+        if show_model_stats:
+            print("Trainable Params = %s" % (params), "\n", model)
+            show_model_stats = not show_model_stats
         validation_strategy = dict(validation_epochs=validation_epochs,
                                    train=dict(method=validate, args=[model, batch_size, training_test_dataset, train_df]),
                                    val=dict(method=validate, args=[model, batch_size, testing_fold_dataset, test_df]))
         validation_strategy = validation_strategy if validation_epochs is not None else None
         train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset,
-                                             validation_strategy)
+                                             validation_strategy, plot=not kfold,)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)
         train_scores, prfs_train = validate(model, batch_size, training_test_dataset, train_df)
