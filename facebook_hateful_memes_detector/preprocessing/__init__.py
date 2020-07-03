@@ -499,6 +499,35 @@ def my_collate(batch):
     return sample_list
 
 
+def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None, train_image_transform=None,
+                 train_torchvision_image_transform=None, test_torchvision_image_transform=None,
+                 test_text_transform=None, test_image_transform=None,
+                 cache_images: bool = True, use_images: bool = True, dev: bool = False,
+                 keep_original_text: bool = False, keep_original_image: bool = False,
+                 keep_processed_image: bool = False, keep_torchvision_image: bool = False):
+    from functools import partial
+    use_dev = dev
+    joiner = partial(os.path.join, image_dir)
+    train = pd.read_csv(train_file)
+    test = pd.read_csv(test_file)
+    dev = train.sample(frac=0.1)
+
+    dev["img"] = list(map(joiner, dev.img))
+    train["img"] = list(map(joiner, train.img))
+    test["img"] = list(map(joiner, test.img))
+
+    rd = dict(train=train, test=test, dev=dev,
+              metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev,
+                            keep_original_text=keep_original_text, keep_original_image=keep_original_image,
+                            keep_processed_image=keep_processed_image, keep_torchvision_image=keep_torchvision_image,
+                            train_text_transform=train_text_transform, train_image_transform=train_image_transform,
+                            train_torchvision_image_transform=train_torchvision_image_transform,
+                            test_torchvision_image_transform=test_torchvision_image_transform,
+                            test_text_transform=test_text_transform, test_image_transform=test_image_transform,
+                            augmented_data=False))
+    return rd
+
+
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
                  train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                  test_text_transform=None, test_image_transform=None,

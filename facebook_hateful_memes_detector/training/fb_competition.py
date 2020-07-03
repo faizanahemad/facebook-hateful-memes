@@ -78,4 +78,24 @@ def predict(model, datadict, batch_size, augmentation_weights: Dict[str, float],
     return sf, model
 
 
+def predict_generic(model, datadict, batch_size):
+    metadata = datadict["metadata"]
+    test = datadict["test"]
+    test_dataset = convert_dataframe_to_dataset(test, metadata, False)
+    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset)
+    test["proba"] = proba_list
+    test["predictions_list"] = predictions_list
+    test["weighted_proba"] = test["proba"] * test["sample_weights"]
+    probas = (test.groupby(["id"])["weighted_proba"].sum() / test.groupby(["id"])["sample_weights"].sum()).reset_index()
+    probas.columns = ["id", "proba"]
+    probas["label"] = (probas["proba"] > 0.5).astype(int)
+    submission_format = datadict["submission_format"]
+    assert set(submission_format.id) == set(probas.id)
+    sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="left", on="id")
+    sf["proba"] = sf["p"]
+    sf["label"] = sf["l"]
+    sf = sf[["id", "label"]].rename(columns={"id": "ID"})
+    return sf, model
+
+
 
