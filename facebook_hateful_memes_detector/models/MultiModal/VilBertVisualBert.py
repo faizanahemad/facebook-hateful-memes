@@ -339,7 +339,6 @@ class VilBertVisualBertModel(nn.Module):
         return torch.cat(feat_seq, 1), pooled
 
     def get_vectors(self, sampleList: SampleList):
-        sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
         image = sampleList.image  # orig_image = sampleList.original_image
 
@@ -393,6 +392,7 @@ class VilBertVisualBertModel(nn.Module):
         return logits, pooled_output, sequence_output
 
     def forward(self, sampleList: SampleList):
+        sampleList = dict2sampleList(sampleList, device=get_device())
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
         # GPUtil.showUtilization()
