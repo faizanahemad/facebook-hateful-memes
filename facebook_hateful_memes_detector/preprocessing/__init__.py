@@ -209,8 +209,6 @@ class ImageAugment:
         self.augs = list(augs_dict.keys())
         choices_arr = np.array([choice_probas[c] if c in choice_probas else 0.0 for c in self.augs])
         self.choice_probas = choices_arr / np.linalg.norm(choices_arr, ord=1)
-
-        self.choice_probas = choice_probas
         self.augments = augs_dict
 
     def __call__(self, image):
