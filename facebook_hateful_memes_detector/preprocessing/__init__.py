@@ -88,6 +88,82 @@ class QuadrantCut:
         return Image.fromarray(arr)
 
 
+class DefinedColorJitter(torchvision.transforms.ColorJitter):
+    def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
+        super().__init__(brightness, contrast, saturation, hue)
+
+    @staticmethod
+    @torch.jit.unused
+    def get_params(brightness, contrast, saturation, hue):
+        """Get a randomized transform to be applied on image.
+
+        Arguments are same as that of __init__.
+
+        Returns:
+            Transform which randomly adjusts brightness, contrast and
+            saturation in a random order.
+        """
+        transforms = []
+        from torchvision.transforms import Lambda, Compose
+
+        if brightness is not None:
+            brightness_factor = random.sample(list(brightness) + [1], k=1)[0]
+            transforms.append(Lambda(lambda img: F.adjust_brightness(img, brightness_factor)))
+
+        if contrast is not None:
+            contrast_factor = random.sample(list(contrast) + [1], k=1)[0]
+            transforms.append(Lambda(lambda img: F.adjust_contrast(img, contrast_factor)))
+
+        if saturation is not None:
+            saturation_factor = random.sample(list(saturation) + [1], k=1)[0]
+            transforms.append(Lambda(lambda img: F.adjust_saturation(img, saturation_factor)))
+
+        if hue is not None:
+            hue_factor = random.sample(list(hue) + [1], k=1)[0]
+            transforms.append(Lambda(lambda img: F.adjust_hue(img, hue_factor)))
+
+        random.shuffle(transforms)
+        transform = Compose(transforms)
+
+        return transform
+
+
+class DefinedRandomPerspective(torchvision.transforms.RandomPerspective):
+    def __init__(self, distortion_scale=0.5, interpolation=Image.BICUBIC, fill=100):
+        super().__init__(distortion_scale=distortion_scale, p=1.0, interpolation=interpolation, fill=fill)
+
+    @staticmethod
+    def get_params(width, height, distortion_scale):
+        import random
+        """Get parameters for ``perspective`` for a random perspective transform.
+
+        Args:
+            width : width of the image.
+            height : height of the image.
+
+        Returns:
+            List containing [top-left, top-right, bottom-right, bottom-left] of the original image,
+            List containing [top-left, top-right, bottom-right, bottom-left] of the transformed image.
+        """
+        half_height = int(height / 2)
+        half_width = int(width / 2)
+        topleft = (random.sample((0, int(distortion_scale * half_width)), k=1)[0],
+                   random.sample((0, int(distortion_scale * half_height)), k=1)[0])
+
+        topright = (random.sample((width - int(distortion_scale * half_width) - 1, width - 1), k=1)[0],
+                    random.sample((0, int(distortion_scale * half_height)), k=1)[0]
+                    )
+        botright = (random.sample((width - int(distortion_scale * half_width) - 1, width - 1), k=1)[0],
+                    random.sample((height - int(distortion_scale * half_height) - 1, height - 1), k=1)[0]
+                    )
+        botleft = (random.sample((0, int(distortion_scale * half_width)), k=1)[0],
+                   random.sample((height - int(distortion_scale * half_height) - 1, height - 1), k=1)[0]
+                   )
+        startpoints = [(0, 0), (width - 1, 0), (width - 1, height - 1), (0, height - 1)]
+        endpoints = [topleft, topright, botright, botleft]
+        return startpoints, endpoints
+
+
 class DefinedAffine(torchvision.transforms.RandomAffine):
     def __init__(self, degrees, translate=None, scale=None, shear=None,):
         super().__init__(degrees, translate, scale, shear)
