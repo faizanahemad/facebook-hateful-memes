@@ -91,7 +91,15 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
             assert type(tm) == dict
             text_model_class, text_model_params, text_in_channels, text_in_tokens = tm["cls"], tm["params"], tm["in_channels"], tm["in_tokens"]
             text_fwd = tm["forward"] if "forward" in tm else "__call__"
+            assert text_fwd in ["__call__", "get_word_vectors"]
             text_model = text_model_class(**text_model_params)
+            if text_fwd != "__call__":
+                if hasattr(text_model, "featurizer"):
+                    text_model.featurizer = None
+                    del text_model.featurizer
+                if hasattr(text_model, "final_layer"):
+                    text_model.final_layer = None
+                    del text_model.final_layer
             tx_models.append(text_model)
             tx_names.append("tx_" + str(i))
             tx_methods.append(text_fwd)
