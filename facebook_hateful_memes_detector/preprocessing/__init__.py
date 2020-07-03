@@ -166,7 +166,7 @@ class DefinedRandomPerspective(torchvision.transforms.RandomPerspective):
 
 class DefinedAffine(torchvision.transforms.RandomAffine):
     def __init__(self, degrees, translate=None, scale=None, shear=None,):
-        super().__init__(degrees, translate, scale, shear)
+        super().__init__(degrees, translate, scale, shear, fillcolor=140)
 
     @staticmethod
     def get_params(degrees, translate, scale_ranges, shears, img_size):
