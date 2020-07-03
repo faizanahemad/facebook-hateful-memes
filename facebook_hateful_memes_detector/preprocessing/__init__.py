@@ -500,14 +500,14 @@ def my_collate(batch):
 
 
 def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None, train_image_transform=None,
-                 train_torchvision_image_transform=None, test_torchvision_image_transform=None,
-                 test_text_transform=None, test_image_transform=None,
-                 cache_images: bool = True, use_images: bool = True, dev: bool = False,
-                 keep_original_text: bool = False, keep_original_image: bool = False,
-                 keep_processed_image: bool = False, keep_torchvision_image: bool = False):
+                     train_torchvision_image_transform=None, test_torchvision_image_transform=None,
+                     test_text_transform=None, test_image_transform=None,
+                     cache_images: bool = True, use_images: bool = True, dev: bool = False,
+                     keep_original_text: bool = False, keep_original_image: bool = False,
+                     keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     from functools import partial
     use_dev = dev
-    joiner = partial(os.path.join, image_dir)
+    joiner = lambda img: os.path.join(image_dir, img) if img is not None and type(img) == str and img != "nan" else None
     train = pd.read_csv(train_file)
     test = pd.read_csv(test_file)
     dev = train.sample(frac=0.1)
