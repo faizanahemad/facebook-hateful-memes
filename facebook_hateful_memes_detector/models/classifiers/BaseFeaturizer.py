@@ -38,10 +38,10 @@ class PassThroughFeaturizer(nn.Module):
 
 
 class BasicFeaturizer(BaseFeaturizer):
-    def __init__(self, num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
+    def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
-        super(BasicFeaturizer, self).__init__(num_classes, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
+        super(BasicFeaturizer, self).__init__(n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                                               n_internal_dims, n_layers, gaussian_noise, dropout)
 
         self.features = WordChannelReducer(n_channels_in, n_channels_out, self.num_pooling)
