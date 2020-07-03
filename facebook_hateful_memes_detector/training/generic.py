@@ -110,7 +110,6 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
 
     import matplotlib.pyplot as plt
     if plot:
-        print(model)
         t = list(range(len(train_losses)))
 
         fig, ax1 = plt.subplots(figsize=(8, 8))
@@ -280,9 +279,9 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                                                                                                                                     multi_eval=multi_eval,
                                                                                                                                     random_state=random_state):
         model, optimizer = model_fn(dataset=training_fold_dataset)
-        model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
-        params = sum([np.prod(p.size()) for p in model_parameters])
         if show_model_stats:
+            model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+            params = sum([np.prod(p.size()) for p in model_parameters])
             print("Trainable Params = %s" % (params), "\n", model)
             show_model_stats = not show_model_stats
         validation_strategy = dict(validation_epochs=validation_epochs,
