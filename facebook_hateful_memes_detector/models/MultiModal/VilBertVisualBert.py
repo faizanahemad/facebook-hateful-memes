@@ -86,10 +86,6 @@ class VilBertVisualBertModel(nn.Module):
 
         self.featurizer_type = featurizer
         if self.featurizer_type == "pass":
-            if "vilbert" in model_name:
-                vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
-                init_fc(vilbert_seq_v_conv, "leaky_relu")
-                self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
             self.num_classes = num_classes
             if self.num_classes != 2 or "lxmert" in model_name or len(model_name) > 1:
                 lin0 = nn.Linear(pooled_dims, pooled_dims * 2)
@@ -106,6 +102,10 @@ class VilBertVisualBertModel(nn.Module):
             self.loss = get_loss_by_task(task)
         else:
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+            if "vilbert" in model_name:
+                vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
+                init_fc(vilbert_seq_v_conv, "leaky_relu")
+                self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
 
 
     def get_tokens(self, texts):
@@ -338,12 +338,10 @@ class VilBertVisualBertModel(nn.Module):
         clean_memory()
         return torch.cat(feat_seq, 1), pooled
 
-    def forward(self, sampleList: SampleList):
+    def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
-        image = sampleList.image # orig_image = sampleList.original_image
-        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
-        sample_weights = sampleList.sample_weight
+        image = sampleList.image  # orig_image = sampleList.original_image
 
         textSampleList = self.get_tokens(texts)
         del sampleList
@@ -378,7 +376,6 @@ class VilBertVisualBertModel(nn.Module):
             if self.featurizer_type == "pass":
                 logits = torch.softmax(torch.stack(logit).mean(0), dim=1)
 
-
             del sl
             clean_memory()
 
@@ -393,7 +390,15 @@ class VilBertVisualBertModel(nn.Module):
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
         sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
         clean_memory()
+        return logits, pooled_output, sequence_output
+
+    def forward(self, sampleList: SampleList):
+        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
+        sample_weights = sampleList.sample_weight
         # GPUtil.showUtilization()
+        logits, pooled_output, sequence_output = self.get_vectors(sampleList)
+        del sampleList
+        clean_memory()
 
         num_labels_pretrained = -1
         if hasattr(self, "visual_bert"):
