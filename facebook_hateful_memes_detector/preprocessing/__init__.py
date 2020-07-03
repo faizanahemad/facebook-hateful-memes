@@ -200,6 +200,9 @@ class ImageAugment:
         self.count_proba = count_proba
         assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
         assert len(count_proba) >= 1
+        if choice_probas == "uniform":
+            adl = len(augs_dict)
+            choice_probas = {k: 1.0/adl for k, v in augs_dict.items()}
         assert (len(count_proba) - 1) < sum([v > 0 for v in choice_probas.values()])
         choice_probas = {k: v for k, v in choice_probas.items() if v > 0}
         assert set(choice_probas.keys()).issubset(augs_dict.keys())
