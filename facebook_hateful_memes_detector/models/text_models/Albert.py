@@ -55,7 +55,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
         n_tokens_in = self.n_tokens_in
-        m = lambda x: tokenizer.encode_plus(x, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in)
+        m = lambda x: tokenizer.encode_plus(x, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
         input_ids, attention_mask = zip(*[(d['input_ids'], d['attention_mask']) for d in map(m, texts)])
         return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())
 
