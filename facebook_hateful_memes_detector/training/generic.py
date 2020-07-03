@@ -264,7 +264,8 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           augmentation_weights: Dict[str, float],
                           multi_eval=False, kfold=False, scheduler_init_fn=None,
-                          random_state=None, validation_epochs=None, show_model_stats=False):
+                          random_state=None, validation_epochs=None, show_model_stats=False,
+                          class_weights={0: 1, 1: 1.8}):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
     if in_notebook():
@@ -289,7 +290,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                                    val=dict(method=validate, args=[model, batch_size, testing_fold_dataset, test_df]))
         validation_strategy = validation_strategy if validation_epochs is not None else None
         train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset,
-                                             validation_strategy, plot=not kfold,)
+                                             validation_strategy, plot=not kfold, class_weights=class_weights)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)
         train_scores, prfs_train = validate(model, batch_size, training_test_dataset, train_df)
