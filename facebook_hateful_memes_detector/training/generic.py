@@ -150,6 +150,7 @@ def generate_predictions(model, batch_size, dataset):
     predictions_list = []
     labels_list = []
     clean_memory()
+    batch_size = batch_size + int(batch_size/2)
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                              shuffle=False, num_workers=1, pin_memory=True)
 
@@ -162,7 +163,6 @@ def generate_predictions(model, batch_size, dataset):
     with torch.no_grad():
         clean_memory()
         for batch in test_loader:
-            clean_memory()
             if use_autocast:
                 with autocast():
                     logits, _, _, _ = model(batch)
