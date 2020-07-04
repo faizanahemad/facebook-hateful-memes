@@ -195,7 +195,7 @@ def validate(model, batch_size, dataset, test_df):
     proba_list = probas["proba"].values
     predictions_list = probas["predictions_list"].values
     labels_list = probas.merge(test_df[["id", "label"]], on="id")["label"].values
-    auc = roc_auc_score(labels_list, proba_list)
+    auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
     # p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="micro")
     prfs = precision_recall_fscore_support(labels_list, predictions_list, average=None, labels=[0, 1])
     map = average_precision_score(labels_list, proba_list)
