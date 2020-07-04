@@ -1,4 +1,5 @@
 import abc
+import fasttext
 from abc import ABC
 from typing import List, Tuple, Dict, Set, Union
 import numpy as np
@@ -18,7 +19,6 @@ import csv
 import numpy as np
 
 from scipy.special import softmax
-from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 from nltk.chunk import ne_chunk
 
@@ -85,7 +85,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             gensim = [api.load("glove-twitter-50"), api.load("glove-wiki-gigaword-50"),
                       api.load("word2vec-google-news-300"), api.load("conceptnet-numberbatch-17-06-300")]
             self.gensim = gensim
-            self.gensim_nn = ExpandContract(700, cap_to_dim_map["gensim"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
+            self.gensim_nn = ExpandContract(400, cap_to_dim_map["gensim"], dropout, use_layer_norm=use_layer_norm, groups=(4, 4))
 
         if "full_view" in capabilities:
             full_sent_in_dims = 300
@@ -210,7 +210,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 
     def get_one_crawl_sentence_vector(self, tm, sentence):
-        tokens = word_tokenize(sentence)
+        tokens = fasttext.tokenize(sentence)
         if isinstance(tm, fasttext.FastText._FastText):
             result = torch.tensor([tm[t] for t in tokens])
         elif isinstance(tm, torchnlp.word_to_vector.char_n_gram.CharNGram):
@@ -239,7 +239,9 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         return torch.tensor(prob).to(get_device())
 
     def get_one_sentence_vector(self, m, text):
-        result = [m[t] if t in m else np.zeros(m.vector_size) for t in word_tokenize(text)]
+        vs = min(m.vector_size, 150)
+        zeros = np.zeros(vs)
+        result = [m[t][:150] if t in m else zeros for t in fasttext.tokenize(text)]
         return torch.tensor(result, dtype=float)
 
     def get_gensim_word_vectors(self, texts: List[str]):
@@ -248,6 +250,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         for m in self.gensim:
             r = stack_and_pad_tensors([self.get_one_sentence_vector(m, text) for text in texts], n_tokens_in)
             result.append(r)
+        result = [r.float() for r in result]
         result = torch.cat(result, 2)
         result = result.to(get_device())
         result = self.gensim_nn(result)
@@ -261,7 +264,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         pdict = self.pdict
         n_tokens_in = self.n_tokens_in
         rake = self.rake_nltk
-        nltk_texts = [word_tokenize(text) for text in texts]
+        nltk_texts = [fasttext.tokenize(text) for text in texts]
         textblob_sentiments = [[sentiment.polarity, sentiment.subjectivity] for sentiment in [TextBlob(text).sentiment for text in texts]]
         textblob_sentiments = torch.tensor(textblob_sentiments).unsqueeze(1).expand(len(texts), n_tokens_in, 2)
         textblob_sentiments = textblob_sentiments.to(get_device())
