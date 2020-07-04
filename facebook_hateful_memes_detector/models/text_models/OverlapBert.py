@@ -9,7 +9,7 @@ from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
 import torchvision.models as models
-from ...utils import get_device
+from ...utils import get_device, clean_memory
 
 
 class OverlapbertModel(Fasttext1DCNNModel):
@@ -75,12 +75,20 @@ class OverlapbertModel(Fasttext1DCNNModel):
 
     def get_word_vectors(self, texts: List[str]):
         input_ids, attention_mask, input_ids_extend, attention_mask_extend = self.tokenise(texts)
+        del texts
         if self.finetune:
             outputs = self.model(input_ids, attention_mask=attention_mask)
+            del input_ids
+            del attention_mask
+            clean_memory()
             outputs_extend = self.model(input_ids_extend, attention_mask=attention_mask_extend)
         else:
             with torch.no_grad():
                 outputs = self.model(input_ids, attention_mask=attention_mask)
+                del input_ids
+                del attention_mask
+                clean_memory()
                 outputs_extend = self.model(input_ids_extend, attention_mask=attention_mask_extend)
+        clean_memory()
         last_hidden_states = torch.cat((outputs[0], outputs_extend[0]), dim=1)
         return last_hidden_states
