@@ -28,6 +28,7 @@ class VilBertVisualBertModel(nn.Module):
                  gaussian_noise, dropout,
                  internal_dims, classifier_dims,
                  featurizer, final_layer_builder,
+                 n_tokens_in,
                  n_tokens_out, n_layers,
                  task,
                  finetune_vilbert=False,
@@ -36,7 +37,8 @@ class VilBertVisualBertModel(nn.Module):
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
         self.task = task
-        max_seq_length = 64
+        max_seq_length = n_tokens_in
+        assert max_seq_length >= 64
         self.text_processor = get_tokenizer(max_seq_length)
         n_tokens_in, pooled_dims = 0, 0
         model_name = [model_name] if type(model_name) ==  str else model_name
