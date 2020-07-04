@@ -508,9 +508,28 @@ def loss_calculator(logits, labels, task, loss_fn):
     return logits, loss
 
 
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1, gamma=2, reduce=True):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduce = reduce
+
+    def forward(self, inputs, targets):
+        BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
+        pt = torch.exp(-BCE_loss)
+        F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+
+        if self.reduce:
+            return torch.mean(F_loss)
+        else:
+            return F_loss
+
+
 def get_loss_by_task(task):
     if task == "classification":
-        loss = nn.CrossEntropyLoss()
+        # loss = nn.CrossEntropyLoss()
+        loss = FocalLoss()
     elif task == "regression":
         loss = nn.MSELoss()
     elif task == "k-classification":
