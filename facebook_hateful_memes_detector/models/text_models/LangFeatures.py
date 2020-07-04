@@ -56,12 +56,12 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         kwargs["rake_dims"] = kwargs["rake_dims"] if "rake_dims" in kwargs else 32
         kwargs["yake_dims"] = kwargs["yake_dims"] if "yake_dims" in kwargs else 32
         assert "key_phrases" not in capabilities or ("key_phrases" in capabilities and "spacy" in capabilities)
-        use_layer_norm = kwargs["use_layer_norm"] if "use_layer_norm" in kwargs else True
+        use_layer_norm = kwargs["use_layer_norm"] if "use_layer_norm" in kwargs else False
         self.capabilities = capabilities
         embedding_dim = 8
         cap_to_dim_map = {"spacy": 128, "snlp": 32,
                           "key_phrases": 64, "nltk": 192, "full_view": 64,
-                          "tmoji": 32, "ibm_max": 16, "gensim": 256, "fasttext_crawl": 192}
+                          "tmoji": 32, "ibm_max": 16, "gensim": 256, "fasttext_crawl": 256}
         cap_to_dim_map.update(capabilities2dims)
         all_dims = sum([cap_to_dim_map[c] for c in capabilities])
         self.cap_to_dim_map = cap_to_dim_map
@@ -225,11 +225,8 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         tm = self.crawl
         n_tokens_in = self.n_tokens_in
         result = stack_and_pad_tensors([self.get_one_crawl_sentence_vector(tm, text) for text in texts], n_tokens_in)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         res2 = stack_and_pad_tensors([self.get_one_crawl_sentence_vector(bpe, text) for text in texts], n_tokens_in)
-        res2 = res2 / res2.norm(dim=2, keepdim=True).clamp(min=1e-5)
         res3 = stack_and_pad_tensors([self.get_one_crawl_sentence_vector(cngram, text) for text in texts], n_tokens_in)
-        res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
         result = torch.cat([result, res2, res3], 2)
         result = result.to(get_device())
         result = self.crawl_nn(result)
@@ -251,7 +248,6 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         for m in self.gensim:
             r = stack_and_pad_tensors([self.get_one_sentence_vector(m, text) for text in texts], n_tokens_in)
             result.append(r)
-        result = [r.float() for r in result]
         result = torch.cat(result, 2)
         result = result.to(get_device())
         result = self.gensim_nn(result)
@@ -483,18 +479,15 @@ class LangFeaturesModel(Fasttext1DCNNModel):
         if "spacy" in self.capabilities:
             r, spt = self.get_spacy_nlp_vectors(texts)
             results.append(r)
-            clean_memory()
         if "key_phrases" in self.capabilities and "spacy" in self.capabilities:
             r = self.get_keyphrases(texts, spt)
             results.append(r)
-            clean_memory()
         for c in self.capabilities:
             if c == "spacy" or c == "key_phrases":
                 continue
             r = cap_method[c](texts)
             results.append(r)
-            clean_memory()
-
+        clean_memory()
         result = torch.cat(results, 2)
         result = result.to(get_device())
         result = self.contract_nn(result)
