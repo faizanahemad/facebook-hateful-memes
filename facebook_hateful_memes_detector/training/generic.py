@@ -153,11 +153,20 @@ def generate_predictions(model, batch_size, dataset):
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                              shuffle=False, num_workers=1, pin_memory=True)
 
+    use_autocast = False
+    try:
+        from torch.cuda.amp import autocast
+        use_autocast = "cuda" in str(get_device())
+    except:
+        pass
     with torch.no_grad():
         clean_memory()
         for batch in test_loader:
             clean_memory()
-            with autocast():
+            if use_autocast:
+                with autocast():
+                    logits, _, _, _ = model(batch)
+            else:
                 logits, _, _, _ = model(batch)
             labels = batch["label"]
             labels_list.extend(labels)
