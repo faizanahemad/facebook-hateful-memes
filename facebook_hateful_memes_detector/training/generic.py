@@ -17,7 +17,6 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
 from transformers import optimization
 from .model_params import group_wise_lr
-from torch.cuda.amp import GradScaler, autocast
 
 def get_multistep_lr(milestones, gamma=0.2):
     def scheduler_init_fn(optimizer, epochs, batch_size, n_samples):
@@ -67,6 +66,14 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
         raise NotImplementedError()
 
     _ = model.train()
+    use_autocast = False
+    try:
+        from torch.cuda.amp import GradScaler, autocast
+        scaler = GradScaler()
+        use_autocast = "cuda" in str(get_device())
+    except:
+        pass
+
 
     weights = make_weights_for_balanced_classes(training_fold_labels, class_weights) # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
     sampler = WeightedRandomSampler(weights, len(weights))
@@ -75,7 +82,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     train_losses = []
     learning_rates = []
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
-    scaler = GradScaler()
+
     with trange(epochs) as epo:
         for epoc in epo:
             _ = model.train()
@@ -86,13 +93,18 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
             with tqdm(train_loader) as data_batch:
                 for batch in data_batch:
                     optimizer.zero_grad()
-                    with autocast():
+                    if use_autocast:
+                        with autocast():
+                            _, _, _, loss = model(batch)
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
                         _, _, _, loss = model(batch)
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
+                        loss.backward()
+                        optimizer.step()
                     if update_in_batch:
                         scheduler.step()
-                    scaler.update()
                     train_losses.append(float(loss.cpu().detach().item()))
                     train_losses_cur_epoch.append(float(loss.cpu().detach().item()))
                     learning_rates.append(float(optimizer.param_groups[0]['lr']))

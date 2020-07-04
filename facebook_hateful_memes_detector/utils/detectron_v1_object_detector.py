@@ -17,7 +17,6 @@ import torchvision.transforms as transforms
 from PIL import Image
 from io import BytesIO
 from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, set_global, get_global
-from torch.cuda.amp import autocast
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
@@ -307,7 +306,17 @@ class FeatureExtractor:
         current_img_list = to_image_list(img_tensor, size_divisible=32)
         current_img_list = current_img_list.to(self.device)
         with torch.no_grad():
-            with autocast(enabled=False):
+            use_autocast = False
+            try:
+                from torch.cuda.amp import autocast
+                use_autocast = "cuda" in str(self.device)
+            except:
+                pass
+
+            if use_autocast:
+                with autocast(enabled=False):
+                    output = self.detection_model(current_img_list)
+            else:
                 output = self.detection_model(current_img_list)
         feat_list, info_list = self._process_feature_extraction_v2(output, im_scales, [im_info], 'fc6')
         return feat_list[0], info_list[0]
