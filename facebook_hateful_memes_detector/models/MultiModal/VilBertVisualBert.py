@@ -69,7 +69,7 @@ class VilBertVisualBertModel(nn.Module):
 
         if "mmbt_region" in model_name:
             self.mmbt_region = get_mmbt_region(get_device())
-            for p in self.lxmert.parameters():
+            for p in self.mmbt_region.parameters():
                 p.requires_grad = finetunes["mmbt_region"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
 
