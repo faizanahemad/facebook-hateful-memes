@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+from ..utils.globals import get_global
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import re
@@ -82,7 +83,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
         sampler = None
         shuffle = True
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
-                              shuffle=shuffle, num_workers=1, pin_memory=True, sampler=sampler)
+                              shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=sampler)
     train_losses = []
     learning_rates = []
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
@@ -157,7 +158,7 @@ def generate_predictions(model, batch_size, dataset):
     clean_memory()
     batch_size = batch_size + int(batch_size/2)
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
-                             shuffle=False, num_workers=1, pin_memory=True)
+                             shuffle=False, num_workers=get_global("dataloader_workers"), pin_memory=True)
 
     use_autocast = False
     try:
