@@ -76,7 +76,7 @@ class VilBertVisualBertModel(nn.Module):
         if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
             raise NotImplementedError()
 
-        if "vilbert" in model_name or "visual_bert" in model_name:
+        if "vilbert" in model_name or "visual_bert" in model_name or "mmbt_region" in model_name:
             self.get_img_details = get_image_info_fn(enable_encoder_feats=False, device=get_device())["get_img_details"]
 
         if "lxmert" in model_name:
