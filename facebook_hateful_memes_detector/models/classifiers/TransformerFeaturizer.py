@@ -201,7 +201,6 @@ class TransformerEnsembleFeaturizer(nn.Module):
         self.ensemble_inp = nn.ModuleDict(ensemble_inp)
         self.ensemble_id = ensemble_id
         self.layer_norms = nn.ModuleDict(layer_norms)
-        nn.init.normal_(self.em.weight, std=1 / n_internal_dims)
 
         self.output_nn = None
         if n_internal_dims != n_channels_out:
