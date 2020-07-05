@@ -32,22 +32,24 @@ class EnsembleTransformerModel(nn.Module):
         assert type(models) == list
         names, im_models, im_shapes, im_procs, im_finetune = [], [], [], [], []
         for i, imo in enumerate(models):
-            if type(imo) == dict:
-                finetune = imo["finetune"]
-                params = imo["params"]
-                mdl_shape = imo["shape"]  # Embedding Dim, SeqLen
-                mdl = imo["model"] if "model" in imo else None
-                mdl_class = imo["model_class"] if "model_class" in imo else None
+            assert type(imo) == dict
+            module_gaussian = imo["gaussian_noise"] if "gaussian_noise" in imo else 0.0
+            module_dropout = imo["dropout"] if "dropout" in imo else 0.0
+            finetune = imo["finetune"] if "finetune" in imo else True
+            params = imo["params"]
+            mdl_shape = imo["shape"]  # Embedding Dim, SeqLen
+            mdl = imo["model"] if "model" in imo else None
+            mdl_class = imo["cls"] if "cls" in imo else None
+            fwd_method = imo["forward"] if "forward" in imo else "__call__"
+            assert fwd_method in ["__call__", "get_word_vectors", "get_vectors"]
 
-                if mdl is None:
-                    assert mdl_class is not None
-                    mdl = mdl_class(**params)
-                    for p in mdl.parameters():
-                        p.requires_grad = finetune
+            if mdl is None:
+                assert mdl_class is not None
+                mdl = mdl_class(**params)
+                for p in mdl.parameters():
+                    p.requires_grad = finetune
 
-            else:
-                raise NotImplementedError()
-
+            mdl = LambdaLayer(mdl, module_gaussian, module_dropout)
             names.append(str(i))
             im_finetune.append(finetune)
             im_models.append(mdl)

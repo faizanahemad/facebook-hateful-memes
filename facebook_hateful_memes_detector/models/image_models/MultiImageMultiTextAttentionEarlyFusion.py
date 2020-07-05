@@ -33,15 +33,15 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         assert type(image_models) == list
         names, im_models, im_shapes, im_procs, im_finetune = [], [], [], [], []
         for imo in image_models:
-            if type(imo) == list or type(imo) == tuple:
-                finetune = imo[2]
-                large_rf = imo[1]
-                imo = imo[0]
-            elif type(imo) == dict:
+            if type(imo) == dict:
+                module_gaussian = imo["gaussian_noise"] if "gaussian_noise" in imo else 0.0
+                module_dropout = imo["dropout"] if "dropout" in imo else 0.0
                 finetune = imo["finetune"]
                 large_rf = imo["large_rf"]
                 imo = imo["model"]
             elif type(imo) == str:
+                module_gaussian = 0.0
+                module_dropout = 0.0
                 finetune = False
                 large_rf = True
             else:
@@ -50,25 +50,26 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
             if "torchvision" in imo:
                 net = "_".join(imo.split("_")[1:])
                 im_model, im_shape = get_torchvision_classification_models(net, large_rf, finetune)
+                im_model = LambdaLayer(im_model, module_gaussian, module_dropout)
                 im_proc = nn.Identity()
 
             elif imo == "caption_features":
-                im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"])
+                im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"], module_gaussian, module_dropout)
                 im_shape = (512, 100)
                 im_proc = nn.Identity()
 
             elif imo == "faster_rcnn":
                 im_shape = (2048, 100)
-                im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=False)["get_batch_img_roi_features"])
+                im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=False)["get_batch_img_roi_features"], module_gaussian, module_dropout)
                 im_proc = nn.Identity()
 
             elif imo == "lxmert_faster_rcnn":
                 im_shape = (2048, 36)
-                im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=False)["get_batch_lxmert_roi_features"])
+                im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=False)["get_batch_lxmert_roi_features"], module_gaussian, module_dropout)
                 im_proc = nn.Identity()
             elif "detr" in imo:
                 im_shape = (256, 100)
-                im_model = LambdaLayer(get_detr_model(get_device(), imo)["batch_detr_fn"])
+                im_model = LambdaLayer(get_detr_model(get_device(), imo)["batch_detr_fn"], module_gaussian, module_dropout)
                 im_proc = nn.Identity()
             else:
                 raise NotImplementedError(imo)
@@ -100,6 +101,9 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 if hasattr(text_model, "final_layer"):
                     text_model.final_layer = None
                     del text_model.final_layer
+            module_gaussian = tm["gaussian_noise"] if "gaussian_noise" in tm else 0.0
+            module_dropout = tm["dropout"] if "dropout" in tm else 0.0
+            text_model = LambdaLayer(text_model, module_gaussian, module_dropout)
             tx_models.append(text_model)
             tx_names.append("tx_" + str(i))
             tx_methods.append(text_fwd)
@@ -118,16 +122,15 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
 
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 
-    def forward(self, sampleList: SampleList):
+    def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         img = sampleList.torchvision_image
         image = sampleList.image
-        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
 
         vectors = dict()
         for k, m in self.tx_models.items():
-            r = getattr(m, self.tx_methods[k])(sampleList if self.tx_methods[k]=="__call__" else sampleList.text)
+            r = getattr(m, self.tx_methods[k])(sampleList if self.tx_methods[k] == "__call__" else sampleList.text)
             text_repr = r[2] if self.tx_methods[k] == "__call__" else r
             vectors[k] = text_repr.to(get_device())
             clean_memory()
@@ -154,5 +157,13 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
             clean_memory()
 
         vectors = self.featurizer(vectors)
+        return vectors
+
+    def forward(self, sampleList: SampleList):
+        sampleList = dict2sampleList(sampleList, device=get_device())
+        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
+        vectors = self.get_vectors(sampleList)
+        del sampleList
+        clean_memory()
         logits, loss = self.final_layer(vectors, labels)
         return logits, vectors.mean(1), vectors, loss

@@ -29,9 +29,8 @@ class AlbertClassifer(Fasttext1DCNNModel):
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.model = AutoModel.from_pretrained(model)
         self.finetune = finetune
-        if not finetune:
-            for p in self.model.parameters():
-                p.requires_grad = False
+        for p in self.model.parameters():
+            p.requires_grad = finetune
         if not use_as_super:
             if featurizer == "cnn":
                 self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,

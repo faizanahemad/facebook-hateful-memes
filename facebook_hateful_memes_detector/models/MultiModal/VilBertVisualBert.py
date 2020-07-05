@@ -24,16 +24,13 @@ import GPUtil
 
 
 class VilBertVisualBertModel(nn.Module):
-    def __init__(self, model_name: List, num_classes,
+    def __init__(self, model_name: Union[List, Dict], num_classes,
                  gaussian_noise, dropout,
                  internal_dims, classifier_dims,
                  featurizer, final_layer_builder,
                  n_tokens_in,
                  n_tokens_out, n_layers,
                  task,
-                 finetune_vilbert=False,
-                 finetune_lxmert=False,
-                 finetune_visual_bert=False,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
         self.task = task
@@ -41,20 +38,34 @@ class VilBertVisualBertModel(nn.Module):
         assert max_seq_length >= 64
         self.text_processor = get_tokenizer(max_seq_length)
         n_tokens_in, pooled_dims = 0, 0
-        model_name = [model_name] if type(model_name) ==  str else model_name
+        model_name = [model_name] if type(model_name) == str else model_name
+        self.model_regularizers = nn.ModuleDict()
+        finetunes = dict()
+        assert type(model_name) == dict
+        for k, v in model_name.items():
+            dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
+            gn = GaussianNoise(v["gaussian_noise"] if "gaussian_noise" in v else 0.0)
+            self.model_regularizers[k] = nn.Sequential(dp, gn)
+            finetunes[k] = v["finetune"] if "finetune" in v else False
+
         self.model_name = model_name
         if "vilbert" in model_name:
             self.vilbert = get_vilbert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
+            for p in self.vilbert.parameters():
+                p.requires_grad = finetunes["vilbert"]
         if "visual_bert" in model_name:
             self.visual_bert = get_visual_bert(get_device())
+            for p in self.visual_bert.parameters():
+                p.requires_grad = finetunes["visual_bert"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
 
         if "lxmert" in model_name:
             self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
+            for p in self.lxmert.parameters():
+                p.requires_grad = finetunes["lxmert"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
-
 
         if len(set(model_name) - {"vilbert", "visual_bert", "lxmert"}) > 0:
             raise NotImplementedError()
@@ -64,16 +75,6 @@ class VilBertVisualBertModel(nn.Module):
 
         if "lxmert" in model_name:
             self.get_lxmert_details = get_image_info_fn(enable_encoder_feats=False, device=get_device())["get_lxmert_details"]
-
-        if hasattr(self, 'vilbert'):
-            for p in self.vilbert.parameters():
-                p.requires_grad = finetune_vilbert
-        if hasattr(self, 'visual_bert'):
-            for p in self.visual_bert.parameters():
-                p.requires_grad = finetune_visual_bert
-        if hasattr(self, 'lxmert'):
-            for p in self.lxmert.parameters():
-                p.requires_grad = finetune_lxmert
 
         if featurizer == "transformer":
             self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
@@ -100,7 +101,7 @@ class VilBertVisualBertModel(nn.Module):
                 ll = nn.LayerNorm(pooled_dims * 2)
                 self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), lin)
             else:
-                assert (finetune_visual_bert or finetune_vilbert)
+                assert (finetunes.get("vilbert", False) or finetunes.get("visual_bert", False))
             self.loss = get_loss_by_task(task)
         else:
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
@@ -341,6 +342,7 @@ class VilBertVisualBertModel(nn.Module):
         return torch.cat(feat_seq, 1), pooled
 
     def get_vectors(self, sampleList: SampleList):
+        sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
         image = sampleList.image  # orig_image = sampleList.original_image
 
@@ -360,8 +362,12 @@ class VilBertVisualBertModel(nn.Module):
                     out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
                 else:
                     out["sequence_output_v"] = out["sequence_output_v"][:, :, :out["sequence_output_t"].size(-1)]
-                sequence_output.append(torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1))
-                pooled_output.append(out["pooled_output"])
+                seq = torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1)
+                seq = self.model_regularizers["vilbert"](seq) if "vilbert" in self.model_regularizers else seq
+                sequence_output.append(seq)
+                pool = out["pooled_output"]
+                pool = self.model_regularizers["vilbert"](pool) if "vilbert" in self.model_regularizers else pool
+                pooled_output.append(pool)
                 logit.append(out["logits"])
                 del out
                 clean_memory()
@@ -369,6 +375,8 @@ class VilBertVisualBertModel(nn.Module):
             if "visual_bert" in self.model_name:
                 out = self.visual_bert_forward(sl)
                 seq, pool = out["sequence_output"], out["pooled_output"]
+                seq = self.model_regularizers["visual_bert"](seq) if "visual_bert" in self.model_regularizers else seq
+                pool = self.model_regularizers["visual_bert"](pool) if "visual_bert" in self.model_regularizers else pool
                 logit.append(out["logits"])
                 del out
                 sequence_output.append(seq)
@@ -381,9 +389,11 @@ class VilBertVisualBertModel(nn.Module):
             clean_memory()
 
         if "lxmert" in self.model_name:
-            feat_seq, pooled = self.lxmert_forward(image, textSampleList)
-            pooled_output.append(pooled)
-            sequence_output.append(feat_seq)
+            seq, pool = self.lxmert_forward(image, textSampleList)
+            seq = self.model_regularizers["lxmert"](seq) if "lxmert" in self.model_regularizers else seq
+            pool = self.model_regularizers["lxmert"](pool) if "lxmert" in self.model_regularizers else pool
+            pooled_output.append(pool)
+            sequence_output.append(seq)
 
         del image
         del textSampleList

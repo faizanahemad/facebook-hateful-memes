@@ -17,6 +17,7 @@ from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, m
 import os
 import torch
 import gc
+import random
 
 
 RE_D = re.compile('\d')
@@ -695,12 +696,18 @@ class WordChannelReducer(nn.Module):
 
 
 class LambdaLayer(nn.Module):
-    def __init__(self, lambd):
+    def __init__(self, lambd, gaussian_noise=0.0, dropout=0.0):
         super(LambdaLayer, self).__init__()
         self.lambd = lambd
+        self.gaussian_noise = GaussianNoise(gaussian_noise)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        return self.lambd(x).to(get_device())
+        x = self.lambd(x)
+        x = x.to(get_device())
+        x = self.dropout(x)
+        x = self.gaussian_noise(x)
+        return x
 
 
 from .detectron_v1_object_detector import get_image_info_fn, persistent_caching_fn

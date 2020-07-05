@@ -201,7 +201,6 @@ class TransformerEnsembleFeaturizer(nn.Module):
         self.ensemble_inp = nn.ModuleDict(ensemble_inp)
         self.ensemble_id = ensemble_id
         self.layer_norms = nn.ModuleDict(layer_norms)
-        self.em = nn.Embedding(len(ensemble_config), n_internal_dims)
         nn.init.normal_(self.em.weight, std=1 / n_internal_dims)
 
         self.output_nn = None
@@ -233,8 +232,6 @@ class TransformerEnsembleFeaturizer(nn.Module):
             else:
                 v = self.layer_norms[k](v)
                 v = self.pos_encoder(v.transpose(0, 1) * math.sqrt(self.n_internal_dims))
-            seq_label = self.em(torch.tensor(self.ensemble_id[k]))
-            v = v + seq_label
             vecs.append(v)
         x = torch.cat(vecs, 0)
         assert x.size(0) == self.n_tokens_in
