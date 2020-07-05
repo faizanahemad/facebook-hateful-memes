@@ -31,6 +31,7 @@ class EnsembleTransformerModel(nn.Module):
         super(EnsembleTransformerModel, self).__init__()
         assert type(models) == list
         names, im_models, im_shapes, im_procs, im_finetune = [], [], [], [], []
+        regularizers = nn.ModuleDict()
         for i, imo in enumerate(models):
             assert type(imo) == dict
             module_gaussian = imo["gaussian_noise"] if "gaussian_noise" in imo else 0.0
@@ -49,7 +50,7 @@ class EnsembleTransformerModel(nn.Module):
                 for p in mdl.parameters():
                     p.requires_grad = finetune
 
-            mdl = LambdaLayer(mdl, module_gaussian, module_dropout)
+            regularizers[str(i)] = nn.Sequential(nn.Dropout(module_dropout), GaussianNoise(module_gaussian))
             names.append(str(i))
             im_finetune.append(finetune)
             im_models.append(mdl)
@@ -57,7 +58,7 @@ class EnsembleTransformerModel(nn.Module):
         self.im_models = nn.ModuleDict(dict(zip(names, im_models)))
         self.im_finetune = dict(zip(names, im_finetune))
         self.im_shapes = dict(zip(names, im_shapes))
-
+        self.regularizers = regularizers
         ensemble_conf = {k: dict(is2d=len(v) == 3, n_tokens_in=(v[-1] * v[-1]) if len(v) == 3 else v[-1], n_channels_in=v[0]) for k, v in self.im_shapes.items()}
         self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
                                                         n_layers, gaussian_noise, dropout)
@@ -74,6 +75,7 @@ class EnsembleTransformerModel(nn.Module):
         vectors = dict()
         for k, m in self.im_models.items():
             _, _, repr, _ = m(sampleList)
+            repr = self.regularizers[k](repr)
             vectors[k] = repr.to(get_device())
             clean_memory()
 

@@ -339,14 +339,29 @@ class ImageCaptionFeatures:
 
         att_embed = self.model["att_embed"]
         encoder = self.model["encoder"]
+        use_autocast = False
+        try:
+            from torch.cuda.amp import autocast
+            use_autocast = "cuda" in str(self.device)
+        except:
+            pass
 
         with torch.no_grad():
-            img_feature = self.get_img_details(image)[0].to(self.device)
-            att_feats = att_embed(img_feature[None])
-            att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
-            att_masks = att_masks.unsqueeze(-2)
-            em = encoder(att_feats, att_masks)
-            return em
+            if use_autocast:
+                with autocast(enabled=False):
+                    img_feature = self.get_img_details(image)[0].to(self.device)
+                    att_feats = att_embed(img_feature[None])
+                    att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
+                    att_masks = att_masks.unsqueeze(-2)
+                    em = encoder(att_feats, att_masks)
+                    return em
+            else:
+                img_feature = self.get_img_details(image)[0].to(self.device)
+                att_feats = att_embed(img_feature[None])
+                att_masks = att_feats.new_ones(att_feats.shape[:2], dtype=torch.long)
+                att_masks = att_masks.unsqueeze(-2)
+                em = encoder(att_feats, att_masks)
+                return em
 
     def generate_captions(self, image):
         if not hasattr(self.__class__, "model"):
