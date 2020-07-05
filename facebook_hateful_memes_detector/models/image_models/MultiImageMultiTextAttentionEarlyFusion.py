@@ -37,7 +37,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 module_gaussian = imo["gaussian_noise"] if "gaussian_noise" in imo else 0.0
                 module_dropout = imo["dropout"] if "dropout" in imo else 0.0
                 finetune = imo["finetune"] if "finetune" in imo else False
-                large_rf = imo["large_rf"]
+                large_rf = imo["large_rf"] if "large_rf" in imo else True
                 imo = imo["model"]
             elif type(imo) == str:
                 module_gaussian = 0.0
