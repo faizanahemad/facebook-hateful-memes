@@ -18,7 +18,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvis
     dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
-from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer
+from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer, get_mmbt_region
 from ..external.lxrt import get_lxrt_model
 import GPUtil
 
@@ -66,6 +66,12 @@ class VilBertVisualBertModel(nn.Module):
                 p.requires_grad = finetunes["lxmert"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
+
+        if "mmbt_region" in model_name:
+            self.mmbt_region = get_mmbt_region(get_device())
+            for p in self.lxmert.parameters():
+                p.requires_grad = finetunes["mmbt_region"]
+            n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
 
         if len(set(model_name) - {"vilbert", "visual_bert", "lxmert"}) > 0:
             raise NotImplementedError()
@@ -341,6 +347,19 @@ class VilBertVisualBertModel(nn.Module):
         clean_memory()
         return torch.cat(feat_seq, 1), pooled
 
+    def mmbt_region_forward(self, sl: SampleList):
+        module_output = self.mmbt_region.model.bert(sl)
+        pooled_output = module_output[1]
+        output = {}
+        output["sequence_output"] = module_output[0]
+        output["pooled_output"] = pooled_output
+        logits = None
+        if self.featurizer_type == "pass":
+            pooled_output = self.dropout(pooled_output)
+            logits = self.classifier(pooled_output).contiguous().squeeze()
+        output["logits"] = logits
+        return output
+
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
@@ -353,7 +372,7 @@ class VilBertVisualBertModel(nn.Module):
         pooled_output = []
         sequence_output = []
         logits = None
-        if "vilbert" in self.model_name or "visual_bert" in self.model_name:
+        if "vilbert" in self.model_name or "visual_bert" in self.model_name or "mmbt_region" in self.model_name:
             sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
             logit = []
             if "vilbert" in self.model_name:
@@ -370,6 +389,17 @@ class VilBertVisualBertModel(nn.Module):
                 pooled_output.append(pool)
                 logit.append(out["logits"])
                 del out
+                clean_memory()
+
+            if "mmbt_region" in self.model_name:
+                out = self.mmbt_region_forward(sl)
+                seq, pool = out["sequence_output"], out["pooled_output"]
+                seq = self.model_regularizers["mmbt_region"](seq) if "mmbt_region" in self.model_regularizers else seq
+                pool = self.model_regularizers["mmbt_region"](pool) if "mmbt_region" in self.model_regularizers else pool
+                logit.append(out["logits"])
+                del out
+                sequence_output.append(seq)
+                pooled_output.append(pool)
                 clean_memory()
 
             if "visual_bert" in self.model_name:
