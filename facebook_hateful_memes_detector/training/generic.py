@@ -52,6 +52,7 @@ def get_cosine_with_hard_restarts_schedule_with_warmup(warmup_proportion=0.2, nu
 
 def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, validation_strategy=None,
           plot=False,
+          sampling_policy=None,
           class_weights={0: 1, 1: 1.8}):
     if in_notebook():
         from tqdm.notebook import tqdm, trange
@@ -75,18 +76,27 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     except:
         pass
 
-    if class_weights is not None:
-        weights = make_weights_for_balanced_classes(training_fold_labels, class_weights) # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
-        sampler = WeightedRandomSampler(weights, len(weights), replacement=False)
+    assert sampling_policy is None or sampling_policy in ["with_replacement", "without_replacement"]
+    if sampling_policy == "with_replacement":
+        weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
+        sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
+        shuffle = False
+        divisor = 1
+    elif sampling_policy == "without_replacement":
+        weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
+        sampler = WeightedRandomSampler(weights, int(len(weights)/2), replacement=False)
+        divisor = 2
         shuffle = False
     else:
         sampler = None
         shuffle = True
+        divisor = 1
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                               shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=sampler)
     train_losses = []
     learning_rates = []
-    scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
+    epochs = epochs * divisor
+    scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, int(len(training_fold_labels)/divisor)) if scheduler_init_fn is not None else (None, False, False)
     print("Autocast = ", use_autocast, "Epochs = ", epochs, "Batch Size = ", batch_size,
           "# Training Samples = ", len(training_fold_labels), "Weighted Sampling = ", sampler is not None)
     with trange(epochs) as epo:
@@ -292,6 +302,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           augmentation_weights: Dict[str, float],
                           multi_eval=False, kfold=False, scheduler_init_fn=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
+                          sampling_policy=None,
                           class_weights={0: 1, 1: 1.8}):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
@@ -317,7 +328,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                                    val=dict(method=validate, args=[model, batch_size, testing_fold_dataset, test_df]))
         validation_strategy = validation_strategy if validation_epochs is not None else None
         train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset,
-                                             validation_strategy, plot=not kfold, class_weights=class_weights)
+                                             validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)
         train_scores, prfs_train = validate(model, batch_size, training_test_dataset, train_df)
