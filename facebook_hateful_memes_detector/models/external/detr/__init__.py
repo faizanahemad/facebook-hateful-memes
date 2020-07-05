@@ -315,7 +315,7 @@ class DETR(DETRTransferBase):
                 assert mask is not None
                 src_proj = self.model.detr.input_proj(src)
                 hs, enc_repr = self.model.detr.transformer(src_proj, mask, self.model.detr.query_embed.weight, pos[-1])
-
+                h = hs[self.decoder_layer]
                 if self.enable_plot:
                     outputs_class = self.model.detr.class_embed(hs[-1])
                     bbox_mask = self.model.bbox_attention(hs[-1], enc_repr, mask=mask)
@@ -323,7 +323,7 @@ class DETR(DETRTransferBase):
                     outputs_seg_masks = seg_masks.view(bs, self.model.detr.num_queries, seg_masks.shape[-2], seg_masks.shape[-1])
                     pred_masks = outputs_seg_masks
                     outputs_coord = self.model.detr.bbox_embed(hs[-1]).sigmoid()
-                    h, pred_boxes, pred_logits = hs[self.decoder_layer], outputs_coord, outputs_class
+                    pred_boxes, pred_logits = outputs_coord, outputs_class
                     return {'pred_logits': pred_logits, 'pred_boxes': pred_boxes, "pred_masks": pred_masks if pred_masks is not None else None}
             elif "demo" in self.model_name:
                 x = self.backbone.conv1(samples.tensors)
