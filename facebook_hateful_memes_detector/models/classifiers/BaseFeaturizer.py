@@ -12,7 +12,7 @@ class BaseFeaturizer(nn.Module):
                  n_internal_dims, n_layers,
                  gaussian_noise=0.0, dropout=0.0):
         super(BaseFeaturizer, self).__init__()
-        assert n_tokens_in % n_tokens_out == 0 and n_tokens_in > n_tokens_out
+        assert n_tokens_in % n_tokens_out == 0 and n_tokens_in >= n_tokens_out
         self.num_pooling = int(n_tokens_in / n_tokens_out)
         self.n_tokens_out = n_tokens_out
         self.n_channels_out = n_channels_out
