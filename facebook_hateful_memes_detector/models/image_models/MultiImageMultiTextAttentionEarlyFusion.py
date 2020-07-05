@@ -80,7 +80,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
             im_shapes.append(im_shape)
             im_procs.append(im_proc)
         self.im_models = nn.ModuleDict(dict(zip(names, im_models)))
-        self.im_procs = nn.ModuleDict(dict(zip(names, im_procs)))
+        self.post_procs = nn.ModuleDict(dict(zip(names, im_procs)))
         self.im_finetune = dict(zip(names, im_finetune))
         self.im_shapes = dict(zip(names, im_shapes))
         self.require_raw_img = {"detr_demo", 'detr_resnet50', 'detr_resnet50_panoptic', 'detr_resnet101', 'detr_resnet101_panoptic',
@@ -103,8 +103,8 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                     del text_model.final_layer
             module_gaussian = tm["gaussian_noise"] if "gaussian_noise" in tm else 0.0
             module_dropout = tm["dropout"] if "dropout" in tm else 0.0
-            text_model = LambdaLayer(text_model, module_gaussian, module_dropout)
             tx_models.append(text_model)
+            self.post_procs["tx_" + str(i)] = nn.Sequential(nn.Dropout(module_dropout), GaussianNoise(module_gaussian))
             tx_names.append("tx_" + str(i))
             tx_methods.append(text_fwd)
 
@@ -132,6 +132,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         for k, m in self.tx_models.items():
             r = getattr(m, self.tx_methods[k])(sampleList if self.tx_methods[k] == "__call__" else sampleList.text)
             text_repr = r[2] if self.tx_methods[k] == "__call__" else r
+            text_repr = self.post_procs[k](text_repr)
             vectors[k] = text_repr.to(get_device())
             clean_memory()
 
@@ -152,7 +153,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
             else:
                 with torch.no_grad():
                     im_repr = m(image if k in self.require_raw_img else img)
-            im_repr = self.im_procs[k](im_repr)
+            im_repr = self.post_procs[k](im_repr)
             vectors[k] = im_repr.to(get_device())
             clean_memory()
 

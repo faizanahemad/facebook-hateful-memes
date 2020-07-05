@@ -102,3 +102,10 @@ def get_visual_bert(device):
             'dataset=hateful_memes', 'run_type=val',
             'checkpoint.resume_zoo=visual_bert.finetuned.hateful_memes.from_coco', 'evaluation.predict=true']
     return get_model(device, opts)
+
+
+def get_mmbt_region(device):
+    opts = ['config=projects/hateful_memes/configs/mmbt/with_features.yaml', 'model=mmbt',
+            'dataset=hateful_memes', 'run_type=val',
+            'checkpoint.resume_zoo=mmbt.hateful_memes.features', 'evaluation.predict=true']
+    return get_model(device, opts)
