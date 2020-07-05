@@ -43,13 +43,19 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
             names = list(map(lambda n: kl + "." + n, names))
             nms.extend(names)
 
-    primitives = {kk: vk for kk, vk in group_lr_conf.items() if type(vk) == float or type(vk) == int}
+    primitives = {kk: vk for kk, vk in group_lr_conf.items() if type(vk) == float or type(vk) == int or type(vk) == bool}
     remaining_params = [(k, p) for k, p in model.named_parameters() if k not in nms]
     if len(remaining_params) > 0:
         names, params = zip(*remaining_params)
         conf = dict(params=params, **primitives)
         confs.append(conf)
         nms.extend(names)
+
+        if "finetune" in primitives:
+            finetune = primitives["finetune"]
+            assert type(finetune) == bool
+            for p in params:
+                p.requires_grad = finetune
 
     plen = sum([len(list(c["params"])) for c in confs])
     assert len(list(model.parameters())) == plen

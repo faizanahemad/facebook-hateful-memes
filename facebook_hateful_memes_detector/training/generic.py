@@ -83,6 +83,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
         shuffle = False
         divisor = 1
     elif sampling_policy == "without_replacement":
+        # num lowest class * num classes
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
         sampler = WeightedRandomSampler(weights, int(len(weights)/2), replacement=False)
         divisor = 2
