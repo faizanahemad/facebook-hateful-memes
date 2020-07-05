@@ -74,11 +74,15 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     except:
         pass
 
-
-    weights = make_weights_for_balanced_classes(training_fold_labels, class_weights) # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
-    sampler = WeightedRandomSampler(weights, len(weights))
+    if class_weights is not None:
+        weights = make_weights_for_balanced_classes(training_fold_labels, class_weights) # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
+        sampler = WeightedRandomSampler(weights, len(weights), replacement=False)
+        shuffle = False
+    else:
+        sampler = None
+        shuffle = True
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
-                              shuffle=True, num_workers=1, pin_memory=True, sampler=None)
+                              shuffle=shuffle, num_workers=1, pin_memory=True, sampler=sampler)
     train_losses = []
     learning_rates = []
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
