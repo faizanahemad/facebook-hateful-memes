@@ -73,7 +73,7 @@ class VilBertVisualBertModel(nn.Module):
                 p.requires_grad = finetunes["mmbt_region"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
 
-        if len(set(model_name) - {"vilbert", "visual_bert", "lxmert"}) > 0:
+        if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
             raise NotImplementedError()
 
         if "vilbert" in model_name or "visual_bert" in model_name:
