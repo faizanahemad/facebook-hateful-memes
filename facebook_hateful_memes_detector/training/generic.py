@@ -82,7 +82,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     train_losses = []
     learning_rates = []
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, len(training_fold_labels)) if scheduler_init_fn is not None else (None, False, False)
-    print("Autocast = ", use_autocast, "Epochs = ", epochs, "Batch Size = ", batch_size, "# Training Samples = ", training_fold_labels)
+    print("Autocast = ", use_autocast, "Epochs = ", epochs, "Batch Size = ", batch_size, "# Training Samples = ", len(training_fold_labels))
     with trange(epochs) as epo:
         for epoc in epo:
             _ = model.train()
