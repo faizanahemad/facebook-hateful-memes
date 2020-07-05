@@ -34,7 +34,7 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
     nms = []
     for kl, vl in group_lr_conf.items():
         assert type(kl) == str
-        assert type(vl) == dict or type(vl) == float or type(vl) == int
+        assert type(vl) == dict or type(vl) == float or type(vl) == int or type(vl) == bool
 
         if type(vl) == dict:
             assert hasattr(model, kl)
