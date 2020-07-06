@@ -13,7 +13,7 @@ rm -rf detectron_model.yaml
 wget -O detectron_model.pth wget https://dl.fbaipublicfiles.com/vilbert-multi-task/detectron_model.pth
 wget -O detectron_model.yaml wget https://dl.fbaipublicfiles.com/vilbert-multi-task/detectron_config.yaml
 
-
+# https://github.com/airsplay/lxmert/issues/32
 gdown --id 1VmUzgu0qlmCMqM1ajoOZxOXP3hiC_qlL
 gdown --id 1zQe00W02veVYq-hdq5WsPOS3OPkNdq79
 

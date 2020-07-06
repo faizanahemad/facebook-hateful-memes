@@ -122,7 +122,10 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
     epochs = int(epochs * divisor)
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, examples) if scheduler_init_fn is not None else (None, False, False)
     print("Autocast = ", use_autocast, "Epochs = ", epochs, "Divisor =", divisor, "Examples =", examples, "Batch Size = ", batch_size,)
-    print("# Training Samples = ", len(training_fold_labels), "Weighted Sampling = ", sampler is not None, "Num Batches = ", len(train_loader))
+    print("Training Samples = ", len(training_fold_labels), "Weighted Sampling = ", sampler is not None,
+          "Num Batches = ", len(train_loader), "Accumulation steps = ", accumulation_steps)
+    if len(train_loader) % accumulation_steps != 0:
+        print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
     with trange(epochs) as epo:
         for epoc in epo:
             _ = model.train()
