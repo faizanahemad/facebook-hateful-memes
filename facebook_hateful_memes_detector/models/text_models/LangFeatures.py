@@ -201,9 +201,11 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                                                   internal_dims, n_layers, gaussian_noise, dropout)
 
             elif featurizer == "transformer":
+                n_encoders = kwargs["n_encoders"] if "n_encoders" in kwargs else n_layers
+                n_decoders = kwargs["n_decoders"] if "n_decoders" in kwargs else n_layers
                 self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                         classifier_dims,
-                                                        internal_dims, n_layers, gaussian_noise, dropout)
+                                                        internal_dims, n_encoders, n_decoders, gaussian_noise, dropout)
             else:
                 raise NotImplementedError()
 

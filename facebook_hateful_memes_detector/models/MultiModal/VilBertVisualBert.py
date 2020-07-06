@@ -16,7 +16,7 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
     dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor
-from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer, BasicFeaturizer, PassThroughFeaturizer
+from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer, get_mmbt_region
 from ..external.lxrt import get_lxrt_model
@@ -29,7 +29,7 @@ class VilBertVisualBertModel(nn.Module):
                  internal_dims, classifier_dims,
                  featurizer, final_layer_builder,
                  n_tokens_in,
-                 n_tokens_out, n_layers,
+                 n_tokens_out, n_encoders, n_decoders,
                  task,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
@@ -85,7 +85,7 @@ class VilBertVisualBertModel(nn.Module):
         if featurizer == "transformer":
             self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                     classifier_dims,
-                                                    internal_dims, n_layers, gaussian_noise, dropout)
+                                                    internal_dims, n_encoders, n_decoders, gaussian_noise, dropout)
         elif featurizer == "pass":
             assert n_tokens_in == n_tokens_out
             assert embedding_dims == classifier_dims

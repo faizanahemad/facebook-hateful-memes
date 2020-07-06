@@ -16,7 +16,7 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_device, \
     dict2sampleList, clean_memory
-from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, TransformerEnsembleFeaturizer
+from ..classifiers import TransformerEnsembleFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.detr import get_detr_model
 
@@ -26,7 +26,7 @@ class EnsembleTransformerModel(nn.Module):
                  gaussian_noise, dropout,
                  internal_dims, classifier_dims,
                  final_layer_builder,
-                 n_tokens_out, n_layers,
+                 n_tokens_out, n_encoders, n_decoders,
                  **kwargs):
         super(EnsembleTransformerModel, self).__init__()
         assert type(models) == list
@@ -61,7 +61,7 @@ class EnsembleTransformerModel(nn.Module):
         self.regularizers = regularizers
         ensemble_conf = {k: dict(is2d=len(v) == 3, n_tokens_in=(v[-1] * v[-1]) if len(v) == 3 else v[-1], n_channels_in=v[0]) for k, v in self.im_shapes.items()}
         self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
-                                                        n_layers, gaussian_noise, dropout)
+                                                        n_encoders, n_decoders, gaussian_noise, dropout)
 
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 

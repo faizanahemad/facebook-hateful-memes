@@ -134,8 +134,6 @@ class Transformer(nn.Module):
         dim_feedforward: the dimension of the feedforward network model (default=2048).
         dropout: the dropout value (default=0.1).
         activation: the activation function of encoder/decoder intermediate layer, relu or gelu (default=relu).
-        custom_encoder: custom encoder (default=None).
-        custom_decoder: custom decoder (default=None).
 
     Examples::
         >>> transformer_model = nn.Transformer(nhead=16, num_encoder_layers=12)
@@ -151,17 +149,19 @@ class Transformer(nn.Module):
                  num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1,
                  activation: str = "relu") -> None:
         super(Transformer, self).__init__()
-
+        assert num_encoder_layers > 0 or num_decoder_layers > 0
         self.num_encoder_layers = num_encoder_layers
         self.num_decoder_layers = num_decoder_layers
 
-        encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
-        encoder_norm = LayerNorm(d_model)
-        self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
+        if num_encoder_layers > 0:
+            encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
+            encoder_norm = LayerNorm(d_model)
+            self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
-        decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
-        decoder_norm = LayerNorm(d_model)
-        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
+        if num_decoder_layers > 0:
+            decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
+            decoder_norm = LayerNorm(d_model)
+            self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
 
         self._reset_parameters()
 
@@ -215,17 +215,22 @@ class Transformer(nn.Module):
         Examples:
             >>> output = transformer_model(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask)
         """
+        if src.size(2) != self.d_model:
+            raise RuntimeError("the feature number of src must be equal to d_model")
 
-        if src.size(1) != tgt.size(1):
-            raise RuntimeError("the batch number of src and tgt must be equal")
+        memory = src
+        if self.num_encoder_layers > 0:
+            memory = self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
 
-        if src.size(2) != self.d_model or tgt.size(2) != self.d_model:
-            raise RuntimeError("the feature number of src and tgt must be equal to d_model")
-
-        memory = self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
-        output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
-                              tgt_key_padding_mask=tgt_key_padding_mask,
-                              memory_key_padding_mask=memory_key_padding_mask)
+        output = memory
+        if self.num_decoder_layers > 0:
+            if src.size(1) != tgt.size(1):
+                raise RuntimeError("the batch number of src and tgt must be equal")
+            if src.size(2) != self.d_model or tgt.size(2) != self.d_model:
+                raise RuntimeError("the feature number of src and tgt must be equal to d_model")
+            output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
+                                  tgt_key_padding_mask=tgt_key_padding_mask,
+                                  memory_key_padding_mask=memory_key_padding_mask)
         return output
 
     def _reset_parameters(self):
@@ -238,7 +243,7 @@ class Transformer(nn.Module):
 
 class TransformerFeaturizer(nn.Module):
     def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
-                 n_internal_dims, n_layers,
+                 n_internal_dims, n_encoders, n_decoders,
                  gaussian_noise=0.0, dropout=0.0):
         super(TransformerFeaturizer, self).__init__()
         gn = GaussianNoise(gaussian_noise)
@@ -246,8 +251,12 @@ class TransformerFeaturizer(nn.Module):
         self.n_tokens_out = n_tokens_out
         self.n_channels_out = n_channels_out
         self.n_internal_dims = n_internal_dims
-        decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims), requires_grad=True)
-        self.register_parameter("decoder_query", decoder_query)
+        self.n_decoders = n_decoders
+        if n_decoders > 0:
+            decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
+                                         requires_grad=True)
+            self.register_parameter("decoder_query", decoder_query)
+            self.tgt_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
 
         self.input_nn = None
         if n_channels_in != n_internal_dims:
@@ -259,10 +268,9 @@ class TransformerFeaturizer(nn.Module):
             self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
             init_fc(self.output_nn, "linear")
 
-        self.transformer = Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims*4, dropout)
+        self.transformer = Transformer(n_internal_dims, 16, n_encoders, n_decoders, n_internal_dims*4, dropout)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.global_layer_norm = nn.LayerNorm(n_internal_dims, eps=1e-06)
-        self.tgt_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
 
     def forward(self, x):
         x = self.input_nn(x) if self.input_nn is not None else x
@@ -271,11 +279,14 @@ class TransformerFeaturizer(nn.Module):
         x = self.pos_encoder(x)
         x = self.global_layer_norm(x)
         batch_size = x.size(1)
-        transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
-        transformer_tgt = self.pos_encoder(transformer_tgt)
-        transformer_tgt = self.tgt_norm(transformer_tgt)
+        transformer_tgt = None
+        if self.n_decoders > 0:
+            transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
+            transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+            transformer_tgt = self.pos_encoder(transformer_tgt)
+            transformer_tgt = self.tgt_norm(transformer_tgt)
         x = self.transformer(x, transformer_tgt)
+        x = x[:self.n_tokens_out]
         x = x.transpose(0, 1)
 
         x = self.output_nn(x) if self.output_nn is not None else x
@@ -286,14 +297,17 @@ class TransformerFeaturizer(nn.Module):
 class TransformerEnsembleFeaturizer(nn.Module):
     def __init__(self, ensemble_config: Dict[str, Dict[str, object]],
                  n_tokens_out, n_channels_out,
-                 n_internal_dims, n_layers,
+                 n_internal_dims, n_encoders, n_decoders,
                  gaussian_noise=0.0, dropout=0.0):
         super(TransformerEnsembleFeaturizer, self).__init__()
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
-        decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
-                                          requires_grad=True)
-        self.register_parameter("decoder_query", decoder_query)
+        self.n_decoders = n_decoders
+        if n_decoders > 0:
+            decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
+                                              requires_grad=True)
+            self.register_parameter("decoder_query", decoder_query)
+            self.tgt_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
 
         self.ensemble_config = ensemble_config
         self.n_tokens_out = n_tokens_out
@@ -331,17 +345,12 @@ class TransformerEnsembleFeaturizer(nn.Module):
             self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
             init_fc(self.output_nn, "linear")
 
-        self.transformer = Transformer(n_internal_dims, 16, n_layers, n_layers, n_internal_dims * 4, dropout)
-
+        self.transformer = Transformer(n_internal_dims, 16, n_encoders, n_decoders, n_internal_dims * 4, dropout)
         self.n_tokens_in = sum([v["n_tokens_in"] for k, v in ensemble_config.items()])
-        TransformerFeaturizer(self.n_tokens_in, n_internal_dims, n_tokens_out,
-                              n_channels_out,
-                              n_internal_dims, n_layers, gaussian_noise, dropout)
 
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.pos_encoder2d = PositionalEncoding2D(n_internal_dims, dropout)
         self.global_layer_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
-        self.tgt_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
 
     def forward(self, idict: Dict[str, torch.Tensor]):
         vecs = []
@@ -361,11 +370,14 @@ class TransformerEnsembleFeaturizer(nn.Module):
         assert x.size(0) == self.n_tokens_in
         x = self.global_layer_norm(x)
         batch_size = x.size(1)
-        transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
-        transformer_tgt = self.pos_encoder(transformer_tgt)
-        transformer_tgt = self.tgt_norm(transformer_tgt)
+        transformer_tgt = None
+        if self.n_decoders > 0:
+            transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
+            transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+            transformer_tgt = self.pos_encoder(transformer_tgt)
+            transformer_tgt = self.tgt_norm(transformer_tgt)
         x = self.transformer(x, transformer_tgt)
+        x = x[:self.n_tokens_out]
         x = x.transpose(0, 1)
         x = self.output_nn(x) if self.output_nn is not None else x
         assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
