@@ -172,6 +172,8 @@ File Structure inside wiki-idf cloned dir
     
 ## Other References
     - https://gist.github.com/jerheff/8cf06fe1df0695806456
+    - https://github.com/umbertogriffo/focal-loss-keras
+    - https://discuss.pytorch.org/t/zero-grad-optimizer-or-net/1887/12
     - LSTM
         - https://stackoverflow.com/questions/53010465/bidirectional-lstm-output-question-in-pytorch
         - https://stackoverflow.com/questions/48302810/whats-the-difference-between-hidden-and-output-in-pytorch-lstm

@@ -52,7 +52,9 @@ def get_cosine_with_hard_restarts_schedule_with_warmup(warmup_proportion=0.2, nu
     return init_fn
 
 
-def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, validation_strategy=None,
+def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
+          accumulation_steps=1,
+          validation_strategy=None,
           plot=False,
           sampling_policy=None,
           class_weights={0: 1, 1: 1.8}):
@@ -69,6 +71,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     else:
         raise NotImplementedError()
 
+    assert accumulation_steps >= 1 and type(accumulation_steps) == int
     _ = model.train()
     use_autocast = False
     try:
@@ -113,32 +116,40 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
         divisor = 1
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                               shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=sampler)
+
     train_losses = []
     learning_rates = []
     epochs = int(epochs * divisor)
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, examples) if scheduler_init_fn is not None else (None, False, False)
-    print("Autocast = ", use_autocast, "Epochs = ", epochs,"Divisor =",divisor,"Examples =",examples, "Batch Size = ", batch_size,
-          "# Training Samples = ", len(training_fold_labels), "Weighted Sampling = ", sampler is not None)
+    print("Autocast = ", use_autocast, "Epochs = ", epochs, "Divisor =", divisor, "Examples =", examples, "Batch Size = ", batch_size,)
+    print("# Training Samples = ", len(training_fold_labels), "Weighted Sampling = ", sampler is not None, "Num Batches = ", len(train_loader))
     with trange(epochs) as epo:
         for epoc in epo:
             _ = model.train()
+            optimizer.zero_grad()
             if update_in_epoch:
                 scheduler.step()
             clean_memory()
             train_losses_cur_epoch = []
             with tqdm(train_loader) as data_batch:
-                for batch in data_batch:
-                    optimizer.zero_grad()
+                for batch_idx, batch in enumerate(data_batch):
                     if use_autocast:
                         with autocast():
                             _, _, _, loss = model(batch)
+                            loss = loss / accumulation_steps
+
                         scaler.scale(loss).backward()
-                        scaler.step(optimizer)
-                        scaler.update()
+                        if (batch_idx + 1) % accumulation_steps == 0:
+                            scaler.step(optimizer)
+                            scaler.update()
+                            optimizer.zero_grad()
                     else:
                         _, _, _, loss = model(batch)
+                        loss = loss / accumulation_steps
                         loss.backward()
-                        optimizer.step()
+                        if (batch_idx + 1) % accumulation_steps == 0:
+                            optimizer.step()
+                            optimizer.zero_grad()
                     if update_in_batch:
                         scheduler.step()
                     train_losses.append(float(loss.cpu().detach().item()))
@@ -320,6 +331,7 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
 
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           augmentation_weights: Dict[str, float],
+                          accumulation_steps=1,
                           multi_eval=False, kfold=False, scheduler_init_fn=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
@@ -347,7 +359,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                                    train=dict(method=validate, args=[model, batch_size, training_test_dataset, train_df]),
                                    val=dict(method=validate, args=[model, batch_size, testing_fold_dataset, test_df]))
         validation_strategy = validation_strategy if validation_epochs is not None else None
-        train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset,
+        train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)

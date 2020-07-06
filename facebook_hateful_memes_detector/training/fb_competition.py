@@ -26,6 +26,7 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout,):
 
 
 def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weights: Dict[str, float],
+                      accumulation_steps=1,
                       multi_eval=False, scheduler_init_fn=None,
                       sampling_policy=None, class_weights={0: 1, 1: 1.8}):
     train_df = datadict["train"]
@@ -41,7 +42,8 @@ def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weigh
     dataset = convert_dataframe_to_dataset(train_augmented, metadata, True)
 
     model, optimizer = model_fn(dataset=dataset)
-    train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, plot=True,
+    train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
+                                         accumulation_steps=accumulation_steps, plot=True,
                                          sampling_policy=sampling_policy, class_weights=class_weights)
     return predict(model, datadict, batch_size, augmentation_weights, multi_eval)
 
