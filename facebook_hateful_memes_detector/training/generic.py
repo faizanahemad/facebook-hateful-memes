@@ -93,18 +93,18 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
         examples = int(len(weights)/2)
         shuffle = False
     elif sampling_policy == "without_replacement_v2":
-        cnt = Counter(training_fold_labels)
+        cnt = Counter(training_fold_labels.tolist())
         examples = cnt.most_common()[-1][1] * len(cnt)
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
         sampler = WeightedRandomSampler(weights, examples, replacement=False)
-        divisor = len(training_fold_labels) / examples
+        divisor = float(len(training_fold_labels)) / examples
         shuffle = False
     elif sampling_policy == "without_replacement_v3":
-        cnt = Counter(training_fold_labels)
+        cnt = Counter(training_fold_labels.tolist())
         examples = int(cnt.most_common()[-1][1] * len(cnt) / 2)
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
         sampler = WeightedRandomSampler(weights, examples, replacement=False)
-        divisor = len(training_fold_labels) / examples
+        divisor = float(len(training_fold_labels)) / examples
         shuffle = False
     else:
         sampler = None
@@ -117,7 +117,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
     learning_rates = []
     epochs = int(epochs * divisor)
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, examples) if scheduler_init_fn is not None else (None, False, False)
-    print("Autocast = ", use_autocast, "Epochs = ", epochs, "Batch Size = ", batch_size,
+    print("Autocast = ", use_autocast, "Epochs = ", epochs,"Divisor =",divisor,"Examples =",examples, "Batch Size = ", batch_size,
           "# Training Samples = ", len(training_fold_labels), "Weighted Sampling = ", sampler is not None)
     with trange(epochs) as epo:
         for epoc in epo:
