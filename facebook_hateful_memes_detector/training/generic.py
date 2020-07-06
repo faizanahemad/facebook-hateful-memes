@@ -18,6 +18,8 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
 from transformers import optimization
 from .model_params import group_wise_lr
+from collections import Counter
+
 
 def get_multistep_lr(milestones, gamma=0.2):
     def scheduler_init_fn(optimizer, epochs, batch_size, n_samples):
@@ -81,23 +83,40 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset, vali
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
         sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
         shuffle = False
+        examples = len(training_fold_labels)
         divisor = 1
     elif sampling_policy == "without_replacement":
         # num lowest class * num classes
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
         sampler = WeightedRandomSampler(weights, int(len(weights)/2), replacement=False)
         divisor = 2
+        examples = int(len(weights)/2)
+        shuffle = False
+    elif sampling_policy == "without_replacement_v2":
+        cnt = Counter(training_fold_labels)
+        examples = cnt.most_common()[-1][1] * len(cnt)
+        weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
+        sampler = WeightedRandomSampler(weights, examples, replacement=False)
+        divisor = len(training_fold_labels) / examples
+        shuffle = False
+    elif sampling_policy == "without_replacement_v3":
+        cnt = Counter(training_fold_labels)
+        examples = int(cnt.most_common()[-1][1] * len(cnt) / 2)
+        weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
+        sampler = WeightedRandomSampler(weights, examples, replacement=False)
+        divisor = len(training_fold_labels) / examples
         shuffle = False
     else:
         sampler = None
         shuffle = True
+        examples = len(training_fold_labels)
         divisor = 1
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                               shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=sampler)
     train_losses = []
     learning_rates = []
-    epochs = epochs * divisor
-    scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, int(len(training_fold_labels)/divisor)) if scheduler_init_fn is not None else (None, False, False)
+    epochs = int(epochs * divisor)
+    scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, examples) if scheduler_init_fn is not None else (None, False, False)
     print("Autocast = ", use_autocast, "Epochs = ", epochs, "Batch Size = ", batch_size,
           "# Training Samples = ", len(training_fold_labels), "Weighted Sampling = ", sampler is not None)
     with trange(epochs) as epo:
