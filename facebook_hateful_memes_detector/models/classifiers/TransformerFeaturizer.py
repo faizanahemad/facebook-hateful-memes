@@ -256,7 +256,7 @@ class TransformerFeaturizer(nn.Module):
             decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
                                          requires_grad=True)
             self.register_parameter("decoder_query", decoder_query)
-            self.tgt_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
+            self.tgt_norm = nn.LayerNorm(n_internal_dims, eps=1e-06)
 
         self.input_nn = None
         if n_channels_in != n_internal_dims:
@@ -307,7 +307,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
             decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
                                               requires_grad=True)
             self.register_parameter("decoder_query", decoder_query)
-            self.tgt_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
+            self.tgt_norm = nn.LayerNorm(n_internal_dims, eps=1e-06)
 
         self.ensemble_config = ensemble_config
         self.n_tokens_out = n_tokens_out
