@@ -408,6 +408,7 @@ def get_image_info_fn(enable_encoder_feats=False,
         kwargs["device"] = device
     else:
         device = get_device()
+        kwargs["device"] = device
 
     def clean_memory():
         _ = gc.collect()
