@@ -481,6 +481,13 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
     return model, shape
 
 
+def get_vgg_face_model():
+    from .senet50_256 import senet50_256
+    model = senet50_256("senet50_256.pth")
+    model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2)), Transpose())
+    return model
+
+
 def loss_calculator(logits, labels, task, loss_fn):
     logits = logits.to(get_device())
     loss = torch.tensor(0.0, device=get_device())

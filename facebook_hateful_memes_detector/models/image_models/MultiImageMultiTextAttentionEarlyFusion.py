@@ -15,7 +15,7 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_device, \
-    dict2sampleList, clean_memory
+    dict2sampleList, clean_memory, get_vgg_face_model
 from ..classifiers import TransformerEnsembleFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.detr import get_detr_model
@@ -70,6 +70,10 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
             elif "detr" in imo:
                 im_shape = (256, 100)
                 im_model = LambdaLayer(get_detr_model(get_device(), imo)["batch_detr_fn"], module_gaussian, module_dropout)
+                im_proc = nn.Identity()
+            elif "vgg_face" in imo:
+                im_shape = (256, 1)
+                im_model = LambdaLayer(get_vgg_face_model(), module_gaussian, module_dropout)
                 im_proc = nn.Identity()
             else:
                 raise NotImplementedError(imo)
