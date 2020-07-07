@@ -256,7 +256,7 @@ class TransformerFeaturizer(nn.Module):
             decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
                                          requires_grad=True)
             self.register_parameter("decoder_query", decoder_query)
-            self.tgt_norm = nn.LayerNorm(n_internal_dims, eps=1e-06)
+            self.tgt_norm = nn.LayerNorm(n_internal_dims)
 
         self.input_nn = None
         if n_channels_in != n_internal_dims:
@@ -270,7 +270,7 @@ class TransformerFeaturizer(nn.Module):
 
         self.transformer = Transformer(n_internal_dims, 16, n_encoders, n_decoders, n_internal_dims*4, dropout)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
-        self.global_layer_norm = nn.LayerNorm(n_internal_dims, eps=1e-06)
+        self.global_layer_norm = nn.LayerNorm(n_internal_dims)
 
     def forward(self, x):
         x = self.input_nn(x) if self.input_nn is not None else x
@@ -307,7 +307,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
             decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
                                               requires_grad=True)
             self.register_parameter("decoder_query", decoder_query)
-            self.tgt_norm = nn.LayerNorm(n_internal_dims, eps=1e-06)
+            self.tgt_norm = nn.LayerNorm(n_internal_dims)
 
         self.ensemble_config = ensemble_config
         self.n_tokens_out = n_tokens_out
@@ -333,7 +333,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
                 input_nn2 = nn.Linear(n_internal_dims * 2, n_internal_dims)
                 init_fc(input_nn2, "linear")
                 input_nn = nn.Sequential(dp, input_nn1, nn.LeakyReLU(), gn, input_nn2)
-            layer_norms[k] = nn.LayerNorm(n_internal_dims, eps=1e-06)
+            layer_norms[k] = nn.LayerNorm(n_internal_dims)
             ensemble_inp[k] = input_nn
             ensemble_id[k] = torch.tensor(i).long().to(get_device())
         self.ensemble_inp = nn.ModuleDict(ensemble_inp)
@@ -350,7 +350,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
 
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.pos_encoder2d = PositionalEncoding2D(n_internal_dims, dropout)
-        self.global_layer_norm = nn.LayerNorm(self.n_internal_dims, eps=1e-06)
+        self.global_layer_norm = nn.LayerNorm(self.n_internal_dims)
 
     def forward(self, idict: Dict[str, torch.Tensor]):
         vecs = []
