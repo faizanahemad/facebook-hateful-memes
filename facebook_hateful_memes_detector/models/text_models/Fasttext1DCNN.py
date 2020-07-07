@@ -34,7 +34,7 @@ class Fasttext1DCNNModel(nn.Module):
         self.dice = True
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
-        self.eps = 1e-3
+        self.eps = 1e-5
 
         if not use_as_super:
             if fasttext_file is not None:
@@ -76,39 +76,36 @@ class Fasttext1DCNNModel(nn.Module):
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
         if self.binary and self.training and self.auc_loss:
-                # aucroc loss
-                probas = logits[:, 1]
-                pos_probas = labels * probas
-                neg_probas = (1-labels) * probas
-                neg_probas = neg_probas[neg_probas > self.eps]
-                pos_probas = pos_probas[pos_probas > self.eps]
-                num_entries = max(int(len(labels)/8), 1)
-                num_entries_neg = min(num_entries, int(len(neg_probas)/2))
-                num_entries_pos = min(num_entries, int(len(pos_probas)/2))
-                assert num_entries_neg >= 1 and num_entries_pos >= 1
+            # aucroc loss
+            probas = logits[:, 1]
+            pos_probas = labels * probas
+            neg_probas = (1-labels) * probas
+            neg_probas = neg_probas[neg_probas > self.eps]
+            pos_probas = pos_probas[pos_probas > self.eps]
+
+            pos_probas = pos_probas[pos_probas < (1 - self.eps)]
+            neg_probas = neg_probas[neg_probas < (1 - self.eps)]  # TODO: Is this required
+
+            num_entries = max(int(len(labels)/8), 1)
+            num_entries_neg = min(num_entries, int(len(neg_probas)/2))
+            num_entries_pos = min(num_entries, int(len(pos_probas)/2))
+            loss_1, loss_2 = 0.0, 0.0
+            pos_probas_min_tmp = pos_probas.min()
+            neg_probas_max_tmp = neg_probas.max()
+            neg_probas = neg_probas[neg_probas > pos_probas_min_tmp]
+            pos_probas = pos_probas[pos_probas < neg_probas_max_tmp]
+            if num_entries_neg >= 1:
                 neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
-                pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()                
-
-                pos_probas = pos_probas[pos_probas < (1 - self.eps)]
-                neg_probas = neg_probas[neg_probas < (1 - self.eps)]
-
-                pos_probas_min_tmp = pos_probas.min()
-                neg_probas_max_tmp = neg_probas.max() 
-                
-                
-                neg_probas = neg_probas[neg_probas > pos_probas_min_tmp]
-                pos_probas = pos_probas[pos_probas < neg_probas_max_tmp]
-                loss_1 = (neg_probas - pos_probas_min).mean()
                 loss_2 = (neg_probas_max - pos_probas).mean()
-                auc_loss = (loss_1 + loss_2)/2
 
-                loss = 1.0 * loss + 0.5 * auc_loss
+            if num_entries_pos >= 1:
+                pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
+                loss_1 = (neg_probas - pos_probas_min).mean()
+            auc_loss = (loss_1 + loss_2)/2
+            loss = 1.0 * loss + 0.5 * auc_loss
+
         if self.binary and self.training and self.dice:
-            dc1 = ((1 - logits[:, 0]) * (1-labels)).mean()
-            dc2 = ((1 - logits[:, 1]) * labels).mean()
-            dc3 = torch.prod(logits, 1).mean()
-            dice_loss = (dc3 + dc1 + dc2)/3.0
-            loss = loss + 0.5* dc3
+            loss = loss + 0.5 * torch.prod(logits, 1).mean()
 
         return logits, vectors.mean(1), vectors, loss
 
