@@ -345,7 +345,7 @@ class Resnet50_256(nn.Module):
         conv5_3x = self.conv5_3_relu(conv5_3)
         pool5_7x7_s1 = self.pool5_7x7_s1(conv5_3x)
         feat_extract = self.feat_extract(pool5_7x7_s1)
-        return None, feat_extract
+        return 0.0, feat_extract
 
 
 def resnet50_256(weights_path=None, **kwargs):
