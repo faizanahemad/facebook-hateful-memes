@@ -127,6 +127,7 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
     with trange(epochs) as epo:
+        # TODO Reduce regularization of model in last few epochs, this way model is acquainted to work with real less regularized data (Real data distribution).
         for epoc in epo:
             _ = model.train()
             optimizer.zero_grad()

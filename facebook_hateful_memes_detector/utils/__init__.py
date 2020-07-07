@@ -680,21 +680,6 @@ class MultiTaskForward(nn.Module):
         return logits_list if len(logits_list) > 1 else logits_list[0], loss_total
 
 
-class WordChannelReducer(nn.Module):
-    def __init__(self, in_channels, out_channels, strides):
-        super(WordChannelReducer, self).__init__()
-        self.strides = strides
-        conv = nn.Conv1d(in_channels, out_channels * 2, strides, strides, padding=0, groups=4, bias=False)
-        init_fc(conv, "leaky_relu")
-        conv2 = nn.Conv1d(out_channels * 2, out_channels, 1, 1, padding=0, groups=1, bias=False)
-        init_fc(conv2, "linear")
-        self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), conv2, Transpose())
-
-    def forward(self, x):
-        assert x.size(1) % self.strides == 0
-        return self.layers(x)
-
-
 class LambdaLayer(nn.Module):
     def __init__(self, lambd, gaussian_noise=0.0, dropout=0.0):
         super(LambdaLayer, self).__init__()
