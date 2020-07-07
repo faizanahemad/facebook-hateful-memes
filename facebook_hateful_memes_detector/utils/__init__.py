@@ -691,7 +691,7 @@ class WordChannelReducer(nn.Module):
         self.layers = nn.Sequential(Transpose(), conv, nn.LeakyReLU(), conv2, Transpose())
 
     def forward(self, x):
-        assert x.size(-1) % self.strides == 0
+        assert x.size(1) % self.strides == 0
         return self.layers(x)
 
 
