@@ -495,7 +495,7 @@ def get_vgg_face_model(model='resnet'):
         for p in c.parameters():
             p.requires_grad = False
 
-    model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2)), Transpose())
+    model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2).transpose(1, 2).transpose(2, 3).flatten(1, 2)),)
     return model
 
 
