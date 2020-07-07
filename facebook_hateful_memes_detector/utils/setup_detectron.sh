@@ -18,7 +18,7 @@ gdown --id 1VmUzgu0qlmCMqM1ajoOZxOXP3hiC_qlL
 gdown --id 1zQe00W02veVYq-hdq5WsPOS3OPkNdq79
 
 
-
+# https://github.com/ox-vgg/vgg_face2
 wget -O senet50_256_pytorch.tar.gz http://www.robots.ox.ac.uk/~vgg/data/vgg_face2/models/pytorch/senet50_256_pytorch.tar.gz
 tar -xvf senet50_256_pytorch.tar.gz
 

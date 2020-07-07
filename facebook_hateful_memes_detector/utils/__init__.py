@@ -17,7 +17,9 @@ from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, m
 import os
 import torch
 import gc
+import os
 import random
+DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 RE_D = re.compile('\d')
@@ -485,9 +487,9 @@ def get_vgg_face_model(model='resnet'):
     from .senet50_256 import senet50_256
     from .resnet50_256 import resnet50_256
     if model == 'senet':
-        model = senet50_256("senet50_256.pth")
+        model = senet50_256(f"{DIR}/senet50_256.pth")
     elif model == 'resnet':
-        model = resnet50_256('resnet50_256.pth')
+        model = resnet50_256(f"{DIR}/resnet50_256.pth")
 
     for c in list(model.children())[:-1]:
         for p in c.parameters():
