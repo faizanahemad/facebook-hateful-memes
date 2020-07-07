@@ -481,9 +481,18 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
     return model, shape
 
 
-def get_vgg_face_model():
+def get_vgg_face_model(model='resnet'):
     from .senet50_256 import senet50_256
-    model = senet50_256("senet50_256.pth")
+    from .resnet50_256 import resnet50_256
+    if model == 'senet':
+        model = senet50_256("senet50_256.pth")
+    elif model == 'resnet':
+        model = resnet50_256('resnet50_256.pth')
+
+    for c in list(model.children())[:-1]:
+        for p in c.parameters():
+            p.requires_grad = False
+
     model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2)), Transpose())
     return model
 

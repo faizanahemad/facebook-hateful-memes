@@ -21,3 +21,6 @@ gdown --id 1zQe00W02veVYq-hdq5WsPOS3OPkNdq79
 
 wget -O senet50_256_pytorch.tar.gz http://www.robots.ox.ac.uk/~vgg/data/vgg_face2/models/pytorch/senet50_256_pytorch.tar.gz
 tar -xvf senet50_256_pytorch.tar.gz
+
+wget -O resnet50_256_pytorch.tar.gz http://www.robots.ox.ac.uk/~vgg/data/vgg_face2/models/pytorch/resnet50_256_pytorch.tar.gz
+tar -xvf resnet50_256_pytorch.tar.gz resnet50_256.pth
