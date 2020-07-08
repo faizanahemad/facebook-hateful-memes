@@ -396,6 +396,7 @@ class ImageCaptionFeatures:
         m = dict(att_embed=att_embed, encoder=encoder)
         if enable_image_captions:
             m["model"] = model
+        print(self.__class__.__name__, ": Loaded Model...")
         return m
 
 
