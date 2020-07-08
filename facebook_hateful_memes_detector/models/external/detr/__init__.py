@@ -258,6 +258,19 @@ class DETR(DETRTransferBase):
                  enable_plot=True):
         super().__init__(resnet, device, im_size)
         self.device = device
+
+        # model, postprocessor = torch.hub.load('facebookresearch/detr', 'detr_resnet101_panoptic', pretrained=True, return_postprocessor=True, num_classes=250)
+        # n_parameters = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        # print('number of params:', n_parameters)
+
+        self.decoder_layer = decoder_layer
+        self.enable_plot = enable_plot
+
+    def build_model(self, ):
+
+        resnet = self.model_name
+        device = self.device
+        print(self.__class__.__name__, self.model_name, ": Loaded Model...")
         if "panoptic" in resnet:
             model, postprocessor = torch.hub.load('facebookresearch/detr', resnet, pretrained=True, return_postprocessor=True,
                                                   num_classes=250)
@@ -288,19 +301,17 @@ class DETR(DETRTransferBase):
             self.load_state_dict(state_dict)
             self.to(self.device)
             self.eval()
-            self.enable_plot = enable_plot
         else:
             self.model = torch.hub.load('facebookresearch/detr', resnet, pretrained=True)
             self.model.to(device)
-        # model, postprocessor = torch.hub.load('facebookresearch/detr', 'detr_resnet101_panoptic', pretrained=True, return_postprocessor=True, num_classes=250)
-        n_parameters = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        print('number of params:', n_parameters)
+
         for p in self.parameters():
             p.requires_grad = False
-        self.decoder_layer = decoder_layer
-        self.enable_plot = enable_plot
 
     def forward(self, images):
+        if not hasattr(self, "model"):
+            self.build_model()
+
         samples = self.get_pil_image(images)
         samples = nested_tensor_from_tensor_list(samples)
         samples.to(self.device)
