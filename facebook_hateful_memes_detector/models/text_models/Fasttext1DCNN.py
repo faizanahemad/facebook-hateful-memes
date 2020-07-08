@@ -88,12 +88,16 @@ class Fasttext1DCNNModel(nn.Module):
 
             num_entries = max(int(len(labels)/8), 1)
             loss_1, loss_2 = 0.0, 0.0
-            pos_probas_min_tmp = pos_probas.min()
-            neg_probas_max_tmp = neg_probas.max()
-            neg_probas = neg_probas[neg_probas > pos_probas_min_tmp]
-            pos_probas = pos_probas[pos_probas < neg_probas_max_tmp]
-            num_entries_neg = min(num_entries, int(len(neg_probas) / 2))
-            num_entries_pos = min(num_entries, int(len(pos_probas) / 2))
+            num_entries_neg, num_entries_pos = 0, 0
+
+            if len(neg_probas) > 1:
+                pos_probas = pos_probas[pos_probas < neg_probas.max()]
+                num_entries_neg = min(num_entries, int(len(neg_probas) / 2))
+
+            if len(pos_probas) > 1:
+                neg_probas = neg_probas[neg_probas > pos_probas.min()]
+                num_entries_pos = min(num_entries, int(len(pos_probas) / 2))
+
             if num_entries_neg >= 1:
                 neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
                 loss_2 = (neg_probas_max - pos_probas).mean()
