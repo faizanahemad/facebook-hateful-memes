@@ -85,6 +85,7 @@ class LXMERTFeatureExtractor:
             from detectron2.engine import DefaultPredictor
             predictor = DefaultPredictor(self.cfg)
             setattr(self.__class__, "predictor", predictor)
+            print(self.__class__.__name__, ": Loaded Model...")
         detectron_features = self.doit(url)
         return detectron_features
 
@@ -202,6 +203,7 @@ class FeatureExtractor:
 
         model.to(self.device)
         model.eval()
+        print(self.__class__.__name__, ": Loaded Model...")
         return model
 
     def get_pil_image(self, image_path):
