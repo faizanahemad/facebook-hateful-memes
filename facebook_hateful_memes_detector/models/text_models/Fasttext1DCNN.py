@@ -75,6 +75,8 @@ class Fasttext1DCNNModel(nn.Module):
         vectors = self.get_word_vectors(texts)
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
+        auc_loss, dice_loss = 0.0, 0.0
+        auc_loss_coef, dice_loss_coef = 0.0, 0.0
         if self.binary and self.training and self.auc_loss:
             # aucroc loss
             probas = logits[:, 1]
@@ -105,11 +107,14 @@ class Fasttext1DCNNModel(nn.Module):
             if num_entries_pos >= 1:
                 pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
                 loss_1 = (neg_probas - pos_probas_min).mean()
-            auc_loss = (loss_1 + loss_2)/2
-            loss = 1.0 * loss + 0.5 * auc_loss
+            auc_loss = loss_1 + loss_2
+            auc_loss_coef = 0.5
 
         if self.binary and self.training and self.dice:
-            loss = loss + 0.5 * torch.prod(logits, 1).mean()
+            dice_loss = torch.prod(logits, 1).mean()
+            dice_loss_coef = 0.5
+
+        loss = (loss + auc_loss_coef * auc_loss + dice_loss_coef * dice_loss)/(1 + auc_loss_coef + dice_loss_coef)
 
         return logits, vectors.mean(1), vectors, loss
 
