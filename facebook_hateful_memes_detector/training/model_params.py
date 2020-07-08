@@ -51,12 +51,6 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
         confs.append(conf)
         nms.extend(names)
 
-        if "finetune" in primitives:
-            finetune = primitives["finetune"]
-            assert type(finetune) == bool
-            for p in params:
-                p.requires_grad = finetune
-
     plen = sum([len(list(c["params"])) for c in confs])
     assert len(list(model.parameters())) == plen
     assert set(list(zip(*model.named_parameters()))[0]) == set(nms)
@@ -66,6 +60,32 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
             c["params"] = (n for n in c["params"])
     return confs, nms
 
+
+def group_wise_finetune(model, group_finetune_conf: Dict, path=""):
+
+    assert type(group_finetune_conf) == dict
+    nms = []
+    for kl, vl in group_finetune_conf.items():
+        assert type(kl) == str
+        assert type(vl) == dict or type(vl) == float or type(vl) == int or type(vl) == bool
+
+        if type(vl) == dict:
+            assert hasattr(model, kl)
+            names = group_wise_finetune(getattr(model, kl), vl, path=path + kl + ".")
+            names = list(map(lambda n: kl + "." + n, names))
+            nms.extend(names)
+
+    primitives = {kk: vk for kk, vk in group_finetune_conf.items() if type(vk) == bool}
+    remaining_params = [(k, p) for k, p in model.named_parameters() if k not in nms]
+    if len(remaining_params) > 0 and "finetune" in primitives:
+        names, params = zip(*remaining_params)
+        nms.extend(names)
+        finetune = primitives["finetune"]
+        assert type(finetune) == bool
+        for p in params:
+            p.requires_grad = finetune
+
+    return nms
 
 if __name__ == "__main__":
     model = models.resnet18(pretrained=True)
@@ -112,5 +132,39 @@ if __name__ == "__main__":
         pprint(cfg)
         print("-" * 80)
         pprint(confs)
+        print("#" * 140)
+
+    # Test Fine Tuning Conf
+
+    test_configs = [
+        # Give same Lr to all model params
+        {"lr": 0.3},
+
+
+        {"layer4": {"lr": 0.3, "finetune": True}},
+
+        {"layer3": {"0": {"conv2": {"lr": 0.001}},
+                    "1": {"lr": 0.003, "finetune": True}}},
+
+
+        {"layer4": {"lr": 0.3, "finetune": True},
+         "layer3": {"0": {"conv2": {"lr": 0.001}},
+                    "1": {"lr": 0.003, "finetune": True},
+                    "finetune": False},
+         }
+    ]
+
+    for cfg in test_configs:
+        print("#" * 140)
+        for p in model.parameters():
+            p.requires_grad = False
+
+        names = group_wise_finetune(model, cfg)
+        print(cfg, names)
+        print("-" * 80)
+        for n, p in model.named_parameters():
+            if p.requires_grad:
+                print(n)
+
         print("#" * 140)
 

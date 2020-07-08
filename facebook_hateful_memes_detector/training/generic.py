@@ -17,7 +17,7 @@ import gc
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
 from transformers import optimization
-from .model_params import group_wise_lr
+from .model_params import group_wise_lr, group_wise_finetune
 from collections import Counter
 
 
@@ -271,8 +271,9 @@ def model_builder(model_class, model_params,
                 params_conf = per_param_opts_fn
             elif type(per_param_opts_fn) == dict:
                 params_conf, _ = group_wise_lr(model, per_param_opts_fn)
+                _ = group_wise_finetune(model, per_param_opts_fn)
             else:
-                params_conf = per_param_opts_fn(model)
+                raise NotImplementedError()
             assert type(params_conf) == list
             assert len(params_conf) > 0
             assert all(["params" in p for p in params_conf])
