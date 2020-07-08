@@ -72,7 +72,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 im_model = LambdaLayer(get_detr_model(get_device(), imo)["batch_detr_fn"], module_gaussian, module_dropout)
                 im_proc = nn.Identity()
             elif "vgg_face" in imo:
-                im_shape = (256, 16)
+                im_shape = (256, 1)
                 im_model = LambdaLayer(get_vgg_face_model(), module_gaussian, module_dropout)
                 im_proc = nn.Identity()
             else:

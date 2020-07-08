@@ -166,7 +166,7 @@ class Resnet50_256(nn.Module):
         self.conv5_3_1x1_increase = nn.Conv2d(512, 2048, kernel_size=[1, 1], stride=(1, 1), bias=False)
         self.conv5_3_1x1_increase_bn = nn.BatchNorm2d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
         self.conv5_3_relu = nn.ReLU(inplace=True)
-        self.pool5_7x7_s1 = nn.AvgPool2d(kernel_size=[7, 7], stride=[1, 1], padding=0)
+        self.pool5_7x7_s1 = nn.AdaptiveAvgPool2d(1)
         self.feat_extract = nn.Conv2d(2048, 256, kernel_size=[1, 1], stride=(1, 1))
         self.classifier_8631_f = nn.Conv2d(256, 8631, kernel_size=[1, 1], stride=(1, 1))
 

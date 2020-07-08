@@ -487,6 +487,7 @@ def get_vgg_face_model(model='resnet'):
     from .senet50_256 import senet50_256
     from .resnet50_256 import resnet50_256
     if model == 'senet':
+        raise NotImplementedError
         model = senet50_256(f"{DIR}/senet50_256.pth")
     elif model == 'resnet':
         model = resnet50_256(f"{DIR}/resnet50_256.pth")
@@ -495,7 +496,7 @@ def get_vgg_face_model(model='resnet'):
         for p in c.parameters():
             p.requires_grad = False
 
-    model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2).transpose(1, 2).transpose(2, 3).flatten(1, 2)),)
+    model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2).transpose(1, 2)),)
     return model
 
 
