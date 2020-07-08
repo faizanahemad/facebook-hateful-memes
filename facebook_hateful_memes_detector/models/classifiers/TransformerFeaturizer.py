@@ -170,7 +170,7 @@ class Transformer(nn.Module):
 
     def forward(self, src: Tensor, tgt: Tensor, src_mask: Optional[Tensor] = None, tgt_mask: Optional[Tensor] = None,
                 memory_mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None,
-                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
+                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
         r"""Take in and process masked source/target sequences.
 
         Args:
@@ -231,7 +231,7 @@ class Transformer(nn.Module):
             output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
                                   tgt_key_padding_mask=tgt_key_padding_mask,
                                   memory_key_padding_mask=memory_key_padding_mask)
-        return output
+        return output, memory
 
     def _reset_parameters(self):
         r"""Initiate parameters in the transformer model."""
@@ -285,7 +285,8 @@ class TransformerFeaturizer(nn.Module):
             transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
             transformer_tgt = self.pos_encoder(transformer_tgt)
             transformer_tgt = self.tgt_norm(transformer_tgt)
-        x = self.transformer(x, transformer_tgt)
+        x, m = self.transformer(x, transformer_tgt)
+        m = m[:self.n_tokens_out]
         x = x[:self.n_tokens_out]
         x = x.transpose(0, 1)
 
@@ -376,8 +377,9 @@ class TransformerEnsembleFeaturizer(nn.Module):
             transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
             transformer_tgt = self.pos_encoder(transformer_tgt)
             transformer_tgt = self.tgt_norm(transformer_tgt)
-        x = self.transformer(x, transformer_tgt)
+        x, m = self.transformer(x, transformer_tgt)
         x = x[:self.n_tokens_out]
+        m = m[:self.n_tokens_out]
         x = x.transpose(0, 1)
         x = self.output_nn(x) if self.output_nn is not None else x
         assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
