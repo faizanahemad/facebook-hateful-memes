@@ -60,7 +60,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 im_shape = list(im_shape)
                 im_shape[-1] = im_shape[-1] + 1
 
-                im_proc = global_view
+                im_proc = LambdaLayer(global_view)
 
             elif imo == "caption_features":
                 im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"], module_gaussian, module_dropout)
