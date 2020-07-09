@@ -107,13 +107,11 @@ class PositionalEncoding2D(nn.Module):
         x = x.transpose(0, 1).transpose(1, 2)  # H, W, B, C
         pe = self.pe[:x.size(0), :] # H, C
         pe_abs = self.pe[:x.size(0) * x.size(1), :]
-        # print("2D PE", pe.size(), self.pe.size(), torch.max(pe))
-        # pe = pe.expand(pe.size(0), b, self.d_model) # H, B, C
+        pe2 = self.pe[:x.size(1), :]  # W, C
         pe1 = pe.unsqueeze(1)
-        pe2 = pe.unsqueeze(0)
-        # print("2D PE", x.size(), pe.size(), pe1.size(), pe2.size())
-        # sys.stdout.flush()
-        x = x + (pe1 + pe2)/3
+        pe2 = pe2.unsqueeze(0)
+        x = x + 0.3 * pe1
+        x = x + 0.3 * pe2
         x = x.flatten(0, 1) + pe_abs/3
         return self.dropout(x)
 
