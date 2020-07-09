@@ -78,7 +78,7 @@ class Fasttext1DCNNModel(nn.Module):
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
         auc_loss, dice_loss = 0.0, 0.0
-        auc_loss_coef, dice_loss_coef, loss_coef = 0.0, 0.0, 0.75
+        auc_loss_coef, dice_loss_coef, loss_coef = 0.0, 0.0, 0.25
         if self.binary and self.training and self.auc_loss:
             # aucroc loss
             probas = logits[:, 1]
