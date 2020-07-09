@@ -14,7 +14,7 @@ def get_set_device_functions():
     def get_global(key):
         assert type(key) == str
         if key not in dev:
-            raise ValueError("Global key = %s not set. Use `set_global(key, value)` first")
+            raise ValueError("Global key = %s not set. Use `set_global(key, value)` first" % key)
         return dev[key]
 
 
