@@ -26,7 +26,7 @@ class GRUFeaturizer(BaseFeaturizer):
         projection = nn.Linear(n_internal_dims, n_channels_out)
         init_fc(projection, "leaky_relu")
         self.indices = list(reversed(range(n_tokens_in-1, 0, -self.num_pooling)))
-        self.projection = nn.Sequential(projection, nn.LeakyReLU(), nn.LayerNorm(n_channels_out))
+        self.projection = nn.Sequential(GaussianNoise(gaussian_noise), projection, nn.LeakyReLU(), nn.LayerNorm(n_channels_out))
         self.featurizer = lstm
 
     def forward(self, x):

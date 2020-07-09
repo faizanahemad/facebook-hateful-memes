@@ -146,12 +146,14 @@ class Transformer(nn.Module):
     """
 
     def __init__(self, d_model: int = 512, nhead: int = 8, num_encoder_layers: int = 6,
-                 num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1,
+                 num_decoder_layers: int = 6, dim_feedforward: int = 2048,
+                 dropout: float = 0.1, gaussian_noise: float = 0.0,
                  activation: str = "relu") -> None:
         super(Transformer, self).__init__()
         assert num_encoder_layers > 0 or num_decoder_layers > 0
         self.num_encoder_layers = num_encoder_layers
         self.num_decoder_layers = num_decoder_layers
+        self.gaussian_noise = GaussianNoise(gaussian_noise)
 
         if num_encoder_layers > 0:
             encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
@@ -228,7 +230,7 @@ class Transformer(nn.Module):
                 raise RuntimeError("the batch number of src and tgt must be equal")
             if src.size(2) != self.d_model or tgt.size(2) != self.d_model:
                 raise RuntimeError("the feature number of src and tgt must be equal to d_model")
-            output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
+            output = self.decoder(self.gaussian_noise(tgt), self.gaussian_noise(memory), tgt_mask=tgt_mask, memory_mask=memory_mask,
                                   tgt_key_padding_mask=tgt_key_padding_mask,
                                   memory_key_padding_mask=memory_key_padding_mask)
         return output, memory
@@ -268,7 +270,7 @@ class TransformerFeaturizer(nn.Module):
             self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
             init_fc(self.output_nn, "linear")
 
-        self.transformer = Transformer(n_internal_dims, 16, n_encoders, n_decoders, n_internal_dims*4, dropout)
+        self.transformer = Transformer(n_internal_dims, 16, n_encoders, n_decoders, n_internal_dims*4, dropout, gaussian_noise)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.global_layer_norm = nn.LayerNorm(n_internal_dims)
 
@@ -346,7 +348,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
             self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
             init_fc(self.output_nn, "linear")
 
-        self.transformer = Transformer(n_internal_dims, 16, n_encoders, n_decoders, n_internal_dims * 4, dropout)
+        self.transformer = Transformer(n_internal_dims, 16, n_encoders, n_decoders, n_internal_dims * 4, dropout, gaussian_noise)
         self.n_tokens_in = sum([v["n_tokens_in"] for k, v in ensemble_config.items()])
 
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
