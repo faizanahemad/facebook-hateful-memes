@@ -57,6 +57,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                     xv = self.torchvision_pool(x).expand(-1, -1, im_shape[1], -1)
                     return torch.cat([x, xv], 3)
 
+                im_shape = list(im_shape)
                 im_shape[-1] = im_shape[-1] + 1
 
                 im_proc = global_view
