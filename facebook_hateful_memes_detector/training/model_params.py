@@ -1,6 +1,8 @@
 from pprint import pprint
 from typing import Dict
 from torchvision import models
+import torch
+from torch import nn
 
 
 def group_wise_lr(model, group_lr_conf: Dict, path=""):
@@ -89,6 +91,7 @@ def group_wise_finetune(model, group_finetune_conf: Dict, path=""):
 
 if __name__ == "__main__":
     model = models.resnet18(pretrained=True)
+    print(list(model.children())[0].__class__ == nn.Conv2d)
 
     test_configs = [
         # Give same Lr to all model params

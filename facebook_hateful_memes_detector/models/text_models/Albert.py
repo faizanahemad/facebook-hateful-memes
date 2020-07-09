@@ -9,7 +9,7 @@ from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
 import torchvision.models as models
-from ...utils import get_device
+from ...utils import get_device, GaussianNoise
 
 
 class AlbertClassifer(Fasttext1DCNNModel):
@@ -52,6 +52,8 @@ class AlbertClassifer(Fasttext1DCNNModel):
                 raise NotImplementedError()
 
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+
+        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer

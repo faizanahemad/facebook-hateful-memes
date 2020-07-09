@@ -11,7 +11,7 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, get_device, dict2sampleList, clean_memory
+from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise
 from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -19,6 +19,26 @@ from torch.utils.data import Subset
 from transformers import optimization
 from .model_params import group_wise_lr, group_wise_finetune
 from collections import Counter
+
+
+def get_regularizer_scheduler(warmup_proportion=0.3):
+    def scheduler(model, batch, num_batches, epoch, num_epochs):
+        total_batches = num_batches * num_epochs
+        cur_batch = num_batches * epoch + batch
+        warmup_batches = warmup_proportion * total_batches
+        for layer, param in model.reg_layers:
+            new_param = np.interp(cur_batch,
+                                  [0, num_batches, warmup_batches, total_batches - num_batches, total_batches],
+                                  [0, 0, param, 0, 0])
+            if layer.__class__ == GaussianNoise:
+                layer.sigma = new_param
+            elif layer.__class__ == nn.Dropout:
+                layer.p = new_param
+            else:
+                raise NotImplementedError
+
+    return scheduler
+
 
 
 def get_multistep_lr(milestones, gamma=0.2):
@@ -52,8 +72,9 @@ def get_cosine_with_hard_restarts_schedule_with_warmup(warmup_proportion=0.2, nu
     return init_fn
 
 
-def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
-          accumulation_steps=1,
+def train(model, optimizer, scheduler_init_fn,
+          batch_size, epochs, dataset,
+          model_call_back=None, accumulation_steps=1,
           validation_strategy=None,
           plot=False,
           sampling_policy=None,
@@ -137,6 +158,8 @@ def train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
             train_losses_cur_epoch = []
             with tqdm(train_loader) as data_batch:
                 for batch_idx, batch in enumerate(data_batch):
+                    if model_call_back is not None:
+                        model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
                     if use_autocast:
                         with autocast():
                             _, _, _, loss = model(batch)
@@ -337,7 +360,7 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           augmentation_weights: Dict[str, float],
                           accumulation_steps=1,
-                          multi_eval=False, kfold=False, scheduler_init_fn=None,
+                          multi_eval=False, kfold=False, scheduler_init_fn=None, model_call_back=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
                           class_weights={0: 1, 1: 1.8}):
@@ -364,7 +387,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                                    train=dict(method=validate, args=[model, batch_size, training_test_dataset, train_df]),
                                    val=dict(method=validate, args=[model, batch_size, testing_fold_dataset, test_df]))
         validation_strategy = validation_strategy if validation_epochs is not None else None
-        train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, accumulation_steps,
+        train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, model_call_back, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)

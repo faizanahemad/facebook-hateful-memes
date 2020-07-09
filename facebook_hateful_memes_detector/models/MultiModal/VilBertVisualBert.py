@@ -116,6 +116,8 @@ class VilBertVisualBertModel(nn.Module):
                 init_fc(vilbert_seq_v_conv, "leaky_relu")
                 self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
 
+        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+
 
     def get_tokens(self, texts):
         keys = ["input_ids", "input_mask", "segment_ids"]

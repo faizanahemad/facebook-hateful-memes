@@ -125,6 +125,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                                                         n_encoders, n_decoders, gaussian_noise, dropout)
 
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
 
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
