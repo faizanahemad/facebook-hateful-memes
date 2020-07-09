@@ -51,7 +51,15 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 net = "_".join(imo.split("_")[1:])
                 im_model, im_shape = get_torchvision_classification_models(net, large_rf, finetune)
                 im_model = LambdaLayer(im_model, module_gaussian, module_dropout)
-                im_proc = nn.Identity()
+                self.torchvision_pool = nn.AdaptiveAvgPool2d(1)
+
+                def global_view(x):
+                    xv = self.torchvision_pool(x).expand(-1, -1, im_shape[1], -1)
+                    return torch.cat([x, xv], 3)
+
+                im_shape[-1] = im_shape[-1] + 1
+
+                im_proc = global_view
 
             elif imo == "caption_features":
                 im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"], module_gaussian, module_dropout)
