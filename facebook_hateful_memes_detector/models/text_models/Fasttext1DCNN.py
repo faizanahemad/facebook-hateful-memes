@@ -35,7 +35,6 @@ class Fasttext1DCNNModel(nn.Module):
         self.dice = True
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
-        self.eps = 1e-5
 
         if not use_as_super:
             if fasttext_file is not None:

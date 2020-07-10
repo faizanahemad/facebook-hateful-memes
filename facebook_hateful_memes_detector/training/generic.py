@@ -23,17 +23,18 @@ from collections import Counter
 
 def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef, loss_coef, ):
     binary = logits.size(1) == 2
+    eps = 1e-5
     if binary:
         auc_loss = 0.0
         if auc_loss_coef > 0:
             probas = logits[:, 1]
             pos_probas = labels * probas
             neg_probas = (1 - labels) * probas
-            neg_probas = neg_probas[neg_probas > self.eps]
-            pos_probas = pos_probas[pos_probas > self.eps]
+            neg_probas = neg_probas[neg_probas > eps]
+            pos_probas = pos_probas[pos_probas > eps]
 
-            pos_probas = pos_probas[pos_probas < (1 - self.eps)]
-            neg_probas = neg_probas[neg_probas < (1 - self.eps)]  # TODO: Is this required
+            pos_probas = pos_probas[pos_probas < (1 - eps)]
+            neg_probas = neg_probas[neg_probas < (1 - eps)]  # TODO: Is this required
 
             num_entries = max(int(len(labels) / 8), 1)
             loss_1, loss_2 = 0.0, 0.0
@@ -47,11 +48,11 @@ def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef,
                 neg_probas = neg_probas[neg_probas > pos_probas.min()]
                 num_entries_pos = min(num_entries, int(len(pos_probas) / 2))
 
-            if num_entries_neg >= 1 and num_entries_neg < len(neg_probas):
+            if 1 <= num_entries_neg < len(neg_probas):
                 neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
                 loss_2 = (neg_probas_max - pos_probas).mean()
 
-            if num_entries_pos >= 1 and num_entries_pos < len(pos_probas):
+            if 1 <= num_entries_pos < len(pos_probas):
                 pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
                 loss_1 = (neg_probas - pos_probas_min).mean()
             auc_loss = loss_1 + loss_2
