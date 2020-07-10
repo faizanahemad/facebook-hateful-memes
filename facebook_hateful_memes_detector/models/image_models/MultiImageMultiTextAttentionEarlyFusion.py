@@ -28,7 +28,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                  gaussian_noise, dropout,
                  internal_dims, classifier_dims,
                  final_layer_builder,
-                 n_tokens_out, n_encoders, n_decoders,
+                 n_tokens_out, n_layers,
                  **kwargs):
         super(MultiImageMultiTextAttentionEarlyFusionModel, self).__init__()
         assert type(image_models) == list
@@ -131,6 +131,8 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
              self.text_models.items()}
         ensemble_conf.update(text_ensemble_conf)
         # ensemble_conf = text_ensemble_conf
+        n_encoders = kwargs["n_encoders"] if "n_encoders" in kwargs else n_layers
+        n_decoders = kwargs["n_decoders"] if "n_decoders" in kwargs else n_layers
         self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
                                                         n_encoders, n_decoders, gaussian_noise, dropout)
 

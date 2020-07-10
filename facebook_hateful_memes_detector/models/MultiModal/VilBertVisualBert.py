@@ -30,7 +30,7 @@ class VilBertVisualBertModel(nn.Module):
                  internal_dims, classifier_dims,
                  featurizer, final_layer_builder,
                  n_tokens_in,
-                 n_tokens_out, n_encoders, n_decoders,
+                 n_tokens_out, n_layers,
                  task,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
@@ -84,6 +84,8 @@ class VilBertVisualBertModel(nn.Module):
             self.get_lxmert_details = get_image_info_fn(enable_encoder_feats=False, device=get_device())["get_lxmert_details"]
 
         if featurizer == "transformer":
+            n_encoders = kwargs["n_encoders"] if "n_encoders" in kwargs else n_layers
+            n_decoders = kwargs["n_decoders"] if "n_decoders" in kwargs else n_layers
             self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                     classifier_dims,
                                                     internal_dims, n_encoders, n_decoders, gaussian_noise, dropout)
