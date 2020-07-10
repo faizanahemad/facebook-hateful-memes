@@ -14,6 +14,7 @@ from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
+from ...training import calculate_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_device, \
     dict2sampleList, clean_memory, get_vgg_face_model
 from ..classifiers import TransformerEnsembleFeaturizer
@@ -135,6 +136,9 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
 
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 1.0
+        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.5
+        self.loss_coef = kwargs["loss_coef"] if "loss_coef" in kwargs else 0.25
 
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
@@ -181,4 +185,6 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         del sampleList
         clean_memory()
         logits, loss = self.final_layer(vectors, labels)
+        if self.training:
+            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef, self.loss_coef)
         return logits, vectors.mean(1), vectors, loss

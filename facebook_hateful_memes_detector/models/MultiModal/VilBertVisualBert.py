@@ -14,6 +14,7 @@ from mmf.common import SampleList, Sample
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
+from ...training import calculate_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
     dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
@@ -117,7 +118,9 @@ class VilBertVisualBertModel(nn.Module):
                 self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
 
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
-
+        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 1.0
+        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.5
+        self.loss_coef = kwargs["loss_coef"] if "loss_coef" in kwargs else 0.25
 
     def get_tokens(self, texts):
         keys = ["input_ids", "input_mask", "segment_ids"]
@@ -459,4 +462,7 @@ class VilBertVisualBertModel(nn.Module):
         else:
             vectors = self.featurizer(sequence_output)
             logits, loss = self.final_layer(vectors, labels)
+
+        if self.training:
+            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef, self.loss_coef)
         return logits, pooled_output, sequence_output, loss

@@ -11,6 +11,7 @@ from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
+from ...training import calculate_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
@@ -67,6 +68,9 @@ class Fasttext1DCNNModel(nn.Module):
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
 
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 1.0
+        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.5
+        self.loss_coef = kwargs["loss_coef"] if "loss_coef" in kwargs else 0.25
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
@@ -77,47 +81,9 @@ class Fasttext1DCNNModel(nn.Module):
         vectors = self.get_word_vectors(texts)
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
-        auc_loss, dice_loss = 0.0, 0.0
-        auc_loss_coef, dice_loss_coef, loss_coef = 0.0, 0.0, 0.25
-        if self.binary and self.training and self.auc_loss:
-            # aucroc loss
-            probas = logits[:, 1]
-            pos_probas = labels * probas
-            neg_probas = (1-labels) * probas
-            neg_probas = neg_probas[neg_probas > self.eps]
-            pos_probas = pos_probas[pos_probas > self.eps]
 
-            pos_probas = pos_probas[pos_probas < (1 - self.eps)]
-            neg_probas = neg_probas[neg_probas < (1 - self.eps)]  # TODO: Is this required
-
-            num_entries = max(int(len(labels)/8), 1)
-            loss_1, loss_2 = 0.0, 0.0
-            num_entries_neg, num_entries_pos = 0, 0
-
-            if len(neg_probas) > 1:
-                pos_probas = pos_probas[pos_probas < neg_probas.max()]
-                num_entries_neg = min(num_entries, int(len(neg_probas) / 2))
-
-            if len(pos_probas) > 1:
-                neg_probas = neg_probas[neg_probas > pos_probas.min()]
-                num_entries_pos = min(num_entries, int(len(pos_probas) / 2))
-
-            if num_entries_neg >= 1 and num_entries_neg < len(neg_probas):
-                neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
-                loss_2 = (neg_probas_max - pos_probas).mean()
-
-            if num_entries_pos >= 1 and num_entries_pos < len(pos_probas):
-                pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
-                loss_1 = (neg_probas - pos_probas_min).mean()
-            auc_loss = loss_1 + loss_2
-            auc_loss_coef = 0.5
-
-        if self.binary and self.training and self.dice:
-            dice_loss = torch.prod(logits, 1).mean()
-            dice_loss_coef = 0.5
-
-        loss = (loss_coef * loss + auc_loss_coef * auc_loss + dice_loss_coef * dice_loss)/(loss_coef + auc_loss_coef + dice_loss_coef)
-
+        if self.training:
+            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef, self.loss_coef)
         return logits, vectors.mean(1), vectors, loss
 
     def get_sentence_vector(self, texts: List[str]):

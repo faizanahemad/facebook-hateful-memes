@@ -21,6 +21,48 @@ from .model_params import group_wise_lr, group_wise_finetune
 from collections import Counter
 
 
+def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef, loss_coef, ):
+    binary = logits.size(1) == 2
+    if binary:
+        auc_loss = 0.0
+        if auc_loss_coef > 0:
+            probas = logits[:, 1]
+            pos_probas = labels * probas
+            neg_probas = (1 - labels) * probas
+            neg_probas = neg_probas[neg_probas > self.eps]
+            pos_probas = pos_probas[pos_probas > self.eps]
+
+            pos_probas = pos_probas[pos_probas < (1 - self.eps)]
+            neg_probas = neg_probas[neg_probas < (1 - self.eps)]  # TODO: Is this required
+
+            num_entries = max(int(len(labels) / 8), 1)
+            loss_1, loss_2 = 0.0, 0.0
+            num_entries_neg, num_entries_pos = 0, 0
+
+            if len(neg_probas) > 1:
+                pos_probas = pos_probas[pos_probas < neg_probas.max()]
+                num_entries_neg = min(num_entries, int(len(neg_probas) / 2))
+
+            if len(pos_probas) > 1:
+                neg_probas = neg_probas[neg_probas > pos_probas.min()]
+                num_entries_pos = min(num_entries, int(len(pos_probas) / 2))
+
+            if num_entries_neg >= 1 and num_entries_neg < len(neg_probas):
+                neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
+                loss_2 = (neg_probas_max - pos_probas).mean()
+
+            if num_entries_pos >= 1 and num_entries_pos < len(pos_probas):
+                pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
+                loss_1 = (neg_probas - pos_probas_min).mean()
+            auc_loss = loss_1 + loss_2
+
+        dice_loss = torch.prod(logits, 1).mean()
+        loss = (loss_coef * loss + auc_loss_coef * auc_loss + dice_loss_coef * dice_loss) / (loss_coef + auc_loss_coef + dice_loss_coef)
+
+    return loss
+
+
+
 def get_regularizer_scheduler(warmup_proportion=0.3):
     def scheduler(model, batch, num_batches, epoch, num_epochs):
         total_batches = num_batches * num_epochs
@@ -28,8 +70,8 @@ def get_regularizer_scheduler(warmup_proportion=0.3):
         warmup_batches = warmup_proportion * total_batches
         for layer, param in model.reg_layers:
             new_param = np.interp(cur_batch,
-                                  [0, num_batches, warmup_batches, total_batches - num_batches, total_batches],
-                                  [0, 0, param, 0, 0])
+                                  [0, warmup_batches, total_batches - num_batches, total_batches],
+                                  [0, param, 0, 0])
             if layer.__class__ == GaussianNoise:
                 layer.sigma = new_param
             elif layer.__class__ == nn.Dropout:
