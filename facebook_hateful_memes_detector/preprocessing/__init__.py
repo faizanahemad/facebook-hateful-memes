@@ -50,12 +50,12 @@ class QuadrantCut:
         x_half = int(shape[0] / 2)
         y_half = int(shape[1] / 2)
 
-        x_third = int(shape[0] / 3)
-        y_third = int(shape[1] / 3)
+        x_third = int(shape[0] / 2.5)
+        y_third = int(shape[1] / 2.5)
         x_2third = shape[0] - x_third
         y_2third = shape[1] - y_third
 
-        choice = random.randint(1, 12)
+        choice = random.randint(1, 11)
         if choice == 1:
             arr[:x_half, :y_half] = mean
         if choice == 2:
@@ -80,10 +80,6 @@ class QuadrantCut:
             arr[:, y_third:y_2third] = mean
         if choice == 11:
             arr[x_third:x_2third, y_third:y_2third] = mean
-        if choice == 12:
-            arr[x_third:x_2third, :] = mean
-            arr[:, y_third:y_2third] = mean
-            arr[x_third:x_2third, y_third:y_2third] = mean
 
         return Image.fromarray(arr)
 
@@ -107,19 +103,19 @@ class DefinedColorJitter(torchvision.transforms.ColorJitter):
         from torchvision.transforms import Lambda, Compose
 
         if brightness is not None:
-            brightness_factor = random.sample(list(brightness) + [1], k=1)[0]
+            brightness_factor = random.sample(list(brightness), k=1)[0]
             transforms.append(Lambda(lambda img: F.adjust_brightness(img, brightness_factor)))
 
         if contrast is not None:
-            contrast_factor = random.sample(list(contrast) + [1], k=1)[0]
+            contrast_factor = random.sample(list(contrast), k=1)[0]
             transforms.append(Lambda(lambda img: F.adjust_contrast(img, contrast_factor)))
 
         if saturation is not None:
-            saturation_factor = random.sample(list(saturation) + [1], k=1)[0]
+            saturation_factor = random.sample(list(saturation), k=1)[0]
             transforms.append(Lambda(lambda img: F.adjust_saturation(img, saturation_factor)))
 
         if hue is not None:
-            hue_factor = random.sample(list(hue) + [1], k=1)[0]
+            hue_factor = random.sample(list(hue), k=1)[0]
             transforms.append(Lambda(lambda img: F.adjust_hue(img, hue_factor)))
 
         random.shuffle(transforms)
