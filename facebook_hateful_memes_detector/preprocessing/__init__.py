@@ -170,8 +170,12 @@ class DefinedAffine(torchvision.transforms.RandomAffine):
         if translate is not None:
             max_dx = translate[0] * img_size[0]
             max_dy = translate[1] * img_size[1]
-            translations = (random.sample((-max_dx, 0.0, max_dx), k=1)[0],
-                            random.sample((-max_dy, 0.0, max_dy), k=1)[0])
+            t1 = random.sample((-max_dx, 0.0, max_dx), k=1)[0]
+            if t1 == 0:
+                t2 = random.sample((-max_dy, max_dy), k=1)[0]
+            else:
+                t2 = random.sample((-max_dy, 0.0, max_dy), k=1)[0]
+            translations = (t1, t2)
         else:
             translations = (0, 0)
 
