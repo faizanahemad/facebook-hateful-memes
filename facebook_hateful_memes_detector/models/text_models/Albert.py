@@ -68,11 +68,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
 
     def get_word_vectors(self, texts: List[str]):
         input_ids, attention_mask = self.tokenise(texts)
-        if self.finetune:
-            outputs = self.model(input_ids, attention_mask=attention_mask)
-        else:
-            with torch.no_grad():
-                outputs = self.model(input_ids, attention_mask=attention_mask)
+        outputs = self.model(input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs[0]
         pooled_output = outputs[1]
         return last_hidden_states

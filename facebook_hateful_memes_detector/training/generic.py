@@ -237,28 +237,112 @@ def train(model, optimizer, scheduler_init_fn,
                     vsv = vsv[-1]
                     print("Epoch = ", epoc + 1, "Train = %.6f" % vst, "Val = %.6f" % vsv,)
 
-    import matplotlib.pyplot as plt
     if plot:
-        t = list(range(len(train_losses)))
-
-        fig, ax1 = plt.subplots(figsize=(8, 8))
-
-        color = 'tab:red'
-        ax1.set_xlabel('Training Batches')
-        ax1.set_ylabel('Loss', color=color)
-        ax1.plot(t, train_losses, color=color)
-        ax1.tick_params(axis='y', labelcolor=color)
-
-        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-
-        color = 'tab:blue'
-        ax2.set_ylabel('Learning Rate', color=color)  # we already handled the x-label with ax1
-        ax2.plot(t, learning_rates, color=color)
-        ax2.tick_params(axis='y', labelcolor=color)
-
-        fig.tight_layout()  # otherwise the right y-label is slightly clipped
-        plt.show()
+        plot_loss_lr(train_losses, learning_rates)
     return train_losses, learning_rates
+
+
+def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
+                                 batch_size, epochs, dataset,
+                                 augment_method,
+                                 model_call_back=None, accumulation_steps=1,
+                                 plot=False):
+    import copy
+    orig_model = copy.deepcopy(model)
+    from tqdm.auto import tqdm as tqdm, trange
+
+
+    assert accumulation_steps >= 1 and type(accumulation_steps) == int
+    _ = model.train()
+    use_autocast = False
+    try:
+        from torch.cuda.amp import GradScaler, autocast
+        scaler = GradScaler()
+        use_autocast = "cuda" in str(get_device())
+    except:
+        pass
+
+    train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
+                              shuffle=True, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=None)
+
+    examples = len(dataset)
+    train_losses = []
+    learning_rates = []
+    scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, examples) if scheduler_init_fn is not None else (None, False, False)
+    print("Autocast = ", use_autocast, "Epochs = ", epochs, "Examples =", examples, "Batch Size = ", batch_size,)
+    print("Training Samples = ", len(dataset), "Weighted Sampling = ", False,
+          "Num Batches = ", len(train_loader), "Accumulation steps = ", accumulation_steps)
+
+    if len(train_loader) % accumulation_steps != 0:
+        print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
+    with trange(epochs) as epo:
+        # TODO Reduce regularization of model in last few epochs, this way model is acquainted to work with real less regularized data (Real data distribution).
+        for epoc in epo:
+            _ = model.train()
+            optimizer.zero_grad()
+            if update_in_epoch:
+                scheduler.step()
+            clean_memory()
+            train_losses_cur_epoch = []
+            with tqdm(train_loader) as data_batch:
+                for batch_idx, batch in enumerate(data_batch):
+                    if model_call_back is not None:
+                        model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
+                    if use_autocast:
+                        with autocast():
+                            repr = model(augment_method(batch))
+                            orig_repr = orig_model(batch)
+                            loss = ((repr - orig_repr)**2).mean()
+                            loss = loss / accumulation_steps
+
+                        scaler.scale(loss).backward()
+                        if (batch_idx + 1) % accumulation_steps == 0:
+                            scaler.step(optimizer)
+                            scaler.update()
+                            optimizer.zero_grad()
+                    else:
+                        repr = model(augment_method(batch))
+                        orig_repr = orig_model(batch)
+                        loss = ((repr - orig_repr) ** 2).mean()
+                        loss = loss / accumulation_steps
+                        loss.backward()
+                        if (batch_idx + 1) % accumulation_steps == 0:
+                            optimizer.step()
+                            optimizer.zero_grad()
+                    if update_in_batch:
+                        scheduler.step()
+                    train_losses.append(float(loss.cpu().detach().item()))
+                    train_losses_cur_epoch.append(float(loss.cpu().detach().item()))
+                    learning_rates.append(float(optimizer.param_groups[0]['lr']))
+                    clean_memory()
+            print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
+
+    if plot:
+        plot_loss_lr(train_losses, learning_rates)
+    return train_losses, learning_rates
+
+
+def plot_loss_lr(train_losses, learning_rates):
+    import matplotlib.pyplot as plt
+    t = list(range(len(train_losses)))
+
+    fig, ax1 = plt.subplots(figsize=(8, 8))
+
+    color = 'tab:red'
+    ax1.set_xlabel('Training Batches')
+    ax1.set_ylabel('Loss', color=color)
+    ax1.plot(t, train_losses, color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+    color = 'tab:blue'
+    ax2.set_ylabel('Learning Rate', color=color)  # we already handled the x-label with ax1
+    ax2.plot(t, learning_rates, color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+    plt.show()
 
 
 def generate_predictions(model, batch_size, dataset):

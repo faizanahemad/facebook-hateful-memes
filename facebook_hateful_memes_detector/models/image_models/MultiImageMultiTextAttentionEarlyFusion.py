@@ -32,18 +32,16 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                  **kwargs):
         super(MultiImageMultiTextAttentionEarlyFusionModel, self).__init__()
         assert type(image_models) == list
-        names, im_models, im_shapes, im_procs, im_finetune = [], [], [], [], []
+        names, im_models, im_shapes, im_procs = [], [], [], []
         for imo in image_models:
             if type(imo) == dict:
                 module_gaussian = imo["gaussian_noise"] if "gaussian_noise" in imo else 0.0
                 module_dropout = imo["dropout"] if "dropout" in imo else 0.0
-                finetune = imo["finetune"] if "finetune" in imo else False
                 large_rf = imo["large_rf"] if "large_rf" in imo else True
                 imo = imo["model"]
             elif type(imo) == str:
                 module_gaussian = 0.0
                 module_dropout = 0.0
-                finetune = False
                 large_rf = True
             else:
                 raise NotImplementedError()
@@ -89,13 +87,11 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
                 raise NotImplementedError(imo)
 
             names.append(imo)
-            im_finetune.append(finetune)
             im_models.append(im_model)
             im_shapes.append(im_shape)
             im_procs.append(im_proc)
         self.im_models = nn.ModuleDict(dict(zip(names, im_models)))
         self.post_procs = nn.ModuleDict(dict(zip(names, im_procs)))
-        self.im_finetune = dict(zip(names, im_finetune))
         self.im_shapes = dict(zip(names, im_shapes))
         self.require_raw_img = {"detr_demo", 'detr_resnet50', 'detr_resnet50_panoptic', 'detr_resnet101', 'detr_resnet101_panoptic',
                                 "ssd", "faster_rcnn", "lxmert_faster_rcnn", "caption_features"}
@@ -168,11 +164,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
 
         clean_memory()
         for k, m in self.im_models.items():
-            if self.im_finetune[k]:
-                im_repr = m(image if k in self.require_raw_img else img)
-            else:
-                with torch.no_grad():
-                    im_repr = m(image if k in self.require_raw_img else img)
+            im_repr = m(image if k in self.require_raw_img else img)
             im_repr = self.post_procs[k](im_repr)
             vectors[k] = im_repr.to(get_device())
             clean_memory()
