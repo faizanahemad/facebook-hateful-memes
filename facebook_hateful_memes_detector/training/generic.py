@@ -246,6 +246,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                                  batch_size, epochs, dataset,
                                  augment_method,
                                  model_call_back=None, accumulation_steps=1,
+                                 collate_fn=None,
                                  plot=False):
     import copy
     orig_model = copy.deepcopy(model)
@@ -262,7 +263,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
     except:
         pass
 
-    train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
+    train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                               shuffle=True, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=None)
 
     examples = len(dataset)
@@ -290,8 +291,10 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
                     if use_autocast:
                         with autocast():
-                            repr = model(augment_method(batch))
-                            orig_repr = orig_model(batch)
+                            augmented_batch = augment_method(batch)
+                            repr = model(augmented_batch)
+                            with torch.no_grad():
+                                orig_repr = orig_model(batch)
                             loss = ((repr - orig_repr)**2).mean()
                             loss = loss / accumulation_steps
 
@@ -301,8 +304,10 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                             scaler.update()
                             optimizer.zero_grad()
                     else:
-                        repr = model(augment_method(batch))
-                        orig_repr = orig_model(batch)
+                        augmented_batch = augment_method(batch)
+                        repr = model(augmented_batch)
+                        with torch.no_grad():
+                            orig_repr = orig_model(batch)
                         loss = ((repr - orig_repr) ** 2).mean()
                         loss = loss / accumulation_steps
                         loss.backward()

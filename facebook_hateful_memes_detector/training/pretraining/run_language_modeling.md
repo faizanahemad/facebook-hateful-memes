@@ -31,6 +31,7 @@ np.percentile(tlens, [97, 99, 99.5, 99.9, 100])
 ```
 
 ## References
+- [Blog How to train a new language model from scratch using Transformers and Tokenizers](https://huggingface.co/blog/how-to-train)
 - [Raw Python file: run_language_modeling.py](https://raw.githubusercontent.com/huggingface/transformers/v2.11.0/examples/language-modeling/run_language_modeling.py)
 - [Possible Training Args Ref](https://github.com/huggingface/transformers/blob/v2.11.0/src/transformers/training_args.py)
 - [Reference Page](https://github.com/huggingface/transformers/tree/v2.11.0/examples/language-modeling)
