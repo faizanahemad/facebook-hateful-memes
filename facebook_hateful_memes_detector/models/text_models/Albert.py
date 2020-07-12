@@ -26,13 +26,9 @@ class AlbertClassifer(Fasttext1DCNNModel):
                                               n_tokens_in, n_tokens_out, True, **kwargs)
         assert n_tokens_in % n_tokens_out == 0
         model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
-        finetune = kwargs["finetune"] if "finetune" in kwargs else False
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.model = AutoModel.from_pretrained(model)
-        self.finetune = finetune
-        for p in self.model.parameters():
-            p.requires_grad = finetune
         if not use_as_super:
             if featurizer == "cnn":
                 self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
