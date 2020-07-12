@@ -9,7 +9,8 @@ from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
 import torchvision.models as models
-from ...utils import get_device, GaussianNoise
+from ...utils import get_device, GaussianNoise, random_word_mask
+import random
 
 
 class AlbertClassifer(Fasttext1DCNNModel):
@@ -26,6 +27,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
         assert n_tokens_in % n_tokens_out == 0
         model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
         finetune = kwargs["finetune"] if "finetune" in kwargs else False
+        self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.model = AutoModel.from_pretrained(model)
         self.finetune = finetune
@@ -58,8 +60,10 @@ class AlbertClassifer(Fasttext1DCNNModel):
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
         n_tokens_in = self.n_tokens_in
-        m = lambda x: tokenizer.encode_plus(x, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
-        input_ids, attention_mask = zip(*[(d['input_ids'], d['attention_mask']) for d in map(m, texts)])
+        if self.training and self.word_masking_proba > 0:
+            texts = [random_word_mask(t, tokenizer, self.word_masking_proba) for t in texts]
+        converted_texts = tokenizer.batch_encode_plus(texts, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
+        input_ids, attention_mask = converted_texts["input_ids"], converted_texts["attention_mask"]
         return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())
 
     def get_word_vectors(self, texts: List[str]):

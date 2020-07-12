@@ -155,6 +155,8 @@ File Structure inside wiki-idf cloned dir
 ## Possible Extra Datasets
     - Sarcasm
         - https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge
+        - https://analyticsindiamag.com/10-popular-datasets-for-sentiment-analysis/
+        - https://www.kaggle.com/c/sentiment-analysis-on-movie-reviews/data
         - https://github.com/MirunaPislar/Sarcasm-Detection
         - https://www.kaggle.com/rmisra/news-headlines-dataset-for-sarcasm-detection/home
         - https://github.com/ef2020/SarcasmAmazonReviewsCorpus/wiki
@@ -172,8 +174,9 @@ File Structure inside wiki-idf cloned dir
     
 ## Other References
     - https://gist.github.com/jerheff/8cf06fe1df0695806456
-    - https://github.com/umbertogriffo/focal-loss-keras
+    - https://github.com/umbertogriffo/focal-loss-keras https://www.kaggle.com/c/tgs-salt-identification-challenge/discussion/65938
     - https://discuss.pytorch.org/t/zero-grad-optimizer-or-net/1887/12
+    - https://discuss.pytorch.org/t/how-to-implement-accumulated-gradient/3822/18
     - LSTM
         - https://stackoverflow.com/questions/53010465/bidirectional-lstm-output-question-in-pytorch
         - https://stackoverflow.com/questions/48302810/whats-the-difference-between-hidden-and-output-in-pytorch-lstm

@@ -748,3 +748,26 @@ def clean_memory():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     _ = gc.collect()
+
+
+def random_word_mask(text: str, tokenizer, probability: float) -> str:
+    if probability == 0:
+        return text
+    tokens = tokenizer.tokenize(text)
+    for idx, token in enumerate(tokens):
+        prob = random.random()
+
+        if prob < probability:
+            prob /= probability
+
+            # 80% randomly change token to mask token
+            if prob < 0.8:
+                tokens[idx] = tokenizer.mask_token
+            # 10% randomly change token to random token
+            elif prob < 0.9:
+                tokens[idx] = tokenizer.convert_ids_to_tokens(
+                    torch.randint(len(tokenizer), (1,), dtype=torch.long)
+                )[0]
+
+            # rest 10% keep the original token as it is
+    return tokenizer.convert_tokens_to_string(tokens)

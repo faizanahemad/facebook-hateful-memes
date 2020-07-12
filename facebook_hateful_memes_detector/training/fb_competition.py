@@ -41,8 +41,7 @@ def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weigh
         train_augmented.loc[train_augmented["augment_type"] == k, "sample_weights"] = v
     train_augmented = train_augmented[train_augmented["sample_weights"] > 0]
     dataset = convert_dataframe_to_dataset(train_augmented, metadata, True)
-
-    model, optimizer = model_fn(dataset=dataset)
+    model, optimizer = model_fn()
     train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
                                          model_call_back=model_call_back, accumulation_steps=accumulation_steps, plot=True,
                                          sampling_policy=sampling_policy, class_weights=class_weights)
