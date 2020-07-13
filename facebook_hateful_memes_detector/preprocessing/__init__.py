@@ -676,6 +676,13 @@ class ImageFolderDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.images)
 
+    @classmethod
+    def from_images(cls, images, image_transform=get_image2torchvision_transforms()):
+        new_inst = ImageFolderDataset([], cache_images=False)
+        assert type(images) == dict
+        new_inst.images = images
+        new_inst.cache_images = True
+
 
 class ZipDatasets(torch.utils.data.Dataset):
     def __init__(self, datasets: List[torch.utils.data.Dataset]):

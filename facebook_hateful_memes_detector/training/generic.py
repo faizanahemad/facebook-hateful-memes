@@ -16,6 +16,7 @@ from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextI
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
+from mmf.common.sample import Sample, SampleList
 from transformers import optimization
 from .model_params import group_wise_lr, group_wise_finetune
 from collections import Counter
@@ -372,7 +373,7 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
                     logits, _, _, _ = model(batch)
             else:
                 logits, _, _, _ = model(batch)
-            labels = batch["label"]
+            labels = batch["label"] if type(batch) == SampleList else batch[-1]
             labels_list.extend(labels)
             logits = logits.cpu().detach()
             top_class = logits.max(dim=1).indices
