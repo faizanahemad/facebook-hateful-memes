@@ -121,6 +121,7 @@ def train(model, optimizer, scheduler_init_fn,
           validation_strategy=None,
           plot=False,
           sampling_policy=None,
+          collate_fn=my_collate,
           class_weights={0: 1, 1: 1.8}):
     if in_notebook():
         from tqdm.notebook import tqdm, trange
@@ -175,7 +176,7 @@ def train(model, optimizer, scheduler_init_fn,
         shuffle = True
         examples = len(dataset)
         divisor = 1
-    train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
+    train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                               shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=sampler)
 
     train_losses = []
@@ -188,7 +189,6 @@ def train(model, optimizer, scheduler_init_fn,
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
     with trange(epochs) as epo:
-        # TODO Reduce regularization of model in last few epochs, this way model is acquainted to work with real less regularized data (Real data distribution).
         for epoc in epo:
             _ = model.train()
             optimizer.zero_grad()
