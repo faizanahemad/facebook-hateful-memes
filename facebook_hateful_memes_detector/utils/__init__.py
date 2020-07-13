@@ -476,6 +476,10 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
             resnet_layers = resnet_layers + [im_model.layer4[0], im_model.layer4[1]]
         model = nn.Sequential(*resnet_layers)
 
+    if net+".pth" in os.listdir("."):
+        print("Loading saved model: ", net+".pth")
+        model.load_state_dict(torch.load(net+".pth"))
+
     if not finetune:
         for p in model.parameters():
             p.requires_grad = False
@@ -486,6 +490,7 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
 def get_vgg_face_model(model='resnet'):
     from .senet50_256 import senet50_256
     from .resnet50_256 import resnet50_256
+    mname = "face_" + model
     if model == 'senet':
         raise NotImplementedError
         model = senet50_256(f"{DIR}/senet50_256.pth")
@@ -497,6 +502,9 @@ def get_vgg_face_model(model='resnet'):
             p.requires_grad = False
 
     model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2).transpose(1, 2)),)
+    if mname+".pth" in os.listdir("."):
+        print("Loading saved model: ", mname+".pth")
+        model.load_state_dict(torch.load(mname+".pth"))
     return model
 
 
