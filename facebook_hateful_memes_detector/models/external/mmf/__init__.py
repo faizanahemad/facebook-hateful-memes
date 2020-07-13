@@ -62,7 +62,7 @@ def get_model(device, opts):
 
 def ready_trainer(trainer):
     from mmf.utils.logger import Logger, TensorboardLogger
-    # trainer._set_device()
+    trainer.configure_device()
     trainer.run_type = trainer.config.get("run_type", "train")
     writer = registry.get("writer", no_warning=True)
     if writer:
@@ -73,7 +73,7 @@ def ready_trainer(trainer):
 
     trainer.config_based_setup()
 
-    trainer.load_model_and_optimizer()
+    trainer.load_model()
 
 
 def tokenizer_conf(max_seq_length=128):
