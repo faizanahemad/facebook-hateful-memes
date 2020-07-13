@@ -91,9 +91,10 @@ class VilBertVisualBertModel(nn.Module):
                                                     classifier_dims,
                                                     internal_dims, n_encoders, n_decoders, gaussian_noise, dropout)
         elif featurizer == "pass":
-            assert n_tokens_in == n_tokens_out
+            n_tokens_out = n_tokens_in
+            print("N tokens Out = ", n_tokens_out)
             assert embedding_dims == classifier_dims
-            assert ("vilbert" in model_name or "visual_bert" in model_name)
+            assert ("vilbert" in model_name or "visual_bert" in model_name or "mmbt_region" in model_name)
         else:
             raise NotImplementedError()
 
