@@ -173,7 +173,7 @@ def train(model, optimizer, scheduler_init_fn,
     else:
         sampler = None
         shuffle = True
-        examples = len(training_fold_labels)
+        examples = len(dataset)
         divisor = 1
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
                               shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=sampler)
