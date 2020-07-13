@@ -348,14 +348,14 @@ def plot_loss_lr(train_losses, learning_rates):
     plt.show()
 
 
-def generate_predictions(model, batch_size, dataset):
+def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
     _ = model.eval()
     proba_list = []
     predictions_list = []
     labels_list = []
     clean_memory()
     batch_size = batch_size + int(batch_size/2)
-    test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=my_collate,
+    test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                              shuffle=False, num_workers=get_global("dataloader_workers"), pin_memory=True)
 
     use_autocast = False
@@ -384,10 +384,10 @@ def generate_predictions(model, batch_size, dataset):
     return proba_list, predictions_list, labels_list
 
 
-def validate(model, batch_size, dataset, test_df=None):
+def validate(model, batch_size, dataset, test_df=None, collate_fn=my_collate):
     from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
-    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset)
+    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn)
 
     if test_df is not None:
         assert type(test_df) == pd.DataFrame

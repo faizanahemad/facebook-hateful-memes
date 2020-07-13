@@ -66,7 +66,7 @@ def predict(model, datadict, batch_size, augmentation_weights: Dict[str, float],
             test_augmented[test_augmented["augment_type"] == k, "sample_weights"] = v
 
     test_dataset = convert_dataframe_to_dataset(test_augmented, metadata, False)
-    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset)
+    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate)
     test_augmented["proba"] = proba_list
     test_augmented["predictions_list"] = predictions_list
     test_augmented["weighted_proba"] = test_augmented["proba"] * test_augmented["sample_weights"]
@@ -86,7 +86,7 @@ def predict_generic(model, datadict, batch_size):
     metadata = datadict["metadata"]
     test = datadict["test"]
     test_dataset = convert_dataframe_to_dataset(test, metadata, False)
-    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset)
+    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate)
     test["proba"] = proba_list
     test["predictions_list"] = predictions_list
     test["weighted_proba"] = test["proba"] * test["sample_weights"]
