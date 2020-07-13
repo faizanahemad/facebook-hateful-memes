@@ -365,8 +365,7 @@ class VilBertVisualBertModel(nn.Module):
         output["pooled_output"] = pooled_output
         logits = None
         if self.featurizer_type == "pass":
-            pooled_output = self.dropout(pooled_output)
-            logits = self.classifier(pooled_output).contiguous().squeeze()
+            logits = self.mmbt_region.model.classifier(pooled_output).contiguous().squeeze()
         output["logits"] = logits
         return output
 
