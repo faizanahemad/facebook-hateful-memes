@@ -373,7 +373,11 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
                     logits, _, _, _ = model(batch)
             else:
                 logits, _, _, _ = model(batch)
-            labels = batch["label"] if type(batch) == SampleList else batch[-1]
+            try:
+                batch = dict2sampleList(batch, device=get_device())
+                labels = batch["label"]
+            except:
+                labels = batch[-1]
             labels_list.extend(labels)
             logits = logits.cpu().detach()
             top_class = logits.max(dim=1).indices
