@@ -62,7 +62,7 @@ def get_model(device, opts):
 
 def ready_trainer(trainer):
     from mmf.utils.logger import Logger, TensorboardLogger
-    trainer._set_device()
+    # trainer._set_device()
     trainer.run_type = trainer.config.get("run_type", "train")
     writer = registry.get("writer", no_warning=True)
     if writer:
