@@ -387,22 +387,28 @@ def generate_predictions(model, batch_size, dataset):
     return proba_list, predictions_list, labels_list
 
 
-def validate(model, batch_size, dataset, test_df):
+def validate(model, batch_size, dataset, test_df=None):
     from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset)
 
-    test_df["proba"] = proba_list
-    test_df["weighted_proba"] = test_df["proba"] * test_df["sample_weights"]
-    probas = (test_df.groupby(["id"])["weighted_proba"].sum() / test_df.groupby(["id"])[
-        "sample_weights"].sum()).reset_index()
-    probas.columns = ["id", "proba"]
-    probas["predictions_list"] = (probas["proba"] > 0.5).astype(int)
+    if test_df is not None:
+        assert type(test_df) == pd.DataFrame
+        test_df["proba"] = proba_list
+        test_df["weighted_proba"] = test_df["proba"] * test_df["sample_weights"]
+        probas = (test_df.groupby(["id"])["weighted_proba"].sum() / test_df.groupby(["id"])[
+            "sample_weights"].sum()).reset_index()
+        probas.columns = ["id", "proba"]
+        probas["predictions_list"] = (probas["proba"] > 0.5).astype(int)
 
-    proba_list = probas["proba"].values
-    predictions_list = probas["predictions_list"].values
-    labels_list = probas.merge(test_df[["id", "label"]], on="id")["label"].values
-    auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
+        proba_list = probas["proba"].values
+        predictions_list = probas["predictions_list"].values
+        labels_list = probas.merge(test_df[["id", "label"]], on="id")["label"].values
+
+    try:
+        auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
+    except:
+        auc = 0
     # p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="micro")
     prfs = precision_recall_fscore_support(labels_list, predictions_list, average=None, labels=[0, 1])
     map = average_precision_score(labels_list, proba_list)
