@@ -645,3 +645,62 @@ class TextImageDataset(Dataset):
         print(text, "|", "Label = ", label)
         image.show()
         return image
+
+
+class ImageFolderDataset(torch.utils.data.Dataset):
+    def __init__(self, images: Union[str, List[str]], image_extensions=(".jpg", ".png", ".jpeg"),
+                 cache_images: bool = False, shuffle: bool = False, image_transform=get_image2torchvision_transforms()):
+        import os
+        if type(images) == str:
+            self.images = list(filter(lambda i: any([ex in i for ex in image_extensions]), os.listdir(images)))
+            self.images = list(map(lambda i: os.path.join(images, i), self.images))
+        else:
+            self.images = images
+
+        if shuffle:
+            self.images = np.random.permutation(self.images)
+        else:
+            self.images = sorted(self.images)
+
+        self.image_transform = image_transform
+        if cache_images:
+            self.images = {i: Image.open(l).convert('RGB') for i, l in enumerate(self.images)} if cache_images else dict()
+        self.cache_images = cache_images
+
+    def __getitem__(self, item):
+        if self.cache_images:
+            return self.image_transform(self.images[item])
+        else:
+            return self.image_transform(Image.open(self.images[item]).convert('RGB'))
+
+    def __len__(self):
+        return len(self.images)
+
+
+class ZipDatasets(torch.utils.data.Dataset):
+    def __init__(self, datasets: List[torch.utils.data.Dataset]):
+        assert len(set(list(map(len, datasets)))) == 1  # All datasets are of same length
+        assert len(datasets) > 1
+        self.datasets = datasets
+
+    def __getitem__(self, item):
+        items = [d[item] for d in self.datasets]
+        return items
+
+    def __len__(self):
+        return len(self.datasets[0])
+
+
+class NegativeSamplingDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset: torch.utils.data.Dataset, negative_proportion=5):
+        x = torch.utils.data.ConcatDataset([dataset] * (negative_proportion + 1))
+        y = [dataset] + [torch.utils.data.Subset(d, torch.randperm(len(d))) for d in [dataset] * negative_proportion]
+        y = torch.utils.data.ConcatDataset(y)
+        labels = [1] * len(dataset) + [0] * (len(dataset) * negative_proportion)
+        self.datasets = ZipDatasets([x, y, labels])
+
+    def __getitem__(self, item):
+        return self.datasets[item]
+
+    def __len__(self):
+        return len(self.datasets)
