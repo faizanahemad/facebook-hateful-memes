@@ -244,15 +244,13 @@ def train(model, optimizer, scheduler_init_fn,
 
 def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                                  batch_size, epochs, dataset,
-                                 augment_method,
+                                 augment_method=lambda x: x,
                                  model_call_back=None, accumulation_steps=1,
                                  collate_fn=None,
                                  plot=False):
     import copy
     orig_model = copy.deepcopy(model)
     from tqdm.auto import tqdm as tqdm, trange
-
-
     assert accumulation_steps >= 1 and type(accumulation_steps) == int
     _ = model.train()
     use_autocast = False
@@ -289,9 +287,13 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                 for batch_idx, batch in enumerate(data_batch):
                     if model_call_back is not None:
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
+                    if type(batch) == list and type(batch[0]) == torch.Tensor:
+                        augmented_batch = batch[1]
+                        batch = batch[0]
+                    else:
+                        augmented_batch = augment_method(batch)
                     if use_autocast:
                         with autocast():
-                            augmented_batch = augment_method(batch)
                             repr = model(augmented_batch)
                             with torch.no_grad():
                                 orig_repr = orig_model(batch)
@@ -304,7 +306,6 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                             scaler.update()
                             optimizer.zero_grad()
                     else:
-                        augmented_batch = augment_method(batch)
                         repr = model(augmented_batch)
                         with torch.no_grad():
                             orig_repr = orig_model(batch)
