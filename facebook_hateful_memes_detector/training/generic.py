@@ -127,13 +127,10 @@ def train(model, optimizer, scheduler_init_fn,
     else:
         from tqdm import tqdm as tqdm, trange
 
-    if isinstance(dataset, TextImageDataset):
-        use_images = dataset.use_images
-        dataset.use_images = False
+    if hasattr(dataset, "labels"):
         training_fold_labels = torch.tensor(dataset.labels)
-        dataset.use_images = use_images
-    else:
-        raise NotImplementedError()
+
+    assert hasattr(dataset, "labels") or sampling_policy is None
 
     assert accumulation_steps >= 1 and type(accumulation_steps) == int
     _ = model.train()
