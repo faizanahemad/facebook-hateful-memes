@@ -682,6 +682,7 @@ class ImageFolderDataset(torch.utils.data.Dataset):
         assert type(images) == dict
         new_inst.images = images
         new_inst.cache_images = True
+        return new_inst
 
 
 class ZipDatasets(torch.utils.data.Dataset):
