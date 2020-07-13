@@ -373,96 +373,96 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
     from torchvision import models
     sm = 10
     lg = 20
-    if net == "resnet18":
+    if "resnet18" in net:
         im_model = models.resnet18(pretrained=True)
         shape = (512, sm, sm) if large_rf else (256, lg, lg)
-    elif net == "resnet34":
+    elif "resnet34" in net:
         im_model = models.resnet34(pretrained=True)
         shape = (512, sm, sm) if large_rf else (256, lg, lg)
-    elif net == "resnet50":
+    elif "resnet50" in net:
         im_model = models.resnet50(pretrained=True)
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnet101":
+    elif "resnet101" in net:
         im_model = models.resnet101(pretrained=True)
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnet152":
+    elif "resnet152" in net:
         im_model = models.resnet152(pretrained=True)
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
 
-    elif net == "resnet18_swsl":
+    elif "resnet18_swsl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet18_swsl')
         shape = (512, sm, sm) if large_rf else (256, lg, lg)
-    elif net == "resnet50_swsl":
+    elif "resnet50_swsl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet50_swsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext50_32x4d_swsl":
+    elif "resnext50_32x4d_swsl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext50_32x4d_swsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x4d_swsl":
+    elif "resnext101_32x4d_swsl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x4d_swsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x8d_swsl":
+    elif "resnext101_32x8d_swsl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x8d_swsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x16d_swsl":
+    elif "resnext101_32x16d_swsl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x16d_swsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
 
-    elif net == "resnet18_ssl":
+    elif "resnet18_ssl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet18_ssl')
         shape = (512, sm, sm) if large_rf else (256, lg, lg)
-    elif net == "resnet50_ssl":
+    elif "resnet50_ssl" in net:
         im_model = model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnet50_ssl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext50_32x4d_ssl":
+    elif "resnext50_32x4d_ssl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext50_32x4d_ssl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x4d_ssl":
+    elif "resnext101_32x4d_ssl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x4d_ssl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x8d_ssl":
+    elif "resnext101_32x8d_ssl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x8d_ssl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x16d_ssl":
+    elif "resnext101_32x16d_ssl" in net:
         im_model = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', 'resnext101_32x16d_ssl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
 
-    elif net == "resnext101_32x8d_wsl":
+    elif "resnext101_32x8d_wsl" in net:
         im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x8d_wsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x16d_wsl":
+    elif "resnext101_32x16d_wsl" in net:
         im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x16d_wsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x32d_wsl":
+    elif "resnext101_32x32d_wsl" in net:
         im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x32d_wsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x48d_wsl":
+    elif "resnext101_32x48d_wsl" in net:
         im_model = torch.hub.load('facebookresearch/WSL-Images', 'resnext101_32x48d_wsl')
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
 
-    elif net == "mobilenet_v2":
+    elif "mobilenet_v2" in net:
         im_model = models.mobilenet_v2(pretrained=True)
         resnet_layers = im_model.features[:-1] if large_rf else im_model.features[:-5]
         model = nn.Sequential(*resnet_layers)
         shape = (320, sm, sm) if large_rf else (96, lg, lg)
-    elif net == "resnext50_32x4d":
+    elif "resnext50_32x4d" in net:
         im_model = models.resnext50_32x4d(pretrained=True)
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "resnext101_32x8d":
+    elif "resnext101_32x8d" in net:
         im_model = models.resnext101_32x8d(pretrained=True)
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "wide_resnet50_2":
+    elif "wide_resnet50_2" in net:
         im_model = models.wide_resnet50_2(pretrained=True)
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "wide_resnet101_2":
+    elif "wide_resnet101_2" in net:
         im_model = models.wide_resnet101_2(pretrained=True)
         shape = (2048, sm, sm) if large_rf else (1024, lg, lg)
-    elif net == "mnasnet0_5":
+    elif "mnasnet0_5" in net:
         im_model = models.mnasnet0_5(pretrained=True)
         resnet_layers = im_model.layers[:-3] if large_rf else im_model.layers[:-5]
         model = nn.Sequential(*resnet_layers)
         shape = (160, sm, sm) if large_rf else (48, lg, lg)
-    elif net == "mnasnet1_0":
+    elif "mnasnet1_0" in net:
         im_model = models.mnasnet1_0(pretrained=True)  # models.mnasnet1_0
         resnet_layers = im_model.layers[:-3] if large_rf else im_model.layers[:-5]
         model = nn.Sequential(*resnet_layers)
@@ -480,6 +480,11 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
         print("Loading saved model: ", net+".pth")
         model.load_state_dict(torch.load(net+".pth"))
 
+    if net in os.listdir("."):
+        print("Loading saved model: ", net)
+        model.load_state_dict(torch.load(net))
+
+
     if not finetune:
         for p in model.parameters():
             p.requires_grad = False
@@ -490,11 +495,11 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
 def get_vgg_face_model(model='resnet'):
     from .senet50_256 import senet50_256
     from .resnet50_256 import resnet50_256
-    mname = "face_" + model
-    if model == 'senet':
+    mname = "face_" + model if "face_" not in model else model
+    if 'senet' in model:
         raise NotImplementedError
         model = senet50_256(f"{DIR}/senet50_256.pth")
-    elif model == 'resnet':
+    elif 'resnet' in model:
         model = resnet50_256(f"{DIR}/resnet50_256.pth")
 
     for c in list(model.children())[:-1]:
@@ -505,6 +510,10 @@ def get_vgg_face_model(model='resnet'):
     if mname+".pth" in os.listdir("."):
         print("Loading saved model: ", mname+".pth")
         model.load_state_dict(torch.load(mname+".pth"))
+
+    if mname in os.listdir("."):
+        print("Loading saved model: ", mname)
+        model.load_state_dict(torch.load(mname))
     return model
 
 
