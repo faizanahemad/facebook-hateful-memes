@@ -880,7 +880,7 @@ class CNNHead(nn.Module):
         if loss is not None:
             self.loss = loss
 
-        c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=False)
+        c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
