@@ -359,6 +359,8 @@ class VilBertVisualBertModel(nn.Module):
         return torch.cat(feat_seq, 1), pooled
 
     def mmbt_region_forward(self, sl: SampleList):
+        sl = sl.copy()
+        sl.to(get_device())
         module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
         output = {}
@@ -368,6 +370,8 @@ class VilBertVisualBertModel(nn.Module):
         if self.featurizer_type == "pass":
             logits = self.mmbt_region.model.classifier(pooled_output).contiguous().squeeze()
         output["logits"] = logits
+        del sl
+        clean_memory()
         return output
 
     def get_vectors(self, sampleList: SampleList):
