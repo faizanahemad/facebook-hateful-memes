@@ -393,19 +393,6 @@ def validate(model, batch_size, dataset, test_df=None, collate_fn=my_collate):
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn)
 
-    if test_df is not None:
-        assert type(test_df) == pd.DataFrame
-        test_df["proba"] = proba_list
-        test_df["weighted_proba"] = test_df["proba"] * test_df["sample_weights"]
-        probas = (test_df.groupby(["id"])["weighted_proba"].sum() / test_df.groupby(["id"])[
-            "sample_weights"].sum()).reset_index()
-        probas.columns = ["id", "proba"]
-        probas["predictions_list"] = (probas["proba"] > 0.5).astype(int)
-
-        proba_list = probas["proba"].values
-        predictions_list = probas["predictions_list"].values
-        labels_list = probas.merge(test_df[["id", "label"]], on="id")["label"].values
-
     try:
         auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
     except:
@@ -466,32 +453,14 @@ def convert_dataframe_to_dataset(df, metadata, train=True):
 
 def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str, float], n_splits=5, multi_eval=False, random_state=0):
     from sklearn.model_selection import train_test_split
-    from sklearn.model_selection import StratifiedKFold
+    from sklearn.model_selection import StratifiedKFold, KFold
     metadata = datadict["metadata"]
-    augmented_data = metadata["augmented_data"]
     train = datadict["train"]
-    train["augmented"] = False
-    train["augment_type"] = "None"
-    train_augmented = datadict["train_augmented"] if augmented_data else train
     skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
-    for train_idx, test_idx in skf.split(train, train.label):
+    # skf = KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+    for train_idx, test_idx in skf.split(train):
         train_split = train.iloc[train_idx]
         test_split = train.iloc[test_idx]
-        train_split = train_split[["id"]].merge(train_augmented, how="inner", on="id")
-        test_split = test_split[["id"]].merge(train_augmented, how="inner", on="id")
-
-        if not multi_eval:
-            test_split = test_split[~test_split["augmented"]]
-            test_split["sample_weights"] = 1.0
-        else:
-            test_split["sample_weights"] = 0.0
-            for k, v in augmentation_weights.items():
-                test_split.loc[test_split["augment_type"] == k, "sample_weights"] = v
-            test_split = test_split[test_split["sample_weights"] > 0]
-        train_split["sample_weights"] = 0.0
-        for k, v in augmentation_weights.items():
-            train_split.loc[train_split["augment_type"] == k, "sample_weights"] = v
-        train_split = train_split[train_split["sample_weights"] > 0]
         yield (convert_dataframe_to_dataset(train_split, metadata, True),
                convert_dataframe_to_dataset(train_split, metadata, False),
                convert_dataframe_to_dataset(test_split, metadata, False), train_split, test_split)
