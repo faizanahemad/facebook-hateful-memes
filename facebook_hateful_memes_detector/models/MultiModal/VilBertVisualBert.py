@@ -48,31 +48,22 @@ class VilBertVisualBertModel(nn.Module):
             dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
             gn = GaussianNoise(v["gaussian_noise"] if "gaussian_noise" in v else 0.0)
             self.model_regularizers[k] = nn.Sequential(dp, gn)
-            finetunes[k] = v["finetune"] if "finetune" in v else False
 
         self.model_name = model_name
         if "vilbert" in model_name:
             self.vilbert = get_vilbert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
-            for p in self.vilbert.parameters():
-                p.requires_grad = finetunes["vilbert"]
         if "visual_bert" in model_name:
             self.visual_bert = get_visual_bert(get_device())
-            for p in self.visual_bert.parameters():
-                p.requires_grad = finetunes["visual_bert"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
 
         if "lxmert" in model_name:
             self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
-            for p in self.lxmert.parameters():
-                p.requires_grad = finetunes["lxmert"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
 
         if "mmbt_region" in model_name:
             self.mmbt_region = get_mmbt_region(get_device())
-            for p in self.mmbt_region.parameters():
-                p.requires_grad = finetunes["mmbt_region"]
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
 
         if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
@@ -112,7 +103,7 @@ class VilBertVisualBertModel(nn.Module):
                 ll = nn.LayerNorm(pooled_dims * 2)
                 self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), lin)
             else:
-                assert (finetunes.get("vilbert", False) or finetunes.get("visual_bert", False))
+                print("[WARNING]: Perform finetuning on model since num classes = 2 and featurizer_type = `pass`")
             self.loss = get_loss_by_task(task)
         else:
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
@@ -360,8 +351,14 @@ class VilBertVisualBertModel(nn.Module):
 
     def mmbt_region_forward(self, sl: SampleList):
         sl = sl.copy()
+        sl.image_feature_0 = sl.image_feature_0.type(torch.float)
         sl.to(get_device())
-        module_output = self.mmbt_region.model.bert(sl)
+        try:
+            module_output = self.mmbt_region.model.bert(sl)
+        except Exception as e:
+            print({k: v.dtype for k, v in sl.items() if type(v) == torch.Tensor})
+            print(sl['input_ids'])
+            raise e
         pooled_output = module_output[1]
         output = {}
         output["sequence_output"] = module_output[0]
@@ -461,6 +458,8 @@ class VilBertVisualBertModel(nn.Module):
             num_labels_pretrained = self.visual_bert.config.num_labels
         elif hasattr(self, "vilbert"):
             num_labels_pretrained = self.vilbert.config.num_labels
+        elif hasattr(self, "mmbt_region"):
+            num_labels_pretrained = self.mmbt_region.config.num_labels
 
         num_labels_pretrained = -1 if hasattr(self, "lxmert") else num_labels_pretrained
 
