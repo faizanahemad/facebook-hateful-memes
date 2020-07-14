@@ -355,7 +355,6 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
     predictions_list = []
     labels_list = []
     clean_memory()
-    batch_size = batch_size + int(batch_size/2)
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                              shuffle=False, num_workers=get_global("dataloader_workers"), pin_memory=True)
 
