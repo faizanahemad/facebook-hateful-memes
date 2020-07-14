@@ -842,7 +842,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         self.gaussian_noise = GaussianNoise(gaussian_noise)
 
     def forward(self, x, labels=None):
-        x = x.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+        x = x.transpose(0, 1) * math.sqrt(self.n_dims)
         x = self.pos_encoder(x)
         x = self.global_layer_norm(x)
         batch_size = x.size(1)
