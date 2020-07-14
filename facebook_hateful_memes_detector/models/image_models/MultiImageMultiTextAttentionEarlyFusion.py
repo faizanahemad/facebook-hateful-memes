@@ -48,7 +48,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
 
             if "torchvision" in imo:
                 net = "_".join(imo.split("_")[1:])
-                im_model, im_shape = get_torchvision_classification_models(net, large_rf, finetune)
+                im_model, im_shape = get_torchvision_classification_models(net, large_rf)
                 im_model = LambdaLayer(im_model, module_gaussian, module_dropout)
                 self.torchvision_pool = nn.AdaptiveAvgPool2d(1)
 
