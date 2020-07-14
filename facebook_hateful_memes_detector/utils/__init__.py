@@ -823,18 +823,17 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         classifiers = nn.ModuleList()
         decoder_layer = TransformerDecoderLayer(n_dims, 8, n_dims*4, dropout, "relu")
         for i in range(n_layers):
-            decoder = TransformerDecoder(decoder_layer, 1, None)
+            decoder_norm = LayerNorm(n_dims)
+            decoder = TransformerDecoder(decoder_layer, 1, decoder_norm)
             decoders.append(decoder)
-            lin0 = nn.Linear(n_dims, n_dims)
-            init_fc(lin0, "leaky_relu")
-            lin = nn.Linear(n_dims, n_out)
-            init_fc(lin, "linear")
-            dp = nn.Dropout(dropout)
-            classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), nn.Sequential(Average(1), dp, lin0, nn.LeakyReLU(), lin))
-            classifiers.append(classifier)
+        lin0 = nn.Linear(n_dims, n_dims)
+        init_fc(lin0, "leaky_relu")
+        lin = nn.Linear(n_dims, n_out)
+        init_fc(lin, "linear")
+        dp = nn.Dropout(dropout)
+        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), nn.Sequential(Average(1), dp, lin0, nn.LeakyReLU(), lin))
 
         self.decoders = decoders
-        self.classifiers = classifiers
         self.decoder_query = decoder_query
         self.n_tokens, self.n_dims, self.n_out, self.n_layers = n_tokens, n_dims, n_out, n_layers
         self.pos_encoder = PositionalEncoding(n_dims, dropout)
@@ -842,22 +841,25 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         self.gaussian_noise = GaussianNoise(gaussian_noise)
 
     def forward(self, x, labels=None):
-        x = x.transpose(0, 1) * math.sqrt(self.n_dims)
-        x = self.pos_encoder(x)
-        x = self.global_layer_norm(x)
+        x = x.transpose(0, 1) # * math.sqrt(self.n_dims)
+        # x = self.pos_encoder(x)
+        # x = self.global_layer_norm(x ) # R
         batch_size = x.size(1)
         transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_dims)
-        transformer_tgt = self.pos_encoder(transformer_tgt)
-        transformer_tgt = self.tgt_norm(transformer_tgt)
+        transformer_tgt = transformer_tgt.transpose(0, 1) # * math.sqrt(self.n_dims)
+        # transformer_tgt = self.pos_encoder(transformer_tgt)
+        # transformer_tgt = self.tgt_norm(transformer_tgt) # R
         loss = 0.0
+        dsum = 0.0
         for i, decoder in enumerate(self.decoders):
             denominator = (self.n_layers - i)**2
             transformer_tgt = decoder(self.gaussian_noise(transformer_tgt), self.gaussian_noise(x))
-            logits = self.classifiers[i](transformer_tgt).squeeze()
+            logits = self.classifier(transformer_tgt).squeeze() # R
             logits = logits.to(get_device())
             logits, loss_cur = loss_calculator(logits, labels, self.task, self.loss)
             loss = loss + loss_cur / denominator
+            dsum += 1 / denominator
+        loss = loss / dsum
 
         return logits, loss
 

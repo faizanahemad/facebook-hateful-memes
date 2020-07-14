@@ -25,7 +25,6 @@ class TransformerFeaturizer(nn.Module):
             decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
                                          requires_grad=True)
             self.register_parameter("decoder_query", decoder_query)
-            self.tgt_norm = nn.LayerNorm(n_internal_dims)
 
         self.input_nn = None
         if n_channels_in != n_internal_dims:
@@ -51,9 +50,7 @@ class TransformerFeaturizer(nn.Module):
         transformer_tgt = None
         if self.n_decoders > 0:
             transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-            transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
-            transformer_tgt = self.pos_encoder(transformer_tgt)
-            transformer_tgt = self.tgt_norm(transformer_tgt)
+            transformer_tgt = transformer_tgt.transpose(0, 1) #* math.sqrt(self.n_internal_dims)
         x, _ = self.transformer(x, transformer_tgt)
         x = x[:self.n_tokens_out]
         x = x.transpose(0, 1)
@@ -76,7 +73,6 @@ class TransformerEnsembleFeaturizer(nn.Module):
             decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
                                               requires_grad=True)
             self.register_parameter("decoder_query", decoder_query)
-            self.tgt_norm = nn.LayerNorm(n_internal_dims)
 
         self.ensemble_config = ensemble_config
         self.n_tokens_out = n_tokens_out
@@ -129,10 +125,10 @@ class TransformerEnsembleFeaturizer(nn.Module):
             v = self.ensemble_inp[k](v)
             if conf["is2d"]:
                 v = v.transpose(1, 2).transpose(2, 3)  # B, H, W, C
-                v = self.layer_norms[k](v)
+                v = self.layer_norms[k](v) # R
                 v = self.pos_encoder2d(v * math.sqrt(self.n_internal_dims))
             else:
-                v = self.layer_norms[k](v)
+                v = self.layer_norms[k](v) # R
                 v = self.pos_encoder(v.transpose(0, 1) * math.sqrt(self.n_internal_dims))
             vecs.append(v)
         x = torch.cat(vecs, 0)
@@ -142,9 +138,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
         transformer_tgt = None
         if self.n_decoders > 0:
             transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-            transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
-            transformer_tgt = self.pos_encoder(transformer_tgt)
-            transformer_tgt = self.tgt_norm(transformer_tgt)
+            transformer_tgt = transformer_tgt.transpose(0, 1) # * math.sqrt(self.n_internal_dims)
         x, _ = self.transformer(x, transformer_tgt)
         x = x[:self.n_tokens_out]
         x = x.transpose(0, 1)
