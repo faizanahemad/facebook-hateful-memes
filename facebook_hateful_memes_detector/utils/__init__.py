@@ -820,10 +820,11 @@ class MultiLayerTransformerDecoderHead(nn.Module):
             decoders.append(decoder)
         lin0 = nn.Linear(n_dims, n_dims)
         init_fc(lin0, "leaky_relu")
-        lin = nn.Linear(n_dims, n_out)
-        init_fc(lin, "linear")
+        c1 = nn.Conv1d(n_dims, n_out, n_tokens, 1, padding=0, groups=1, bias=True)
+        init_fc(c1, "linear")
+        avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), nn.Sequential(Average(1), dp, lin0, nn.LeakyReLU(), lin)) # TODO:  Try CNN
+        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, lin0, nn.LeakyReLU(), Transpose(), c1, avp)
 
         self.decoders = decoders
         self.decoder_query = decoder_query
@@ -877,11 +878,13 @@ class CNNHead(nn.Module):
         self.task = loss
         self.loss = get_loss_by_task(loss)
         # TODO: Try 2 layers
+        lin0 = nn.Linear(n_dims, n_dims)
+        init_fc(lin0, "leaky_relu")
         c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(dp, Transpose(), c1, avp)
+        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), Transpose(), c1, avp)
         self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
 
     def forward(self, x, labels=None):
