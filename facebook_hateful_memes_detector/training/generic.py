@@ -20,6 +20,7 @@ from mmf.common.sample import Sample, SampleList
 from transformers import optimization
 from .model_params import group_wise_lr, group_wise_finetune
 from collections import Counter
+from IPython.display import display
 
 
 def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef, loss_coef, ):
@@ -404,7 +405,7 @@ def validate(model, batch_size, dataset, collate_fn=my_collate):
     acc = accuracy_score(labels_list, predictions_list)
     validation_scores = [map, acc, auc]
     few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, predictions_list, labels_list)))[:10], columns=["Probability", "Predictions", "Labels"])
-    print("In Validation: Few Probs, Preds, Labels: ", "\n", few_preds)
+    display(few_preds)
     return validation_scores, prfs
 
 
