@@ -852,13 +852,14 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         loss = 0.0
         dsum = 0.0
         for i, decoder in enumerate(self.decoders):
-            denominator = (self.n_layers - i)**2
             transformer_tgt = decoder(self.gaussian_noise(transformer_tgt), self.gaussian_noise(x))
-            logits = self.classifier(transformer_tgt).squeeze() # R
-            logits = logits.to(get_device())
-            logits, loss_cur = loss_calculator(logits, labels, self.task, self.loss)
-            loss = loss + loss_cur / denominator
-            dsum += 1 / denominator
+            if i >= 1:
+                denominator = (self.n_layers - i) ** 2
+                logits = self.classifier(transformer_tgt).squeeze() # R
+                logits = logits.to(get_device())
+                logits, loss_cur = loss_calculator(logits, labels, self.task, self.loss)
+                loss = loss + loss_cur / denominator
+                dsum += 1 / denominator
         loss = loss / dsum
 
         return logits, loss
