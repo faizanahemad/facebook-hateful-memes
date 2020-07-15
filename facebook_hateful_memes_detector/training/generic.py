@@ -457,10 +457,12 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
     metadata = datadict["metadata"]
     train = datadict["train"]
     skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+    # print("TRAIN Sizes =",train.shape, "\n", train.label.value_counts())
     # skf = KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
-    for train_idx, test_idx in skf.split(train):
+    for train_idx, test_idx in skf.split(train, train.label):
         train_split = train.iloc[train_idx]
         test_split = train.iloc[test_idx]
+        # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
         yield (convert_dataframe_to_dataset(train_split, metadata, True),
                convert_dataframe_to_dataset(train_split, metadata, False),
                convert_dataframe_to_dataset(test_split, metadata, False), train_split, test_split)
