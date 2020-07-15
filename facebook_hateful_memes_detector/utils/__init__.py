@@ -527,25 +527,16 @@ def loss_calculator(logits, labels, task, loss_fn):
     loss = torch.tensor(0.0, device=get_device())
     if labels is not None:
         labels = labels.to(get_device())
-        if task == "classification":
+        if task == "classification" or task == "focal":
             assert len(labels.size()) == 1
             loss = loss_fn(logits, labels.long())
-            # preds = logits.max(dim=1).indices
             logits = torch.softmax(logits, dim=1)
         elif task == "regression":
             assert len(labels.size()) == 2
             loss = loss_fn(logits, labels.float())
 
-        elif task == "k-classification":
-            assert len(labels.size()) == 2
-            labels = labels.astype(float)
-            loss = loss_fn(logits, labels)
-            logits = torch.sigmoid(logits)
-
-    if task == "classification":
+    if task == "classification" or task == "focal":
         logits = torch.softmax(logits, dim=1)
-    elif task == "k-classification":
-        logits = torch.sigmoid(logits)
 
     return logits, loss
 
@@ -569,8 +560,12 @@ class FocalLoss(nn.Module):
 
 
 def get_loss_by_task(task):
-    if task == "classification":
-        # loss = nn.CrossEntropyLoss()
+    if callable(task):
+        raise NotImplementedError
+        loss = task
+    elif task == "classification":
+        loss = nn.CrossEntropyLoss()
+    elif task == "focal":
         loss = FocalLoss()
     elif task == "regression":
         loss = nn.MSELoss()
@@ -805,15 +800,12 @@ class Transformer(nn.Module):
 
 class MultiLayerTransformerDecoderHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout, gaussian_noise,
-                 task, loss=None, n_queries=16, n_layers=3):
+                 loss=None, n_queries=16, n_layers=3):
         super().__init__()
-        if task not in ["classification", "regression", "k-classification"]:
-            raise NotImplementedError(task)
+        if loss not in ["classification", "focal", "regression", "k-classification"] or not callable(loss):
+            raise NotImplementedError(loss)
         # TODO: Implement n_of_k class classification or set prediction/bipartite loss
-        self.task = task
-        self.loss = get_loss_by_task(task)
-        if loss is not None:
-            self.loss = loss
+        self.loss = get_loss_by_task(loss)
 
         decoder_query = nn.Parameter(torch.randn(n_queries, n_dims) * (1 / n_dims), requires_grad=True)
         self.register_parameter("decoder_query", decoder_query)
@@ -830,7 +822,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         lin = nn.Linear(n_dims, n_out)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), nn.Sequential(Average(1), dp, lin0, nn.LeakyReLU(), lin))
+        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), nn.Sequential(Average(1), dp, lin0, nn.LeakyReLU(), lin)) # TODO:  Try CNN
 
         self.decoders = decoders
         self.decoder_query = decoder_query
@@ -877,17 +869,13 @@ class GRUHead:
 
 class CNNHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 task, loss=None, width="wide", ):
+                 loss, width="wide", ):
         super().__init__()
-        if task not in ["classification", "regression", "k-classification"]:
-            raise NotImplementedError(task)
-        # TODO: Implement n_of_k class classification or set prediction/bipartite loss
-        self.task = task
-        self.loss = get_loss_by_task(task)
-
-        if loss is not None:
-            self.loss = loss
-
+        if loss not in ["classification", "focal", "regression", "k-classification"]:
+            raise NotImplementedError(loss)
+        self.task = loss
+        self.loss = get_loss_by_task(loss)
+        # TODO: Try 2 layers
         c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
@@ -906,14 +894,13 @@ class CNNHead(nn.Module):
                 or (len(x.size()) == 4 and x.size()[1] == self.n_dims))
         logits = self.classifier(x).squeeze()
         logits = logits.to(get_device())
-        return loss_calculator(logits, labels, self.task, self.loss)
+        return loss_calculator(logits, labels if self.training else None, self.task, self.loss)
 
 
 class CNN2DHead(CNNHead):
     def __init__(self, n_dims, n_out, dropout,
-                 task, loss=None, ):
-        super().__init__(n_dims, 1, n_out, dropout,
-                         task, loss)
+                 loss=None, ):
+        super().__init__(n_dims, 1, n_out, dropout, loss)
 
         conv = nn.Conv2d(n_dims, n_out, 3)
         init_fc(conv, "linear")
@@ -923,7 +910,7 @@ class CNN2DHead(CNNHead):
 
 class AveragedLinearHead(CNNHead):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 task, loss=None, ):
+                 loss ):
         """
         Expected input in format (Batch, Seq, Embedding_dims)
         :param n_dims: Embedding_dims
@@ -933,8 +920,7 @@ class AveragedLinearHead(CNNHead):
         :param task:
         :param loss:
         """
-        super().__init__(n_dims, n_tokens, n_out, dropout,
-                         task, loss)
+        super().__init__(n_dims, n_tokens, n_out, dropout, loss)
         lin0 = nn.Linear(n_dims, n_dims)
         init_fc(lin0, "leaky_relu")
         lin = nn.Linear(n_dims, n_out)
@@ -946,7 +932,7 @@ class AveragedLinearHead(CNNHead):
 
 class LinearHead(CNNHead):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 task, loss=None, ):
+                 loss ):
         """
         Expected input in format (Batch, Seq, Embedding_dims)
         :param n_dims: Embedding_dims
@@ -956,8 +942,7 @@ class LinearHead(CNNHead):
         :param task:
         :param loss:
         """
-        super().__init__(n_dims, n_tokens, n_out, dropout,
-                         task, loss)
+        super().__init__(n_dims, n_tokens, n_out, dropout, loss)
         lin0 = nn.Linear(n_dims, n_dims)
         init_fc(lin0, "leaky_relu")
         lin = nn.Linear(n_dims, n_out)

@@ -132,11 +132,11 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
                                                         n_encoders, n_decoders, gaussian_noise, dropout)
 
-        self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+        loss = kwargs["loss"] if "loss" in kwargs else None
+        self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, loss)
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
-        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 1.0
-        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.5
-        self.loss_coef = kwargs["loss_coef"] if "loss_coef" in kwargs else 0.25
+        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 4.0
+        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 2.0
 
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
@@ -180,5 +180,5 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         clean_memory()
         logits, loss = self.final_layer(vectors, labels)
         if self.training:
-            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef, self.loss_coef)
+            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef)
         return logits, vectors.mean(1), vectors, loss

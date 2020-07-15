@@ -23,7 +23,7 @@ from collections import Counter
 from IPython.display import display
 
 
-def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef, loss_coef, ):
+def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef):
     binary = logits.size(1) == 2
     eps = 1e-5
     if binary:
@@ -60,10 +60,9 @@ def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef,
             auc_loss = loss_1 + loss_2
 
         dice_loss = torch.prod(logits, 1).mean()
-        loss = (loss_coef * loss + auc_loss_coef * auc_loss + dice_loss_coef * dice_loss) / (loss_coef + auc_loss_coef + dice_loss_coef)
+        loss = (loss + auc_loss_coef * auc_loss + dice_loss_coef * dice_loss) / (1 + auc_loss_coef + dice_loss_coef)
 
     return loss
-
 
 
 def get_regularizer_scheduler(warmup_proportion=0.7):
@@ -83,7 +82,6 @@ def get_regularizer_scheduler(warmup_proportion=0.7):
                 raise NotImplementedError
 
     return scheduler
-
 
 
 def get_multistep_lr(milestones, gamma=0.2):

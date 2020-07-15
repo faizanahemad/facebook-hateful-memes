@@ -31,12 +31,13 @@ class VilBertVisualBertModel(nn.Module):
                  featurizer, final_layer_builder,
                  n_tokens_in,
                  n_tokens_out, n_layers,
-                 task,
+                 loss,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
-        self.task = task
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
         max_seq_length = n_tokens_in
+        assert type(loss) == str and loss in ["classification", "focal", "regression", "k-classification"]
+        self.task = loss
         assert max_seq_length >= 64
         self.text_processor = get_tokenizer(max_seq_length)
         n_tokens_in, pooled_dims = 0, 0
@@ -110,18 +111,17 @@ class VilBertVisualBertModel(nn.Module):
                 self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), ll, GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), lin)
             else:
                 print("[WARNING]: Perform finetuning on model since num classes = 2 and featurizer_type = `pass`")
-            self.loss = get_loss_by_task(task)
+            self.loss = get_loss_by_task(loss)
         else:
-            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, )
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, loss)
             if "vilbert" in model_name:
                 vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
                 init_fc(vilbert_seq_v_conv, "leaky_relu")
                 self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
 
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
-        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 1.0
-        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.5
-        self.loss_coef = kwargs["loss_coef"] if "loss_coef" in kwargs else 0.25
+        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 4.0
+        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 2.0
 
     def get_tokens(self, texts):
         keys = ["input_ids", "input_mask", "segment_ids"]
@@ -466,11 +466,11 @@ class VilBertVisualBertModel(nn.Module):
         if self.featurizer_type == "pass":
             if num_labels_pretrained != self.num_classes:
                 logits = self.final_layer(pooled_output)
-            logits, loss = loss_calculator(logits, labels, self.task, self.loss)
+            logits, loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
         else:
             vectors = self.featurizer(sequence_output)
             logits, loss = self.final_layer(vectors, labels)
 
         if self.training:
-            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef, self.loss_coef)
+            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef)
         return logits, pooled_output, sequence_output, loss

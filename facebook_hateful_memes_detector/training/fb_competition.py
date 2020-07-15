@@ -19,8 +19,9 @@ from transformers import optimization
 from .generic import *
 
 
-def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout,):
-    cnn = CNNHead(n_dims, n_tokens, n_out, dropout, "classification")
+def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, loss="classification"):
+    loss = "classification" if loss is None else loss
+    cnn = CNNHead(n_dims, n_tokens, n_out, dropout, loss)
     mtf = MultiTaskForward([cnn])
     return mtf
 
