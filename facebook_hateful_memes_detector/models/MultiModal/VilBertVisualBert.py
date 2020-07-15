@@ -42,7 +42,6 @@ class VilBertVisualBertModel(nn.Module):
         n_tokens_in, pooled_dims = 0, 0
         model_name = [model_name] if type(model_name) == str else model_name
         self.model_regularizers = nn.ModuleDict()
-        finetunes = dict()
         assert type(model_name) == dict
         for k, v in model_name.items():
             dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
@@ -53,18 +52,25 @@ class VilBertVisualBertModel(nn.Module):
         if "vilbert" in model_name:
             self.vilbert = get_vilbert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
+            for p in self.vilbert.parameters():
+                p.requires_grad = False
         if "visual_bert" in model_name:
             self.visual_bert = get_visual_bert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
-
+            for p in self.visual_bert.parameters():
+                p.requires_grad = False
         if "lxmert" in model_name:
             self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
+            for p in self.lxmert.parameters():
+                p.requires_grad = False
 
         if "mmbt_region" in model_name:
             self.mmbt_region = get_mmbt_region(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
+            for p in self.mmbt_region.parameters():
+                p.requires_grad = False
 
         if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
             raise NotImplementedError()
