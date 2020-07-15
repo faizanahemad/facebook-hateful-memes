@@ -356,15 +356,9 @@ class VilBertVisualBertModel(nn.Module):
         return torch.cat(feat_seq, 1), pooled
 
     def mmbt_region_forward(self, sl: SampleList):
-        sl = sl.copy()
+        sl = sl.to(get_device())
         sl.image_feature_0 = sl.image_feature_0.type(torch.float)
-        sl.to(get_device())
-        try:
-            module_output = self.mmbt_region.model.bert(sl)
-        except Exception as e:
-            print({k: v.dtype for k, v in sl.items() if type(v) == torch.Tensor})
-            print(sl['input_ids'])
-            raise e
+        module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
         output = {}
         output["sequence_output"] = module_output[0]
