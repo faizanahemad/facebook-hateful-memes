@@ -820,7 +820,6 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         self.tgt_norm = nn.LayerNorm(n_dims)
 
         decoders = nn.ModuleList()
-        classifiers = nn.ModuleList()
         decoder_layer = TransformerDecoderLayer(n_dims, 8, n_dims*4, dropout, "relu")
         for i in range(n_layers):
             decoder_norm = LayerNorm(n_dims)
@@ -839,6 +838,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         self.pos_encoder = PositionalEncoding(n_dims, dropout)
         self.global_layer_norm = nn.LayerNorm(n_dims)
         self.gaussian_noise = GaussianNoise(gaussian_noise)
+        self._reset_parameters()
 
     def forward(self, x, labels=None):
         x = x.transpose(0, 1) # * math.sqrt(self.n_dims)
@@ -863,6 +863,13 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         loss = loss / dsum
 
         return logits, loss
+
+    def _reset_parameters(self):
+        r"""Initiate parameters in the transformer model."""
+
+        for p in self.parameters():
+            if p.dim() > 1:
+                xavier_uniform_(p)
 
 
 class GRUHead:
