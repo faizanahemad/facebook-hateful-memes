@@ -227,12 +227,13 @@ def train(model, optimizer, scheduler_init_fn,
             print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
             if validation_strategy is not None:
                 if (epoc + 1) in validation_strategy["validation_epochs"]:
+                    vst, vsv = 0, 0
                     if "train" in validation_strategy:
                         vst, _ = validation_strategy["train"]["method"](*validation_strategy["train"]["args"])
+                        vst = vst[-1]
                     if "val" in validation_strategy:
                         vsv, _ = validation_strategy["val"]["method"](*validation_strategy["val"]["args"])
-                    vst = vst[-1]
-                    vsv = vsv[-1]
+                        vsv = vsv[-1]
                     print("Epoch = ", epoc + 1, "Train = %.6f" % vst, "Val = %.6f" % vsv,)
 
     if plot:
