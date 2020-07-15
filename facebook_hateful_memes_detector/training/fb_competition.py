@@ -25,80 +25,41 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout,):
     return mtf
 
 
-def train_and_predict(model_fn, datadict, batch_size, epochs, augmentation_weights: Dict[str, float],
-                      accumulation_steps=1,
-                      multi_eval=False, scheduler_init_fn=None,
-                      model_call_back=None,
-                      sampling_policy=None, class_weights={0: 1, 1: 1.8}):
+def train_and_predict(model_fn, datadict, batch_size, epochs,
+                      accumulation_steps=1, scheduler_init_fn=None,
+                      model_call_back=None, validation_epochs=None,
+                      sampling_policy=None, class_weights={0: 1, 1: 1.8},
+                      ):
     train_df = datadict["train"]
-    train_df["augmented"] = False
-    train_df["augment_type"] = "None"
     metadata = datadict["metadata"]
-    augmented_data = metadata["augmented_data"]
-    train_augmented = datadict["train_augmented"] if augmented_data else train_df
-    train_augmented["sample_weights"] = 0.0
-    for k, v in augmentation_weights.items():
-        train_augmented.loc[train_augmented["augment_type"] == k, "sample_weights"] = v
-    train_augmented = train_augmented[train_augmented["sample_weights"] > 0]
-    dataset = convert_dataframe_to_dataset(train_augmented, metadata, True)
+    dataset = convert_dataframe_to_dataset(train_df, metadata, True)
     model, optimizer = model_fn()
+    validation_strategy = dict(validation_epochs=validation_epochs,
+                               train=dict(method=validate, args=[model, batch_size, dataset]))
+    validation_strategy = validation_strategy if validation_epochs is not None else None
     train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
-                                         model_call_back=model_call_back, accumulation_steps=accumulation_steps, plot=True,
+                                         model_call_back=model_call_back, validation_strategy=validation_strategy,
+                                         accumulation_steps=accumulation_steps, plot=True,
                                          sampling_policy=sampling_policy, class_weights=class_weights)
-    return predict(model, datadict, batch_size, augmentation_weights, multi_eval)
+    return predict(model, datadict, batch_size)
 
 
-def predict(model, datadict, batch_size, augmentation_weights: Dict[str, float],
-                      multi_eval=False):
-    metadata = datadict["metadata"]
-    augmented_data = metadata["augmented_data"]
-    test = datadict["test"]
-    test["augmented"] = False
-    test["augment_type"] = "None"
-    test_augmented: pd.DataFrame = datadict["test_augmented"] if augmented_data else test
-
-    if not multi_eval:
-        test_augmented = test_augmented[~test_augmented["augmented"]]
-        test_augmented["sample_weights"] = 1.0
-    else:
-        test_augmented["sample_weights"] = 0.0
-        for k, v in augmentation_weights.items():
-            test_augmented[test_augmented["augment_type"] == k, "sample_weights"] = v
-
-    test_dataset = convert_dataframe_to_dataset(test_augmented, metadata, False)
-    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate)
-    test_augmented["proba"] = proba_list
-    test_augmented["predictions_list"] = predictions_list
-    test_augmented["weighted_proba"] = test_augmented["proba"] * test_augmented["sample_weights"]
-    probas = (test_augmented.groupby(["id"])["weighted_proba"].sum() / test_augmented.groupby(["id"])["sample_weights"].sum()).reset_index()
-    probas.columns = ["id", "proba"]
-    probas["label"] = (probas["proba"] > 0.5).astype(int)
-    submission_format = datadict["submission_format"]
-    assert set(submission_format.id) == set(probas.id)
-    sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="left", on="id")
-    sf["proba"] = sf["p"]
-    sf["label"] = sf["l"]
-    sf = sf[["id", "proba", "label"]]
-    return sf, model
-
-
-def predict_generic(model, datadict, batch_size):
+def predict(model, datadict, batch_size):
     metadata = datadict["metadata"]
     test = datadict["test"]
+    ids = test["id"] if "id" in test.columns else test["ID"]
+    id_name = "id" if "id" in test.columns else "ID"
     test_dataset = convert_dataframe_to_dataset(test, metadata, False)
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate)
-    test["proba"] = proba_list
-    test["predictions_list"] = predictions_list
-    test["weighted_proba"] = test["proba"] * test["sample_weights"]
-    probas = (test.groupby(["id"])["weighted_proba"].sum() / test.groupby(["id"])["sample_weights"].sum()).reset_index()
-    probas.columns = ["id", "proba"]
-    probas["label"] = (probas["proba"] > 0.5).astype(int)
-    submission_format = datadict["submission_format"]
-    assert set(submission_format.id) == set(probas.id)
-    sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="left", on="id")
-    sf["proba"] = sf["p"]
-    sf["label"] = sf["l"]
-    sf = sf[["id", "label"]].rename(columns={"id": "ID"})
+    probas = pd.DataFrame({id_name: ids, "proba": proba_list, "label": predictions_list})
+    sf = probas
+    if "submission_format" in datadict and type(datadict["submission_format"]) == pd.DataFrame and len(datadict["submission_format"]) == len(probas):
+        submission_format = datadict["submission_format"]
+        assert set(submission_format.id) == set(probas.id)
+        sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="left", on="id")
+        sf["proba"] = sf["p"]
+        sf["label"] = sf["l"]
+        sf = sf[["id", "proba", "label"]]
     return sf, model
 
 

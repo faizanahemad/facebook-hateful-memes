@@ -388,7 +388,7 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
     return proba_list, predictions_list, labels_list
 
 
-def validate(model, batch_size, dataset, test_df=None, collate_fn=my_collate):
+def validate(model, batch_size, dataset, collate_fn=my_collate):
     from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn)
@@ -402,6 +402,7 @@ def validate(model, batch_size, dataset, test_df=None, collate_fn=my_collate):
     map = average_precision_score(labels_list, proba_list)
     acc = accuracy_score(labels_list, predictions_list)
     validation_scores = [map, acc, auc]
+    print("In Validation: Few Probs, Preds, Labels: ", np.random.permutation(list(zip(proba_list, predictions_list, labels_list)))[:10])
     return validation_scores, prfs
 
 
@@ -451,7 +452,7 @@ def convert_dataframe_to_dataset(df, metadata, train=True):
     return ds
 
 
-def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str, float], n_splits=5, multi_eval=False, random_state=0):
+def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None):
     from sklearn.model_selection import train_test_split
     from sklearn.model_selection import StratifiedKFold, KFold
     metadata = datadict["metadata"]
@@ -469,9 +470,8 @@ def random_split_for_augmented_dataset(datadict, augmentation_weights: Dict[str,
 
 
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
-                          augmentation_weights: Dict[str, float],
                           accumulation_steps=1,
-                          multi_eval=False, kfold=False, scheduler_init_fn=None, model_call_back=None,
+                          kfold=False, scheduler_init_fn=None, model_call_back=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
                           class_weights={0: 1, 1: 1.8}):
@@ -485,8 +485,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     prfs_list = []
     index = ["map", "accuracy", "auc"]
 
-    for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data, augmentation_weights,
-                                                                                                                                    multi_eval=multi_eval,
+    for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data,
                                                                                                                                     random_state=random_state):
         model, optimizer = model_fn()
         if show_model_stats:
@@ -495,8 +494,8 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
             print("Trainable Params = %s" % (params), "\n", model)
             show_model_stats = not show_model_stats
         validation_strategy = dict(validation_epochs=validation_epochs,
-                                   train=dict(method=validate, args=[model, batch_size, training_test_dataset, train_df]),
-                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset, test_df]))
+                                   train=dict(method=validate, args=[model, batch_size, training_test_dataset]),
+                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset]))
         validation_strategy = validation_strategy if validation_epochs is not None else None
         train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, model_call_back, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
