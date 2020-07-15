@@ -120,8 +120,8 @@ class VilBertVisualBertModel(nn.Module):
                 self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
 
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
-        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 4.0
-        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 2.0
+        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 0.0
+        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.0
 
     def get_tokens(self, texts):
         keys = ["input_ids", "input_mask", "segment_ids"]

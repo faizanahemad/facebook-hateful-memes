@@ -402,8 +402,9 @@ def validate(model, batch_size, dataset, collate_fn=my_collate):
     map = average_precision_score(labels_list, proba_list)
     acc = accuracy_score(labels_list, predictions_list)
     validation_scores = [map, acc, auc]
-    few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, predictions_list, labels_list)))[:10], columns=["Probability", "Predictions", "Labels"])
-    display(few_preds)
+    few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, predictions_list, labels_list))), columns=["Probability", "Predictions", "Labels"])
+    display(few_preds.groupby(["Labels"])[["Probability", "Predictions"]].agg(["mean", "median"]))
+    display(few_preds.sample(10))
     return validation_scores, prfs
 
 
