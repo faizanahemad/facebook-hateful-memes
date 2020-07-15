@@ -82,7 +82,7 @@ class Fasttext1DCNNModel(nn.Module):
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
 
         if self.training:
-            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef, self.loss_coef)
+            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef)
         return logits, vectors.mean(1), vectors, loss
 
     def get_sentence_vector(self, texts: List[str]):
