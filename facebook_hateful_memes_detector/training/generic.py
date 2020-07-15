@@ -503,8 +503,8 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, model_call_back, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
-        validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, test_df)
-        train_scores, prfs_train = validate(model, batch_size, training_test_dataset, train_df)
+        validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset)
+        train_scores, prfs_train = validate(model, batch_size, training_test_dataset)
         prfs_list.append(prfs_train + prfs_val)
         rdf = dict(train=train_scores, val=validation_scores)
         rdf = pd.DataFrame(data=rdf, index=index)
