@@ -802,7 +802,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout, gaussian_noise,
                  loss=None, n_queries=16, n_layers=3):
         super().__init__()
-        if loss not in ["classification", "focal", "regression", "k-classification"] or not callable(loss):
+        if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
         # TODO: Implement n_of_k class classification or set prediction/bipartite loss
         self.loss = get_loss_by_task(loss)
