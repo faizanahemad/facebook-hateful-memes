@@ -57,7 +57,7 @@ def predict(model, datadict, batch_size):
     if "submission_format" in datadict and type(datadict["submission_format"]) == pd.DataFrame and len(datadict["submission_format"]) == len(probas):
         submission_format = datadict["submission_format"]
         assert set(submission_format.id) == set(probas.id)
-        sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="left", on="id")
+        sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="inner", on="id")
         sf["proba"] = sf["p"]
         sf["label"] = sf["l"]
         sf = sf[["id", "proba", "label"]]

@@ -583,6 +583,8 @@ def make_weights_for_balanced_classes(labels, weight_per_class: Dict = None):
     return torch.DoubleTensor(weight)
 
 
+def identity(x): return x
+
 class TextImageDataset(Dataset):
     def __init__(self, identifiers: List, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
                  sample_weights: List[float] = None,
@@ -596,15 +598,15 @@ class TextImageDataset(Dataset):
         if use_images:
             self.images = {l: Image.open(l).convert('RGB') for l in set(image_locations)} if cache_images else dict()
         self.labels = labels
-        self.text_transform = text_transform if text_transform is not None else lambda x: x
-        self.image_transform = image_transform if image_transform is not None else lambda x: x
+        self.text_transform = text_transform if text_transform is not None else identity
+        self.image_transform = image_transform if image_transform is not None else identity
         self.use_images = use_images
         self.sample_weights = [1.0] * len(texts) if sample_weights is None else sample_weights
         assert len(self.sample_weights) == len(self.image_locations) == len(self.texts)
         self.keep_original_text = keep_original_text
         self.keep_original_image = keep_original_image
         self.to_torchvision = get_image2torchvision_transforms()
-        self.torchvision_image_transform = torchvision_image_transform if torchvision_image_transform is not None else lambda x: x
+        self.torchvision_image_transform = torchvision_image_transform if torchvision_image_transform is not None else identity
         self.keep_processed_image = keep_processed_image
         self.keep_torchvision_image = keep_torchvision_image
 
