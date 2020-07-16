@@ -511,6 +511,9 @@ def get_vgg_face_model(model='resnet'):
         for p in c.parameters():
             p.requires_grad = False
 
+    for p in list(model.children())[-1].parameters():
+        p.requires_grad = True
+
     model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2).transpose(1, 2)),)
     if mname+".pth" in os.listdir("."):
         print("Loading saved model: ", mname+".pth")
@@ -824,7 +827,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, lin0, nn.LeakyReLU(), Transpose(), c1, avp)
+        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, lin0, nn.LeakyReLU(), dp, Transpose(), c1, avp)
 
         self.decoders = decoders
         self.decoder_query = decoder_query
@@ -877,14 +880,13 @@ class CNNHead(nn.Module):
             raise NotImplementedError(loss)
         self.task = loss
         self.loss = get_loss_by_task(loss)
-        # TODO: Try 2 layers
         lin0 = nn.Linear(n_dims, n_dims)
         init_fc(lin0, "leaky_relu")
         c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), Transpose(), c1, avp)
+        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), dp, Transpose(), c1, avp)
         self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
 
     def forward(self, x, labels=None):
