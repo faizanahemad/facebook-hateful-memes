@@ -36,7 +36,7 @@ def train_and_predict(model_fn, datadict, batch_size, epochs,
     dataset = convert_dataframe_to_dataset(train_df, metadata, True)
     model, optimizer = model_fn()
     validation_strategy = dict(validation_epochs=validation_epochs,
-                               train=dict(method=validate, args=[model, batch_size, dataset]))
+                               train=dict(method=validate, args=[model, batch_size, dataset], kwargs=dict(display_detail=True)))
     validation_strategy = validation_strategy if validation_epochs is not None else None
     train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
                                          model_call_back=model_call_back, validation_strategy=validation_strategy,

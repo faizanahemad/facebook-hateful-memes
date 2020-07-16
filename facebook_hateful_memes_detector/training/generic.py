@@ -228,10 +228,10 @@ def train(model, optimizer, scheduler_init_fn,
                 if (epoc + 1) in validation_strategy["validation_epochs"]:
                     vst, vsv = 0, 0
                     if "train" in validation_strategy:
-                        vst, _ = validation_strategy["train"]["method"](*validation_strategy["train"]["args"])
+                        vst, _ = validation_strategy["train"]["method"](*validation_strategy["train"]["args"], **validation_strategy["train"]["kwargs"])
                         vst = vst[-1]
                     if "val" in validation_strategy:
-                        vsv, _ = validation_strategy["val"]["method"](*validation_strategy["val"]["args"])
+                        vsv, _ = validation_strategy["val"]["method"](*validation_strategy["val"]["args"],  **validation_strategy["val"]["kwargs"])
                         vsv = vsv[-1]
                     print("Epoch = ", epoc + 1, "Train = %.6f" % vst, "Val = %.6f" % vsv,)
 
@@ -388,7 +388,7 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
     return proba_list, predictions_list, labels_list
 
 
-def validate(model, batch_size, dataset, collate_fn=my_collate):
+def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=False):
     from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
     proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn)
@@ -402,9 +402,11 @@ def validate(model, batch_size, dataset, collate_fn=my_collate):
     map = average_precision_score(labels_list, proba_list)
     acc = accuracy_score(labels_list, predictions_list)
     validation_scores = [map, acc, auc]
-    few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, predictions_list, labels_list))), columns=["Probability", "Predictions", "Labels"])
-    display(few_preds.groupby(["Labels"])[["Probability", "Predictions"]].agg(["mean", "median", "min", "max"]))
-    display(few_preds.sample(10))
+    if display_detail:
+        few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, predictions_list, labels_list))), columns=["Proba", "Preds", "Labels"])
+        display(few_preds.groupby(["Labels"])[["Proba", "Preds"]].agg(["mean", "median", "min", "max"]))
+        display(pd.concat((few_preds.sample(4), few_preds.sample(4), few_preds.sample(4)), 1))
+        print("scores = ", dict(zip(["map", "acc", "auc"], ["%.4f" % v for v in validation_scores])))
     return validation_scores, prfs
 
 
@@ -496,14 +498,14 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
             print("Trainable Params = %s" % (params), "\n", model)
             show_model_stats = not show_model_stats
         validation_strategy = dict(validation_epochs=validation_epochs,
-                                   train=dict(method=validate, args=[model, batch_size, training_test_dataset]),
-                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset]))
+                                   train=dict(method=validate, args=[model, batch_size, training_test_dataset], kwargs=dict(display_detail=False)),
+                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset], kwargs=dict(display_detail=True)))
         validation_strategy = validation_strategy if validation_epochs is not None else None
         train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, model_call_back, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
-        validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset)
-        train_scores, prfs_train = validate(model, batch_size, training_test_dataset)
+        validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)
+        train_scores, prfs_train = validate(model, batch_size, training_test_dataset, display_detail=False)
         prfs_list.append(prfs_train + prfs_val)
         rdf = dict(train=train_scores, val=validation_scores)
         rdf = pd.DataFrame(data=rdf, index=index)
