@@ -584,13 +584,14 @@ def make_weights_for_balanced_classes(labels, weight_per_class: Dict = None):
 
 
 class TextImageDataset(Dataset):
-    def __init__(self, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
+    def __init__(self, identifiers: List, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
                  sample_weights: List[float] = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
                  torchvision_image_transform=None,
                  keep_original_text: bool = False, keep_original_image: bool = False,
                  keep_processed_image: bool = False, keep_torchvision_image: bool = False):
         self.texts = list(texts)
+        self.identifiers = list(identifiers)
         self.image_locations = image_locations
         if use_images:
             self.images = {l: Image.open(l).convert('RGB') for l in set(image_locations)} if cache_images else dict()
@@ -609,12 +610,13 @@ class TextImageDataset(Dataset):
 
     def __getitem__(self, item):
         text = self.texts[item]
+        identifier = self.identifiers[item]
         label = self.labels[item] if self.labels is not None else 0
         sample_weight = self.sample_weights[item]
         # clean_text
         orig_text = text
         text = self.text_transform(text)
-        s = Sample({"text": text, "label": label, "sample_weight": sample_weight})
+        s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight})
         if self.use_images and (self.keep_torchvision_image or self.keep_original_image or self.keep_processed_image):
             l = self.image_locations[item]
             image = self.images.get(l)
