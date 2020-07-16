@@ -717,11 +717,13 @@ class Transformer(nn.Module):
 
         if num_encoder_layers > 0:
             encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
-            self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, None)
+            encoder_norm = LayerNorm(d_model)
+            self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
         if num_decoder_layers > 0:
+            decoder_norm = LayerNorm(d_model)
             decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
-            self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, None)
+            self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
 
         self._reset_parameters()
 
@@ -827,7 +829,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, lin0, nn.LeakyReLU(), dp, Transpose(), c1, avp)
+        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, lin0, nn.LeakyReLU(),  Transpose(), c1, avp)
 
         self.decoders = decoders
         self.decoder_query = decoder_query
@@ -886,7 +888,7 @@ class CNNHead(nn.Module):
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), dp, Transpose(), c1, avp)
+        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(),  Transpose(), c1, avp)
         self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
 
     def forward(self, x, labels=None):
