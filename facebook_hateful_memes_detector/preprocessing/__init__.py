@@ -579,7 +579,7 @@ def identity(x): return x
 
 class TextImageDataset(Dataset):
     def __init__(self, identifiers: List, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
-                 sample_weights: List[float] = None,
+                 sample_weights: List[float] = None, cached_images: Dict = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
                  torchvision_image_transform=None,
                  keep_original_text: bool = False, keep_original_image: bool = False,
@@ -589,7 +589,10 @@ class TextImageDataset(Dataset):
         self.image_locations = image_locations
         from tqdm.auto import tqdm as tqdm, trange
         if use_images:
-            self.images = {l: Image.open(l).convert('RGB') for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")} if cache_images else dict()
+            if cached_images is not None:
+                self.images = cached_images
+            else:
+                self.images = {l: Image.open(l).convert('RGB') for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")} if cache_images else dict()
         self.labels = labels
         self.text_transform = text_transform if text_transform is not None else identity
         self.image_transform = image_transform if image_transform is not None else identity

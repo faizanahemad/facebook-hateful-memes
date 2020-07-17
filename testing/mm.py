@@ -64,7 +64,7 @@ data = get_datasets(data_dir="../data/", train_text_transform=preprocess_text, t
                     keep_processed_image=True, keep_torchvision_image=False,)
 
 
-data["test"] = data["dev"].tail(256).head(128)
+data["test"] = data["dev"].tail(224).head(128)
 
 adam = torch.optim.Adam
 adam_params = params = dict(lr=1e-3, weight_decay=1e-7)

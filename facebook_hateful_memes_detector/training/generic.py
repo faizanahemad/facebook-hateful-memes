@@ -188,7 +188,7 @@ def train(model, optimizer, scheduler_init_fn,
           "Num Batches = ", len(train_loader), "Accumulation steps = ", accumulation_steps)
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
-    with trange(epochs, "Epochs") as epo:
+    with trange(epochs) as epo:
         for epoc in epo:
             _ = model.train()
             optimizer.zero_grad()
@@ -272,7 +272,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
 
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
-    with trange(epochs, "Epochs") as epo:
+    with trange(epochs) as epo:
         # TODO Reduce regularization of model in last few epochs, this way model is acquainted to work with real less regularized data (Real data distribution).
         for epoc in epo:
             _ = model.train()
@@ -444,7 +444,7 @@ def model_builder(model_class, model_params,
     return builder
 
 
-def convert_dataframe_to_dataset(df, metadata, train=True):
+def convert_dataframe_to_dataset(df, metadata, train=True, **kwargs):
     from functools import partial
     text = list(df.text)
     labels = df["label"].values if "label" in df else None
@@ -458,7 +458,7 @@ def convert_dataframe_to_dataset(df, metadata, train=True):
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
                           cache_images=metadata["cache_images"], use_images=metadata["use_images"],
                           keep_original_text=metadata["keep_original_text"], keep_original_image=metadata["keep_original_image"],
-                          keep_processed_image=metadata["keep_processed_image"], keep_torchvision_image=metadata["keep_torchvision_image"])
+                          keep_processed_image=metadata["keep_processed_image"], keep_torchvision_image=metadata["keep_torchvision_image"], **kwargs)
     return ds
 
 
@@ -474,8 +474,10 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None):
         train_split = train.iloc[train_idx]
         test_split = train.iloc[test_idx]
         # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
-        yield (convert_dataframe_to_dataset(train_split, metadata, True),
-               convert_dataframe_to_dataset(train_split, metadata, False),
+        train_set = convert_dataframe_to_dataset(train_split, metadata, True)
+        train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
+        yield (train_set,
+               train_test_set,
                convert_dataframe_to_dataset(test_split, metadata, False))
 
 
@@ -499,8 +501,10 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         trin = data["train"]
         test = data["dev"]
         metadata = data["metadata"]
-        folds = [(convert_dataframe_to_dataset(trin, metadata, True),
-                  convert_dataframe_to_dataset(trin, metadata, False),
+        train_set = convert_dataframe_to_dataset(trin, metadata, True)
+        train_test_set = convert_dataframe_to_dataset(trin, metadata, False, cached_images=train_set.images)
+        folds = [(train_set,
+                  train_test_set,
                   convert_dataframe_to_dataset(test, metadata, False))]
     else:
         folds = random_split_for_augmented_dataset(data, random_state=random_state)
