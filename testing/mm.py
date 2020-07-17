@@ -64,7 +64,7 @@ data = get_datasets(data_dir="../data/", train_text_transform=preprocess_text, t
                     keep_processed_image=True, keep_torchvision_image=False,)
 
 
-data["test"] = data["dev"].head(16)
+data["test"] = data["dev"]
 
 adam = torch.optim.Adam
 adam_params = params = dict(lr=1e-3, weight_decay=1e-7)
@@ -122,7 +122,7 @@ model_fn = model_builder(
         final_layer_builder=fb_1d_loss_builder,
         internal_dims=256,
         classifier_dims=768,
-        n_tokens_in=96,
+        n_tokens_in=128,
         n_tokens_out=16,
         n_layers=2,
         loss="classification",
@@ -142,7 +142,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score, classificati
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 labels_list = data["test"].label
-proba_list = sf.proba
+proba_list = sf.proba[:, 1]
 predictions_list = sf.label
 
 auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")

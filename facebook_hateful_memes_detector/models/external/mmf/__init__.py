@@ -74,7 +74,9 @@ def ready_trainer(trainer):
     trainer.configure_seed()
     trainer.load_model()
     from mmf.trainers.callbacks.checkpoint import CheckpointCallback
+    from mmf.trainers.callbacks.early_stopping import EarlyStoppingCallback
     trainer.checkpoint_callback = CheckpointCallback(trainer.config, trainer)
+    trainer.early_stop_callback = EarlyStoppingCallback(trainer.config, trainer)
     trainer.callbacks.append(trainer.checkpoint_callback)
     trainer.on_init_start()
 
