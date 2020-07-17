@@ -587,8 +587,9 @@ class TextImageDataset(Dataset):
         self.texts = list(texts)
         self.identifiers = list(identifiers)
         self.image_locations = image_locations
+        from tqdm.auto import tqdm as tqdm, trange
         if use_images:
-            self.images = {l: Image.open(l).convert('RGB') for l in set(image_locations)} if cache_images else dict()
+            self.images = {l: Image.open(l).convert('RGB') for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")} if cache_images else dict()
         self.labels = labels
         self.text_transform = text_transform if text_transform is not None else identity
         self.image_transform = image_transform if image_transform is not None else identity

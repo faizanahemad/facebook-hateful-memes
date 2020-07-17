@@ -188,7 +188,7 @@ def train(model, optimizer, scheduler_init_fn,
           "Num Batches = ", len(train_loader), "Accumulation steps = ", accumulation_steps)
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
-    with trange(epochs) as epo:
+    with trange(epochs, "Epochs") as epo:
         for epoc in epo:
             _ = model.train()
             optimizer.zero_grad()
@@ -196,7 +196,7 @@ def train(model, optimizer, scheduler_init_fn,
                 scheduler.step()
             clean_memory()
             train_losses_cur_epoch = []
-            with tqdm(train_loader) as data_batch:
+            with tqdm(train_loader, "Batches") as data_batch:
                 for batch_idx, batch in enumerate(data_batch):
                     if model_call_back is not None:
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
@@ -272,7 +272,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
 
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
-    with trange(epochs) as epo:
+    with trange(epochs, "Epochs") as epo:
         # TODO Reduce regularization of model in last few epochs, this way model is acquainted to work with real less regularized data (Real data distribution).
         for epoc in epo:
             _ = model.train()
@@ -281,7 +281,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                 scheduler.step()
             clean_memory()
             train_losses_cur_epoch = []
-            with tqdm(train_loader) as data_batch:
+            with tqdm(train_loader, "Batches") as data_batch:
                 for batch_idx, batch in enumerate(data_batch):
                     if model_call_back is not None:
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
@@ -368,7 +368,7 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
     use_autocast = use_autocast and get_global("use_autocast")
     with torch.no_grad():
         clean_memory()
-        with tqdm(test_loader) as test_loader:
+        with tqdm(test_loader, "Generate Predictions") as test_loader:
             for batch in test_loader:
                 if use_autocast:
                     with autocast():
@@ -488,10 +488,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           class_weights=None):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
-    if in_notebook():
-        from tqdm.notebook import tqdm, trange
-    else:
-        from tqdm import tqdm as tqdm, trange
+    from tqdm.auto import tqdm as tqdm, trange
     results_list = []
     prfs_list = []
     index = ["map", "accuracy", "auc"]
