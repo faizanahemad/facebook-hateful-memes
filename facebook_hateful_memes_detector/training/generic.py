@@ -462,23 +462,45 @@ def convert_dataframe_to_dataset(df, metadata, train=True, **kwargs):
     return ds
 
 
-def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None):
+def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, uniform_sample_binary_labels=True):
     from sklearn.model_selection import train_test_split
     from sklearn.model_selection import StratifiedKFold, KFold
     metadata = datadict["metadata"]
     train = datadict["train"]
-    skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
-    # print("TRAIN Sizes =",train.shape, "\n", train.label.value_counts())
-    # skf = KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
-    for train_idx, test_idx in skf.split(train, train.label):
-        train_split = train.iloc[train_idx]
-        test_split = train.iloc[test_idx]
-        # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
-        train_set = convert_dataframe_to_dataset(train_split, metadata, True)
-        train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
-        yield (train_set,
-               train_test_set,
-               convert_dataframe_to_dataset(test_split, metadata, False))
+    if uniform_sample_binary_labels and len(set(train.label)) == 2:
+        # TODO: This code is specific to FB competition since it assumes that zeros are more than ones
+        ones = train[train["label"] == 1]
+        zeros = train[train["label"] == 0]
+        kf1, kf2 = KFold(n_splits=5, shuffle=True), KFold(n_splits=5, shuffle=True)
+        for (ones_train_idx, ones_test_idx), (zeros_train_idx, zeros_test_idx) in zip(kf1.split(ones), kf2.split(zeros)):
+            ones_train = ones[ones_train_idx]
+            ones_test = ones[ones_test_idx]
+            zeros_train = pd.concat((zeros[zeros_train_idx], zeros[zeros_test_idx[len(ones_test_idx):]]))
+            zeros_test = zeros[zeros_test_idx[:len(ones_test_idx)]]
+            train_split = pd.concat((ones_train, zeros_train)).sample(frac=1.0)
+            test_split = pd.concat((ones_test, zeros_test)).sample(frac=1.0)
+            print("Doing Special split for FB", "\n", "Train Labels =", train_split.label.value_counts(),
+                  "Test Labels =", test_split.label.value_counts())
+            assert len(set(train_split["id"]).intersection(set(test_split["id"]))) == 0
+            train_set = convert_dataframe_to_dataset(train_split, metadata, True)
+            train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
+            yield (train_set,
+                   train_test_set,
+                   convert_dataframe_to_dataset(test_split, metadata, False))
+
+    else:
+        skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+        # print("TRAIN Sizes =",train.shape, "\n", train.label.value_counts())
+        # skf = KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
+        for train_idx, test_idx in skf.split(train, train.label):
+            train_split = train.iloc[train_idx]
+            test_split = train.iloc[test_idx]
+            # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
+            train_set = convert_dataframe_to_dataset(train_split, metadata, True)
+            train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
+            yield (train_set,
+                   train_test_set,
+                   convert_dataframe_to_dataset(test_split, metadata, False))
 
 
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
