@@ -473,10 +473,10 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, 
         zeros = train[train["label"] == 0]
         kf1, kf2 = KFold(n_splits=5, shuffle=True), KFold(n_splits=5, shuffle=True)
         for (ones_train_idx, ones_test_idx), (zeros_train_idx, zeros_test_idx) in zip(kf1.split(ones), kf2.split(zeros)):
-            ones_train = ones[ones_train_idx]
-            ones_test = ones[ones_test_idx]
-            zeros_train = pd.concat((zeros[zeros_train_idx], zeros[zeros_test_idx[len(ones_test_idx):]]))
-            zeros_test = zeros[zeros_test_idx[:len(ones_test_idx)]]
+            ones_train = ones.iloc[ones_train_idx]
+            ones_test = ones.iloc[ones_test_idx]
+            zeros_train = pd.concat((zeros.iloc[zeros_train_idx], zeros.iloc[zeros_test_idx[len(ones_test_idx):]]))
+            zeros_test = zeros.iloc[zeros_test_idx[:len(ones_test_idx)]]
             train_split = pd.concat((ones_train, zeros_train)).sample(frac=1.0)
             test_split = pd.concat((ones_test, zeros_test)).sample(frac=1.0)
             print("Doing Special split for FB", "\n", "Train Labels =", train_split.label.value_counts(),
