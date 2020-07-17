@@ -71,8 +71,9 @@ def ready_trainer(trainer):
         registry.register("writer", trainer.writer)
 
     trainer.configure_device()
+    trainer.configure_seed()
     trainer.load_model()
-
+    trainer.on_init_start()
 
 def tokenizer_conf(max_seq_length=128):
     s = SimpleNamespace()

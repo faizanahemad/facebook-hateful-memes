@@ -146,7 +146,6 @@ class VilBertVisualBertModel(nn.Module):
         sl.segment_ids = textSampleList.segment_ids
         return sl
 
-
     def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList):
         imgfs = [self.get_img_details(im) for im in orig_image]
         samples = [Sample(dict(image_feature_0=feat_list, image_info_0=info_list)) for feat_list, info_list in imgfs]
@@ -154,6 +153,7 @@ class VilBertVisualBertModel(nn.Module):
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
         sl.segment_ids = textSampleList.segment_ids
+        sl.id = textSampleList.id
         return sl
 
     def __vilbert_preprocessing__(self, sample_list: SampleList):
@@ -379,6 +379,7 @@ class VilBertVisualBertModel(nn.Module):
         image = sampleList.image  # orig_image = sampleList.original_image
 
         textSampleList = self.get_tokens(texts)
+        textSampleList.id = sampleList.id
         del sampleList
         clean_memory()
         # GPUtil.showUtilization()
