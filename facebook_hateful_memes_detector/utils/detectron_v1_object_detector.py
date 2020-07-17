@@ -314,7 +314,7 @@ class FeatureExtractor:
                 use_autocast = "cuda" in str(self.device)
             except:
                 pass
-
+            use_autocast = use_autocast and get_global("use_autocast")
             if use_autocast:
                 with autocast(enabled=False):
                     output = self.detection_model(current_img_list)
@@ -347,7 +347,7 @@ class ImageCaptionFeatures:
             use_autocast = "cuda" in str(self.device)
         except:
             pass
-
+        use_autocast = use_autocast and get_global("use_autocast")
         with torch.no_grad():
             if use_autocast:
                 with autocast(enabled=False):

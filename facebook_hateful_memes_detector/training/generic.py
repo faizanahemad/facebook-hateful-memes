@@ -142,7 +142,7 @@ def train(model, optimizer, scheduler_init_fn,
         use_autocast = "cuda" in str(get_device())
     except:
         pass
-
+    use_autocast = use_autocast and get_global("use_autocast")
     assert sampling_policy is None or sampling_policy in ["with_replacement", "without_replacement", "without_replacement_v2", "without_replacement_v3"]
     if sampling_policy == "with_replacement":
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
@@ -258,7 +258,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
         use_autocast = "cuda" in str(get_device())
     except:
         pass
-
+    use_autocast = use_autocast and get_global("use_autocast")
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                               shuffle=True, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=None)
 
@@ -355,6 +355,7 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
     predictions_list = []
     labels_list = []
     clean_memory()
+    from tqdm.auto import tqdm as tqdm, trange
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
                              shuffle=False, num_workers=get_global("dataloader_workers"), pin_memory=True)
 
@@ -364,27 +365,29 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
         use_autocast = "cuda" in str(get_device())
     except:
         pass
+    use_autocast = use_autocast and get_global("use_autocast")
     with torch.no_grad():
         clean_memory()
-        for batch in test_loader:
-            if use_autocast:
-                with autocast():
+        with tqdm(test_loader) as test_loader:
+            for batch in test_loader:
+                if use_autocast:
+                    with autocast():
+                        logits, _, _, _ = model(batch)
+                else:
                     logits, _, _, _ = model(batch)
-            else:
-                logits, _, _, _ = model(batch)
-            try:
-                batch = dict2sampleList(batch, device=get_device())
-                labels = batch["label"]
-            except:
-                labels = batch[-1]
-            labels_list.extend(labels)
-            logits = logits.cpu().detach()
-            top_class = logits.max(dim=1).indices
-            top_class = top_class.flatten().tolist()
-            probas = logits[:, 1].tolist()
-            predictions_list.extend(top_class)
-            proba_list.extend(probas)
-            clean_memory()
+                try:
+                    batch = dict2sampleList(batch, device=get_device())
+                    labels = batch["label"]
+                except:
+                    labels = batch[-1]
+                labels_list.extend(labels)
+                logits = logits.cpu().detach()
+                top_class = logits.max(dim=1).indices
+                top_class = top_class.flatten().tolist()
+                probas = logits[:, 1].tolist()
+                predictions_list.extend(top_class)
+                proba_list.extend(probas)
+                clean_memory()
     return proba_list, predictions_list, labels_list
 
 
