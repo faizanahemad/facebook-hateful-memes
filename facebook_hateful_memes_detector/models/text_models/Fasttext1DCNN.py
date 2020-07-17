@@ -12,7 +12,7 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
 from ...training import calculate_auc_dice_loss
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList, load_stored_params
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
 
@@ -67,6 +67,8 @@ class Fasttext1DCNNModel(nn.Module):
             loss = kwargs["loss"] if "loss" in kwargs else None
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, loss)
 
+        if "stored_model" in kwargs:
+            load_stored_params(self, kwargs["stored_model"])
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
         self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 0.0
         self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.0

@@ -13,7 +13,7 @@ import pandas as pd
 import jsonlines
 from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
 from spacy import glossary
-from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache
+from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, get_global
 import os
 import torch
 import gc
@@ -481,14 +481,7 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
             resnet_layers = resnet_layers + [im_model.layer4[0], im_model.layer4[1]]
         model = nn.Sequential(*resnet_layers)
 
-    if net+".pth" in os.listdir("."):
-        print("Loading saved model: ", net+".pth")
-        model.load_state_dict(torch.load(net+".pth"))
-
-    if net in os.listdir("."):
-        print("Loading saved model: ", net)
-        model.load_state_dict(torch.load(net))
-
+    load_stored_params(model, net)
 
     if not finetune:
         for p in model.parameters():
@@ -519,10 +512,27 @@ def get_vgg_face_model(model='resnet'):
         print("Loading saved model: ", mname+".pth")
         model.load_state_dict(torch.load(mname+".pth"))
 
-    if mname in os.listdir("."):
-        print("Loading saved model: ", mname)
-        model.load_state_dict(torch.load(mname))
+    load_stored_params(model, mname)
     return model
+
+
+def load_stored_params(model, key):
+    if key+".pth" in os.listdir("."):
+        print("Loading saved model: ", key+".pth")
+        model.load_state_dict(torch.load(key+".pth"))
+
+    if key in os.listdir("."):
+        print("Loading saved model: ", key)
+        model.load_state_dict(torch.load(key))
+
+    global_dir = get_global("models_dir")
+    if key+".pth" in os.listdir(global_dir):
+        print("Loading saved model: ", key+".pth")
+        model.load_state_dict(torch.load(os.path.join(global_dir, key+".pth")))
+
+    if key in os.listdir(global_dir):
+        print("Loading saved model: ", key)
+        model.load_state_dict(torch.load(os.path.join(global_dir, key)))
 
 
 def loss_calculator(logits, labels, task, loss_fn):
@@ -823,13 +833,10 @@ class MultiLayerTransformerDecoderHead(nn.Module):
             decoder_norm = LayerNorm(n_dims)
             decoder = TransformerDecoder(decoder_layer, 1, decoder_norm)
             decoders.append(decoder)
-        lin0 = nn.Linear(n_dims, n_dims)
-        init_fc(lin0, "leaky_relu")
         c1 = nn.Conv1d(n_dims, n_out, n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
-        avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, lin0, nn.LeakyReLU(),  Transpose(), c1, avp)
+        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, Transpose(), c1, avp)
 
         self.decoders = decoders
         self.decoder_query = decoder_query
@@ -874,6 +881,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
 class GRUHead:
     pass
 
+
 class CNNHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
                  loss, width="wide", ):
@@ -882,14 +890,11 @@ class CNNHead(nn.Module):
             raise NotImplementedError(loss)
         self.task = loss
         self.loss = get_loss_by_task(loss)
-        lin0 = nn.Linear(n_dims, n_dims)
-        init_fc(lin0, "leaky_relu")
         c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
-        norm = LayerNorm(n_dims)
-        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(),  Transpose(), c1, avp)
+        self.classifier = nn.Sequential(dp, Transpose(), c1, avp)
         self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
 
     def forward(self, x, labels=None):

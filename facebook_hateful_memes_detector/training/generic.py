@@ -476,12 +476,13 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None):
         # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
         yield (convert_dataframe_to_dataset(train_split, metadata, True),
                convert_dataframe_to_dataset(train_split, metadata, False),
-               convert_dataframe_to_dataset(test_split, metadata, False), train_split, test_split)
+               convert_dataframe_to_dataset(test_split, metadata, False))
 
 
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           accumulation_steps=1,
-                          kfold=False, scheduler_init_fn=None, model_call_back=None,
+                          kfold=False, test_dev=False,
+                          scheduler_init_fn=None, model_call_back=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
                           class_weights={0: 1, 1: 1.8}):
@@ -495,8 +496,19 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     prfs_list = []
     index = ["map", "accuracy", "auc"]
 
-    for training_fold_dataset, training_test_dataset, testing_fold_dataset, train_df, test_df in random_split_for_augmented_dataset(data,
-                                                                                                                                    random_state=random_state):
+    assert not (test_dev and kfold)
+
+    if test_dev:
+        train = data["train"]
+        test = data["dev"]
+        metadata = data["metadata"]
+        folds = [(convert_dataframe_to_dataset(train, metadata, True),
+                  convert_dataframe_to_dataset(train, metadata, False),
+                  convert_dataframe_to_dataset(test, metadata, False))]
+    else:
+        folds = random_split_for_augmented_dataset(data, random_state=random_state)
+
+    for training_fold_dataset, training_test_dataset, testing_fold_dataset in folds:
         model, optimizer = model_fn()
         if show_model_stats:
             model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))

@@ -16,7 +16,7 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...training import calculate_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
-    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask
+    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask, load_stored_params
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer, get_mmbt_region
@@ -119,6 +119,8 @@ class VilBertVisualBertModel(nn.Module):
                 init_fc(vilbert_seq_v_conv, "leaky_relu")
                 self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
 
+        if "stored_model" in kwargs:
+            load_stored_params(self, kwargs["stored_model"])
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
         self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 0.0
         self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.0

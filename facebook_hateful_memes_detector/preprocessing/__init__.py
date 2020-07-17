@@ -523,15 +523,14 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
                             train_torchvision_image_transform=train_torchvision_image_transform,
                             test_torchvision_image_transform=test_torchvision_image_transform,
-                            test_text_transform=test_text_transform, test_image_transform=test_image_transform,
-                            augmented_data=False))
+                            test_text_transform=test_text_transform, test_image_transform=test_image_transform))
     return rd
 
 
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
                  train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
-                 cache_images: bool = True, use_images: bool = True, dev: bool = False,
+                 cache_images: bool = True, use_images: bool = True, dev: bool = False, append_dev: bool = False,
                  keep_original_text: bool = False, keep_original_image: bool = False,
                  keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     use_dev = dev
@@ -545,21 +544,14 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     train["img"] = list(map(joiner, train.img))
     test["img"] = list(map(joiner, test.img))
 
-    augmented_data = os.path.exists(joiner("train-augmented.csv"))
-    train_augmented = pd.read_csv(joiner("train-augmented.csv")) if os.path.exists(joiner("train-augmented.csv")) else None
-    dev_augmented = pd.read_csv(joiner("dev-augmented.csv")) if os.path.exists(joiner("dev-augmented.csv")) else None
-    test_augmented = pd.read_csv(joiner("test-augmented.csv")) if os.path.exists(joiner("test-augmented.csv")) else None
     submission_format = pd.read_csv(joiner("submission_format.csv"))
     # TODO: Fold in dev into train
     if use_dev:
-        train_augmented = dev_augmented
         train = dev
-    else:
+    elif append_dev:
         train = pd.concat((train, dev))
-        train_augmented = pd.concat((train_augmented, dev_augmented)) if train_augmented is not None else None
 
     rd = dict(train=train, test=test, dev=dev,
-              train_augmented=train_augmented, dev_augmented=dev_augmented, test_augmented=test_augmented,
               submission_format=submission_format,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev,
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,
@@ -568,7 +560,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
                             train_torchvision_image_transform=train_torchvision_image_transform,
                             test_torchvision_image_transform=test_torchvision_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform,
-                            data_dir=data_dir, augmented_data=augmented_data))
+                            data_dir=data_dir))
     return rd
 
 
