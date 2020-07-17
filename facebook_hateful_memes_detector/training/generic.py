@@ -495,6 +495,7 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, 
         for train_idx, test_idx in skf.split(train, train.label):
             train_split = train.iloc[train_idx]
             test_split = train.iloc[test_idx]
+            assert len(set(train_split["id"]).intersection(set(test_split["id"]))) == 0
             # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
             train_set = convert_dataframe_to_dataset(train_split, metadata, True)
             train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
