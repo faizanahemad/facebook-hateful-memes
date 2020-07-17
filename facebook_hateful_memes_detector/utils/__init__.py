@@ -888,6 +888,7 @@ class CNNHead(nn.Module):
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
         dp = nn.Dropout(dropout)
+        norm = LayerNorm(n_dims)
         self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(),  Transpose(), c1, avp)
         self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
 
