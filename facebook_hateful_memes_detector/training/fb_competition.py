@@ -29,7 +29,7 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, loss="classification"):
 def train_and_predict(model_fn, datadict, batch_size, epochs,
                       accumulation_steps=1, scheduler_init_fn=None,
                       model_call_back=None, validation_epochs=None,
-                      sampling_policy=None, class_weights={0: 1, 1: 1.8},
+                      sampling_policy=None, class_weights=None,
                       ):
     train_df = datadict["train"]
     metadata = datadict["metadata"]

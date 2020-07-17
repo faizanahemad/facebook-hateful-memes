@@ -485,7 +485,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           scheduler_init_fn=None, model_call_back=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
-                          class_weights={0: 1, 1: 1.8}):
+                          class_weights=None):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
     if in_notebook():
@@ -499,11 +499,11 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     assert not (test_dev and kfold)
 
     if test_dev:
-        train = data["train"]
+        trin = data["train"]
         test = data["dev"]
         metadata = data["metadata"]
-        folds = [(convert_dataframe_to_dataset(train, metadata, True),
-                  convert_dataframe_to_dataset(train, metadata, False),
+        folds = [(convert_dataframe_to_dataset(trin, metadata, True),
+                  convert_dataframe_to_dataset(trin, metadata, False),
                   convert_dataframe_to_dataset(test, metadata, False))]
     else:
         folds = random_split_for_augmented_dataset(data, random_state=random_state)
