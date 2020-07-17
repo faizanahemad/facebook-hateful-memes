@@ -481,6 +481,8 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, 
             test_split = pd.concat((ones_test, zeros_test)).sample(frac=1.0)
             print("Doing Special split for FB", "\n", "Train Labels =", train_split.label.value_counts(),
                   "Test Labels =", test_split.label.value_counts())
+            assert len(set(ones_train["id"]).intersection(set(ones_test["id"]))) == 0
+            assert len(set(zeros_train["id"]).intersection(set(zeros_test["id"]))) == 0
             assert len(set(train_split["id"]).intersection(set(test_split["id"]))) == 0
             train_set = convert_dataframe_to_dataset(train_split, metadata, True)
             train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
