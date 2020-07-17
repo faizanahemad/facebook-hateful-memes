@@ -335,6 +335,7 @@ class VilBertVisualBertModel(nn.Module):
         clean_memory()
         logits = None
         if self.featurizer_type == "pass":
+            pooled_output = self.visual_bert.model.dropout(pooled_output)
             logits = self.visual_bert.model.classifier(pooled_output).contiguous().squeeze()
         output_dict["logits"] = logits
         return output_dict

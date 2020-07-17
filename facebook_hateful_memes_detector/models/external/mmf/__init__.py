@@ -73,6 +73,9 @@ def ready_trainer(trainer):
     trainer.configure_device()
     trainer.configure_seed()
     trainer.load_model()
+    from mmf.trainers.callbacks.checkpoint import CheckpointCallback
+    trainer.checkpoint_callback = CheckpointCallback(trainer.config, trainer)
+    trainer.callbacks.append(trainer.checkpoint_callback)
     trainer.on_init_start()
 
 def tokenizer_conf(max_seq_length=128):
