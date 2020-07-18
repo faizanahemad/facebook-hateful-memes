@@ -255,6 +255,7 @@ class VilBertVisualBertModel(nn.Module):
 
         logits = None
         if self.featurizer_type == "pass":
+            pooled_output = self.vilbert.model.dropout(pooled_output)
             logits = self.vilbert.model.classifier(pooled_output).contiguous().squeeze()
         output = dict(sequence_output_t=sequence_output_t,
                       sequence_output_v=sequence_output_v,
@@ -368,6 +369,7 @@ class VilBertVisualBertModel(nn.Module):
         output["pooled_output"] = pooled_output
         logits = None
         if self.featurizer_type == "pass":
+            pooled_output = self.mmbt_region.model.dropout(pooled_output)
             logits = self.mmbt_region.model.classifier(pooled_output).contiguous().squeeze()
         output["logits"] = logits
         del sl

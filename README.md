@@ -14,15 +14,27 @@ mv *.png img
 
 ```bash
 conda install -y -c anaconda openjdk
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict transformers contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance lmdb fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git'
-
-pip install torch torchvision # pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html 
+conda install python=3.8
+pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cu101/torch_nightly.html
 pip install fasttext
+pip install transformers==2.11
+# pip install torch torchvision 
+# pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html 
+# pip install torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
+# pip install https://download.pytorch.org/whl/nightly/cu101/torch-1.6.0.dev20200625%2Bcu101-cp37-cp37m-linux_x86_64.whl
+
+
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git'
+
+
+
 
 python -m spacy download en_core_web_sm
 python -m spacy download en_core_web_md
 python -m spacy download en_core_web_lg
 python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon');nltk.download('treebank');nltk.download('wordnet');import gensim.downloader as api;api.load(\"glove-twitter-25\");api.load(\"glove-twitter-50\");api.load(\"glove-wiki-gigaword-50\");api.load(\"word2vec-google-news-300\");api.load(\"conceptnet-numberbatch-17-06-300\");"
+
+
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install --no-deps -e . && python scripts/download_weights.py
 # edit: vi torchmoji/lstm.py and change `input, batch_sizes, _, _ = input` line 78
 # look at: https://github.com/huggingface/torchMoji/blob/master/examples/score_texts_emojis.py
@@ -87,43 +99,25 @@ File Structure inside wiki-idf cloned dir
     - Ricap and cutout
     - Super-resolution and then resize
 - Try 
-    - image captioned text as another part of model input
     - Take a attention or conv based text classifier and overfit, make heatmap of which word is used for classification and invert those words to create negative examples. 
-    - use a previous layer of Resnet and feed into attention model as a 3d array (14 x 14 x 256) so that it can look at regions of image
-        - For image vectors use both row and column numbers for position embedding
-    - Start with Pretrained Resnet and Transformers
-    - Relative position embedding?
     - Analyse the images
         - Check what kind of augmentations will help. 
         - See if adding emotion recognition pre-trained net on images can help
         - See if sentiment identification pre-trained network on images and text can help
         - See if object detection models like YOLOv4 can help
-        
-    - Start with pretrained VLBert as base network, add more attention layers and incorporate side features with those.
     - This problem is more around image understanding rather than recognition. As such disentangled feature extraction from images can help.
+    - Cluster based OverSampling
+        - Cluster-Based Over Sampling: In this case, the K-means clustering algorithm is independently applied to minority and majority class instances. This is to identify clusters in the dataset. Subsequently, each cluster is oversampled such that all clusters of the same class have an equal number of instances and all classes have the same size.  After oversampling of each cluster, all clusters of the same class contain the same number of observations.
+    - Ensembling / Stacking
+        - https://arxiv.org/pdf/1704.01664.pdf
 - analyse performance of different networks against adversarial attacks
-- Sarcasm detection pretrain
-- VCR, NLVR, VQA Pretrained models
-    
 - Can I find which words /  topics are sensitive from a Knowledge Base like Wikipedia and then use that info along with the word embedding
-- Sentiment classification datasets
+
 
 - Features
     - YOLOv4 objects and their relative sizes as features
 
 - Models: Combine multiple Trained Models as ensembles (Text-only, Image-only, Multi-modal models)
-    - Text Models can use back translation augmentation
-    - Fasttext pretrained word embeddings + Multi-head attention
-    - Bert pretrained word embeddings + Multi-head attention
-    - Bidirectional Text GRU model
-    - Image Captioning model with self-attention layers
-    - VL-Bert pretrained
-    - VisualBert pretrained
-    - VL-Bert pretrained then fine tuned with Text and image augmentations
-    - VisualBert pretrained then fine tuned with text and image augmentations
-    - Faster RCNN / YOLOv4 based image features model
-    - MMBT by Facebook
-    - Plain Resnet based classifier? 
     - Disentangeled VAE with self-attention based model
     
     
