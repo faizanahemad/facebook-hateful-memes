@@ -932,7 +932,7 @@ class DecoderEnsemblingHead(nn.Module):
             lin = nn.Linear(n_dims, n_out)
             init_fc(lin, "linear")
             dp = nn.Dropout(dropout)
-            classifier = lin
+            classifier = nn.Sequential(dp, lin)
             if n_classifier_layers == 2:
                 classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
             classifiers.append(classifier)
