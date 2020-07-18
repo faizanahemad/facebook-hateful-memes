@@ -11,7 +11,7 @@ from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassifi
 import torchvision.models as models
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
-from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer
+from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global
 import os
 import random
 import math
@@ -31,8 +31,13 @@ class AlbertClassifer(Fasttext1DCNNModel):
         assert n_tokens_in % n_tokens_out == 0
         model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
-        self.tokenizer = AutoTokenizer.from_pretrained(model)
-        self.model = AutoModel.from_pretrained(model)
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(model)
+            self.model = AutoModel.from_pretrained(model)
+        except Exception as e:
+            global_dir = get_global("models_dir")
+            self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(global_dir, model))
+            self.model = AutoModel.from_pretrained(os.path.join(global_dir, model))
         self.need_fasttext = "fasttext_vector_config" in kwargs
         if "fasttext_vector_config" in kwargs:
             import fasttext
