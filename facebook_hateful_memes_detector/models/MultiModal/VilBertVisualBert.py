@@ -430,7 +430,8 @@ class VilBertVisualBertModel(nn.Module):
                 pooled_output.append(pool)
 
             if self.featurizer_type == "pass":
-                logits = torch.softmax(torch.stack(logit).mean(0), dim=1)
+                logit = [torch.softmax(l, dim=1) for l in logit]
+                logits = torch.stack(logit).mean(0)
 
             del sl
             clean_memory()
