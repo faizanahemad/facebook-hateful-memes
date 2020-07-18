@@ -113,7 +113,7 @@ class VilBertVisualBertModel(nn.Module):
                 print("[WARNING]: Perform finetuning on model since num classes = 2 and featurizer_type = `pass`")
             self.loss = get_loss_by_task(loss)
         else:
-            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, loss)
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
             if "vilbert" in model_name:
                 vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
                 init_fc(vilbert_seq_v_conv, "leaky_relu")

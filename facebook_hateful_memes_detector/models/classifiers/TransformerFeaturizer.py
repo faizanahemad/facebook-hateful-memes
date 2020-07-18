@@ -21,6 +21,9 @@ class TransformerFeaturizer(nn.Module):
         self.n_channels_out = n_channels_out
         self.n_internal_dims = n_internal_dims
         self.n_decoders = n_decoders
+        self.transformer_needed = n_encoders > 0 or n_decoders > 0
+        if not self.transformer_needed:
+            return
         if n_decoders > 0:
             decoder_query = nn.Parameter(torch.randn((n_tokens_out, n_internal_dims)) * (1 / n_internal_dims),
                                          requires_grad=True)
@@ -41,10 +44,12 @@ class TransformerFeaturizer(nn.Module):
         self.global_layer_norm = nn.LayerNorm(n_internal_dims)
 
     def forward(self, x):
+        if not self.transformer_needed:
+            return x[:, :self.n_tokens_out]
         x = self.input_nn(x) if self.input_nn is not None else x
 
         x = x.transpose(0, 1) * math.sqrt(self.n_internal_dims)
-        x = self.pos_encoder(x)
+        x = self.pos_encoder(x)  # TODO: Do we need pos encoding here given transformers lib already does that?
         x = self.global_layer_norm(x)
         batch_size = x.size(1)
         transformer_tgt = None

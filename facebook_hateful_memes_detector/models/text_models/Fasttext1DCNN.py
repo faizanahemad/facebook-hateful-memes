@@ -65,7 +65,7 @@ class Fasttext1DCNNModel(nn.Module):
             else:
                 raise NotImplementedError()
             loss = kwargs["loss"] if "loss" in kwargs else None
-            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, loss)
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
 
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])

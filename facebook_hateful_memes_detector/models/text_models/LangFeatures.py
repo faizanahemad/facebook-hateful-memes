@@ -210,7 +210,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
                 raise NotImplementedError()
 
             loss = kwargs["loss"] if "loss" in kwargs else None
-            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, loss)
+            self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
