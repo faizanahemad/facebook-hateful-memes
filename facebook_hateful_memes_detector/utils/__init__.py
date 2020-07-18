@@ -926,7 +926,7 @@ class DecoderEnsemblingHead(nn.Module):
         n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
         assert n_classifier_layers in [1, 2]
         classifiers = nn.ModuleList()
-        for _ in n_tokens:
+        for _ in range(n_tokens):
             lin0 = nn.Linear(n_dims, n_dims)
             init_fc(lin0, "leaky_relu")
             lin = nn.Linear(n_dims, n_out)
