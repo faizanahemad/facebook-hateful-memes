@@ -20,8 +20,8 @@ from .generic import *
 
 
 def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):
-    loss = kwargs["loss"] if "loss" in kwargs else "classification"
-    classification_head = kwargs["classification_head"] if "classification_head" in kwargs else "cnn1d"
+    loss = kwargs.pop("loss", "classification")
+    classification_head = kwargs.pop("classification_head", "cnn1d")
     if classification_head == "cnn1d":
         head = CNNHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
     elif classification_head == "decoder_ensemble":

@@ -122,8 +122,8 @@ class VilBertVisualBertModel(nn.Module):
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
-        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 0.0
-        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.0
+        self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
+        self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
 
     def get_tokens(self, texts):
         keys = ["input_ids", "input_mask", "segment_ids"]

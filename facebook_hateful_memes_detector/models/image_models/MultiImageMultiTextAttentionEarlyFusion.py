@@ -127,18 +127,17 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
              self.text_models.items()}
         ensemble_conf.update(text_ensemble_conf)
         # ensemble_conf = text_ensemble_conf
-        n_encoders = kwargs["n_encoders"] if "n_encoders" in kwargs else n_layers
-        n_decoders = kwargs["n_decoders"] if "n_decoders" in kwargs else n_layers
+        n_encoders = kwargs.pop("n_encoders", n_layers)
+        n_decoders = kwargs.pop("n_decoders", n_layers)
         self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
                                                         n_encoders, n_decoders, gaussian_noise, dropout)
 
-        loss = kwargs["loss"] if "loss" in kwargs else None
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
-        self.auc_loss_coef = kwargs["auc_loss_coef"] if "auc_loss_coef" in kwargs else 0.0
-        self.dice_loss_coef = kwargs["dice_loss_coef"] if "dice_loss_coef" in kwargs else 0.0
+        self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
+        self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
 
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
