@@ -55,7 +55,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
             if gru_layers > 0:
                 lstm = nn.Sequential(GaussianNoise(gaussian_noise),
                                      nn.GRU(embedding_dims, int(embedding_dims / 2), gru_layers, batch_first=True, bidirectional=True, dropout=dropout))
-                pre_query_layer = nn.Sequential(crawl_nn, lstm, nn.LayerNorm(embedding_dims), LambdaLayer(lambda x: x.transpose(0, 1)))
+                pre_query_layer = nn.Sequential(crawl_nn, lstm, LambdaLayer(lambda x: x[0]), nn.LayerNorm(embedding_dims), LambdaLayer(lambda x: x.transpose(0, 1)))
             else:
                 pos_encoder = PositionalEncoding(embedding_dims, dropout)
                 pre_query_layer = nn.Sequential(crawl_nn, LambdaLayer(lambda x: x.transpose(0, 1) * math.sqrt(embedding_dims)),
@@ -95,8 +95,6 @@ class AlbertClassifer(Fasttext1DCNNModel):
     def fasttext_vectors(self, texts: List[str], last_hidden_states: torch.Tensor):
         word_vectors = self.get_fasttext_vectors(texts, 8 * int(self.n_tokens_in/(8*1.375) + 1), **self.word_vectorizers)
         word_vectors = self.pre_query_layer(word_vectors)
-        if len(word_vectors) == 2:
-            word_vectors = word_vectors[0]
         last_hidden_states = last_hidden_states.transpose(0, 1)
         word_vectors, _ = self.query_layer(word_vectors, last_hidden_states)
         return word_vectors
