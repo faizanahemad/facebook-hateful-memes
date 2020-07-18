@@ -56,6 +56,7 @@ class TransformerFeaturizer(nn.Module):
         if self.n_decoders > 0:
             transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
             transformer_tgt = transformer_tgt.transpose(0, 1) #* math.sqrt(self.n_internal_dims)
+            # TODO: do we need tgt_norm?
         x, _ = self.transformer(x, transformer_tgt)
         x = x[:self.n_tokens_out]
         x = x.transpose(0, 1)

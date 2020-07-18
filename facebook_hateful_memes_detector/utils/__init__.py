@@ -820,8 +820,6 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         self.task = loss
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
-        # TODO: Implement n_of_k class classification or set prediction/bipartite loss
-        self.loss = get_loss_by_task(loss)
 
         decoder_query = nn.Parameter(torch.randn(n_queries, n_dims) * (1 / n_dims), requires_grad=True)
         self.register_parameter("decoder_query", decoder_query)
@@ -833,16 +831,11 @@ class MultiLayerTransformerDecoderHead(nn.Module):
             decoder_norm = LayerNorm(n_dims)
             decoder = TransformerDecoder(decoder_layer, 1, decoder_norm)
             decoders.append(decoder)
-        c1 = nn.Conv1d(n_dims, n_out, n_tokens, 1, padding=0, groups=1, bias=True)
-        init_fc(c1, "linear")
-        dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(LambdaLayer(lambda x: x.transpose(0, 1)), dp, Transpose(), c1, avp)
+        self.classifier = DecoderEnsemblingHead(n_dims, n_queries, n_out, dropout, loss)
 
         self.decoders = decoders
         self.decoder_query = decoder_query
         self.n_tokens, self.n_dims, self.n_out, self.n_layers = n_tokens, n_dims, n_out, n_layers
-        self.pos_encoder = PositionalEncoding(n_dims, dropout)
-        self.global_layer_norm = nn.LayerNorm(n_dims)
         self.gaussian_noise = GaussianNoise(gaussian_noise)
         self._reset_parameters()
 
@@ -859,15 +852,11 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         dsum = 0.0
         for i, decoder in enumerate(self.decoders):
             transformer_tgt = decoder(self.gaussian_noise(transformer_tgt), self.gaussian_noise(x))
-            if i >= 1:
-                denominator = (self.n_layers - i) ** 2
-                logits = self.classifier(transformer_tgt).squeeze() # R
-                logits = logits.to(get_device())
-                logits, loss_cur = loss_calculator(logits, labels, self.task, self.loss)
-                loss = loss + loss_cur / denominator
-                dsum += 1 / denominator
+            multiple = 2 ** i
+            logits, loss_cur = self.classifier(transformer_tgt)
+            loss = loss + (loss_cur * multiple)
+            dsum += multiple
         loss = loss / dsum
-
         return logits, loss
 
     def _reset_parameters(self):
