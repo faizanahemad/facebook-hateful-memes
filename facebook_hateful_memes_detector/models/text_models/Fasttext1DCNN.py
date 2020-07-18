@@ -25,9 +25,8 @@ class Fasttext1DCNNModel(nn.Module):
                  use_as_super=False,
                  **kwargs):
         super(Fasttext1DCNNModel, self).__init__()
-        fasttext_file = kwargs[
-            "fasttext_file"] if "fasttext_file" in kwargs else "crawl-300d-2M-subword.bin"  # "wiki-news-300d-1M-subword.bin"
-        fasttext_model = kwargs["fasttext_model"] if "fasttext_model" in kwargs else None
+        fasttext_file = kwargs.pop("fasttext_file", "crawl-300d-2M-subword.bin")  # "wiki-news-300d-1M-subword.bin"
+        fasttext_model = kwargs.pop("fasttext_model", None)
         assert fasttext_file is not None or fasttext_model is not None or use_as_super
         self.num_classes = num_classes
         self.binary = num_classes == 2
@@ -102,7 +101,8 @@ class Fasttext1DCNNModel(nn.Module):
         result = result.to(get_device())
         return result
 
-    def get_one_sentence_vector(self, tm, sentence):
+    @classmethod
+    def get_one_sentence_vector(cls, tm, sentence):
         tokens = fasttext.tokenize(sentence)
         if isinstance(tm, fasttext.FastText._FastText):
             result = torch.tensor([tm[t] for t in tokens])
@@ -119,14 +119,33 @@ class Fasttext1DCNNModel(nn.Module):
         cngram = self.cngram
         tm = self.text_model
         n_tokens_in = self.n_tokens_in
-        result = stack_and_pad_tensors([self.get_one_sentence_vector(tm, text) for text in texts], n_tokens_in)
-        result = result / result.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
-        res2 = stack_and_pad_tensors([self.get_one_sentence_vector(bpe, text) for text in texts], n_tokens_in)
-        res2 = res2 / res2.norm(dim=2, keepdim=True).clamp(min=1e-5)
-        res3 = stack_and_pad_tensors([self.get_one_sentence_vector(cngram, text) for text in texts], n_tokens_in)
-        res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
-        result = torch.cat([result, res2, res3], 2)
-        result = result.to(get_device())
+        result = self.get_fasttext_vectors(texts, n_tokens_in, fasttext_crawl=tm, bpe=bpe, cngram=cngram,)
         result = self.crawl_nn(result)
+        return result
+
+    @classmethod
+    def get_fasttext_vectors(cls, texts: List[str], n_tokens_in,
+                             fasttext_crawl=None, fasttext_wiki=None,
+                             bpe=None, cngram=None,):
+        result = []
+        if fasttext_crawl:
+            res0 = stack_and_pad_tensors([cls.get_one_sentence_vector(fasttext_crawl, text) for text in texts], n_tokens_in)
+            res0 = res0 / res0.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+            result.append(res0)
+        if fasttext_wiki:
+            res1 = stack_and_pad_tensors([cls.get_one_sentence_vector(fasttext_wiki, text) for text in texts], n_tokens_in)
+            res1 = res1 / res1.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+            result.append(res1)
+        if bpe:
+            res2 = stack_and_pad_tensors([cls.get_one_sentence_vector(bpe, text) for text in texts], n_tokens_in)
+            res2 = res2 / res2.norm(dim=2, keepdim=True).clamp(min=1e-5)
+            result.append(res2)
+        if cngram:
+            res3 = stack_and_pad_tensors([cls.get_one_sentence_vector(cngram, text) for text in texts], n_tokens_in)
+            res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
+            result.append(res3)
+        result = torch.cat(result, 2)
+        result = result.to(get_device())
+
         return result
 

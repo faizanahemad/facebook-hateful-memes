@@ -9,9 +9,12 @@ from .Fasttext1DCNN import Fasttext1DCNNModel
 from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
 import torchvision.models as models
-from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params
+from torchnlp.word_to_vector import CharNGram
+from torchnlp.word_to_vector import BPEmb
+from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer
 import os
 import random
+import math
 
 
 class AlbertClassifer(Fasttext1DCNNModel):
@@ -30,6 +33,35 @@ class AlbertClassifer(Fasttext1DCNNModel):
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.model = AutoModel.from_pretrained(model)
+        self.need_fasttext = "fasttext_vector_config" in kwargs
+        if "fasttext_vector_config" in kwargs:
+            import fasttext
+            ftvc = kwargs["fasttext_vector_config"]
+            gru_layers = ftvc.pop("gru_layers", 0)
+            n_decoders = ftvc.pop("n_decoders", 2)
+            fasttext_crawl = fasttext.load_model("crawl-300d-2M-subword.bin")
+            fasttext_wiki = fasttext.load_model("wiki-news-300d-1M-subword.bin")
+            bpe = BPEmb(dim=200)
+            cngram = CharNGram()
+            self.word_vectorizers = dict(fasttext_crawl=fasttext_crawl, fasttext_wiki=fasttext_wiki, bpe=bpe, cngram=cngram)
+            crawl_nn = ExpandContract(900, embedding_dims, dropout,
+                                      use_layer_norm=True, unit_norm=False, groups=(4, 4))
+
+            if gru_layers > 0:
+                lstm = nn.Sequential(GaussianNoise(gaussian_noise),
+                                     nn.GRU(embedding_dims, int(embedding_dims / 2), gru_layers, batch_first=True, bidirectional=True, dropout=dropout))
+                pre_query_layer = nn.Sequential(crawl_nn, lstm, nn.LayerNorm(embedding_dims), LambdaLayer(lambda x: x.transpose(0, 1)))
+            else:
+                pos_encoder = PositionalEncoding(embedding_dims, dropout)
+                pre_query_layer = nn.Sequential(crawl_nn, LambdaLayer(lambda x: x.transpose(0, 1) * math.sqrt(embedding_dims)),
+                                                pos_encoder, nn.LayerNorm(embedding_dims))
+            self.pre_query_layer = pre_query_layer
+            self.query_layer = Transformer(embedding_dims, 8, 0, n_decoders, embedding_dims*4, dropout, gaussian_noise)
+            # We need gru+decoder support
+            # n_internal_dims modification
+            # support for selecting which fasttext entities we want
+            # layer norm them and append extra dims
+            pass
         if not use_as_super:
             if featurizer == "cnn":
                 self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
@@ -50,11 +82,17 @@ class AlbertClassifer(Fasttext1DCNNModel):
             else:
                 raise NotImplementedError()
 
-            loss = kwargs["loss"] if "loss" in kwargs else None
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+
+    def fasttext_vectors(self, texts: List[str], last_hidden_states: torch.Tensor):
+        word_vectors = self.get_fasttext_vectors(texts, 8 * int(self.n_tokens_in/(8*1.375) + 1), **self.word_vectorizers)
+        word_vectors = self.pre_query_layer(word_vectors)
+        last_hidden_states = last_hidden_states.transpose(0, 1)
+        word_vectors, _ = self.query_layer(word_vectors, last_hidden_states)
+        return word_vectors
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
@@ -69,5 +107,8 @@ class AlbertClassifer(Fasttext1DCNNModel):
         input_ids, attention_mask = self.tokenise(texts)
         outputs = self.model(input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs[0]
+        if self.need_fasttext:
+            fasttext_vectors = self.fasttext_vectors(texts, last_hidden_states)
+            last_hidden_states = (last_hidden_states + fasttext_vectors) / 2
         pooled_output = outputs[1]
         return last_hidden_states
