@@ -113,7 +113,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
         outputs = self.model(input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs[0]
         if self.need_fasttext:
-            fasttext_vectors = self.fasttext_vectors(texts, last_hidden_states)
+            fasttext_vectors = self.fasttext_vectors(texts, last_hidden_states).transpose(0, 1)
             last_hidden_states = (last_hidden_states + fasttext_vectors) / 2
         pooled_output = outputs[1]
         return last_hidden_states
