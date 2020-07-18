@@ -884,7 +884,7 @@ class GRUHead:
 
 class CNNHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 loss, width="wide", ):
+                 loss, width="wide", **kwargs):
         super().__init__()
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
@@ -909,6 +909,53 @@ class CNNHead(nn.Module):
         logits = self.classifier(x).squeeze()
         logits = logits.to(get_device())
         return loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+
+
+class DecoderEnsemblingHead(nn.Module):
+    """
+    We asume that each token coming into this head is coming from a Transformer Decoder.
+    """
+
+    def __init__(self, n_dims, n_tokens, n_out, dropout,
+                 loss, **kwargs):
+        super().__init__()
+        if loss not in ["classification", "focal", "regression", "k-classification"]:
+            raise NotImplementedError(loss)
+        self.task = loss
+        self.loss = get_loss_by_task(loss)
+        n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
+        assert n_classifier_layers in [1, 2]
+        classifiers = nn.ModuleList()
+        for _ in n_tokens:
+            lin0 = nn.Linear(n_dims, n_dims)
+            init_fc(lin0, "leaky_relu")
+            lin = nn.Linear(n_dims, n_out)
+            init_fc(lin, "linear")
+            dp = nn.Dropout(dropout)
+            classifier = lin
+            if n_classifier_layers == 2:
+                classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
+            classifiers.append(classifier)
+
+        self.classifiers = classifiers
+        self.n_tokens, self.n_dims, self.n_out = n_tokens, n_dims, n_out
+
+    def forward(self, x, labels=None):
+        assert len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims)
+        losses, logits = [], []
+        for i in range(self.n_tokens):
+            classifier = self.classifiers[i]
+            tokens = x[:, i].squeeze()
+            assert tokens.size() == (x.size(0), x.size(2))
+            logit = classifier(tokens).squeeze()
+            logit = logit.to(get_device())
+            logit, loss = loss_calculator(logit, labels if self.training else None, self.task, self.loss)
+            losses.append(loss)
+            logits.append(logit)
+
+        loss = torch.stack(losses).mean()
+        logits = torch.stack(logits).mean(0)
+        return logits, loss
 
 
 class CNN2DHead(CNNHead):

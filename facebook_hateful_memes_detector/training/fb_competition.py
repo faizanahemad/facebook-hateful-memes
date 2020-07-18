@@ -10,7 +10,7 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, CNNHead, AveragedLinearHead, OneTokenPositionLinearHead, MultiTaskForward, CNN2DHead
+from ..utils import in_notebook, CNNHead, AveragedLinearHead, OneTokenPositionLinearHead, MultiTaskForward, CNN2DHead, DecoderEnsemblingHead
 from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -19,10 +19,16 @@ from transformers import optimization
 from .generic import *
 
 
-def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, loss="classification"):
-    loss = "classification" if loss is None else loss
-    cnn = CNNHead(n_dims, n_tokens, n_out, dropout, loss)
-    mtf = MultiTaskForward([cnn])
+def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):
+    loss = kwargs["loss"] if "loss" in kwargs else "classification"
+    classification_head = kwargs["classification_head"] if "classification_head" in kwargs else "cnn1d"
+    if classification_head == "cnn1d":
+        head = CNNHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
+    elif classification_head == "decoder_ensemble":
+        head = DecoderEnsemblingHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
+    else:
+        raise NotImplementedError
+    mtf = MultiTaskForward([head])
     return mtf
 
 
