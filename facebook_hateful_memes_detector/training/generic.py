@@ -421,7 +421,7 @@ def model_builder(model_class, model_params,
         prams.update(kwargs)
         model = model_class(**prams)
         model.to(get_device())
-        all_params = filter(lambda p: p.requires_grad, model.parameters())
+        all_params = list(filter(lambda p: p.requires_grad, model.parameters()))
 
         if per_param_opts_fn is not None:
             # https://pytorch.org/docs/master/optim.html#per-parameter-options
@@ -437,8 +437,9 @@ def model_builder(model_class, model_params,
             assert all(["params" in p for p in params_conf])
 
             all_params = params_conf
-
-        optimizer = optimiser_class(all_params, **optimiser_params)
+        optimizer = None
+        if len(all_params) > 0:
+            optimizer = optimiser_class(all_params, **optimiser_params)
         return model, optimizer
 
     return builder
