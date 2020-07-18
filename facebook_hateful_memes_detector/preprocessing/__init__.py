@@ -530,7 +530,7 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
                  train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
-                 cache_images: bool = True, use_images: bool = True, dev: bool = False, append_dev: bool = False,
+                 cache_images: bool = True, use_images: bool = True, dev: bool = False, test_dev: bool = True,
                  keep_original_text: bool = False, keep_original_image: bool = False,
                  keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     use_dev = dev
@@ -546,14 +546,14 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
 
     submission_format = pd.read_csv(joiner("submission_format.csv"))
     # TODO: Fold in dev into train
+    if not test_dev:
+        train = pd.concat((train, dev))
     if use_dev:
         train = dev
-    elif append_dev:
-        train = pd.concat((train, dev))
 
     rd = dict(train=train, test=test, dev=dev,
               submission_format=submission_format,
-              metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev,
+              metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev, test_dev=test_dev,
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,
                             keep_processed_image=keep_processed_image, keep_torchvision_image=keep_torchvision_image,
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,

@@ -71,7 +71,7 @@ adam_params = params = dict(lr=1e-3, weight_decay=1e-7)
 optimizer = adam
 optimizer_params = adam_params
 
-batch_size=16
+batch_size=8
 
 lr_strategy = {
     "vilbert": {
@@ -142,7 +142,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score, classificati
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 labels_list = data["test"].label
-proba_list = sf.proba[:, 1]
+proba_list = sf.proba
 predictions_list = sf.label
 
 auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")

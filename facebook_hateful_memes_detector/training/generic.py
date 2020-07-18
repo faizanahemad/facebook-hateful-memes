@@ -508,7 +508,7 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, 
 
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           accumulation_steps=1,
-                          kfold=False, test_dev=False,
+                          kfold=False,
                           scheduler_init_fn=None, model_call_back=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
@@ -519,7 +519,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     results_list = []
     prfs_list = []
     index = ["map", "accuracy", "auc"]
-
+    test_dev = data["metadata"]["test_dev"]
     assert not (test_dev and kfold)
 
     if test_dev:
