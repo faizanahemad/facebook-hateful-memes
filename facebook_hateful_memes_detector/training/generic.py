@@ -341,6 +341,7 @@ def train(model, optimizer, scheduler_init_fn,
                 scheduler.step()
             clean_memory()
             train_losses_cur_epoch = []
+            loss_monitor = 0.0
             with tqdm(train_loader, "Batches") as data_batch:
                 for batch_idx, batch in enumerate(data_batch):
                     if model_call_back is not None:
@@ -349,24 +350,28 @@ def train(model, optimizer, scheduler_init_fn,
                         with autocast():
                             _, _, _, loss = model(batch)
                             loss = loss / accumulation_steps
-
+                            loss_monitor += loss.cpu().detach().item()
                         scaler.scale(loss).backward()
                         if (batch_idx + 1) % accumulation_steps == 0:
                             scaler.step(optimizer)
                             scaler.update()
-                            optimizer.zero_grad()
+
                     else:
                         _, _, _, loss = model(batch)
                         loss = loss / accumulation_steps
+                        loss_monitor += loss.cpu().detach().item()
                         loss.backward()
                         if (batch_idx + 1) % accumulation_steps == 0:
                             optimizer.step()
-                            optimizer.zero_grad()
+
+                    if (batch_idx + 1) % accumulation_steps == 0:
+                        train_losses.append(float(loss_monitor))
+                        learning_rates.append(float(optimizer.param_groups[0]['lr']))
+                        loss_monitor = 0.0
+                        optimizer.zero_grad()
                     if update_in_batch:
                         scheduler.step()
-                    train_losses.append(float(loss.cpu().detach().item()))
-                    train_losses_cur_epoch.append(float(loss.cpu().detach().item()))
-                    learning_rates.append(float(optimizer.param_groups[0]['lr']))
+                    train_losses_cur_epoch.append(float(loss.cpu().detach().item()) * accumulation_steps)
                     clean_memory()
             print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
             if validation_strategy is not None:
