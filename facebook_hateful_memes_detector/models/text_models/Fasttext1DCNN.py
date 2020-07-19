@@ -11,7 +11,7 @@ from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...training import calculate_auc_dice_loss
+from ...training import calculate_auc_dice_loss, get_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList, load_stored_params
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
@@ -71,6 +71,8 @@ class Fasttext1DCNNModel(nn.Module):
         self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
         self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
         self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
+        self.auc_method = kwargs.pop("auc_method", 1)
+        self.auc_dice_loss = get_auc_dice_loss(num_classes, self.dice_loss_coef, self.auc_loss_coef, auc_method=self.auc_method)
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
@@ -83,7 +85,7 @@ class Fasttext1DCNNModel(nn.Module):
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
 
         if self.training:
-            loss = calculate_auc_dice_loss(logits, labels, loss, self.auc_loss_coef, self.dice_loss_coef)
+            loss += self.auc_dice_loss(logits, labels)
         return logits, vectors.mean(1), vectors, loss
 
     def get_sentence_vector(self, texts: List[str]):

@@ -23,44 +23,188 @@ from collections import Counter
 from IPython.display import display
 
 
+def try_dice():
+    loss = get_dice_loss(2, threshold_1=0.8, threshold_2=1e-2)
+    import matplotlib.pyplot as plt
+    x = torch.arange(0, 1, 0.01).detach().cpu()
+    x2 = 1 - x
+    xx = torch.cat([x.reshape(-1, 1), x2.reshape(-1, 1)], 1)
+    y = loss(xx).detach().cpu()
+    plt.plot(x, y)
+    plt.show()
+
+
+def try_dice_n_classes(n_classes):
+    loss = get_dice_loss(n_classes, threshold_1=0.8, threshold_2=1e-2)
+    import matplotlib.pyplot as plt
+    x = torch.softmax(torch.randn(10000, n_classes), dim=1)
+    y = loss(x).detach().cpu()
+    x = torch.abs(x - 1/n_classes).mean(1)
+    x, y = zip(*sorted(list(zip(x, y)), key=lambda k: k[0]))
+    plt.plot(x, y)
+    plt.show()
+
+
+def mean_sigma_finder_for_dice_loss(n_classes, threshold_1=0.8, threshold_2=1e-2):
+    """
+    For given n_classes this provides a sigma value such that when any class proba goes above threshold_1, loss goes below threshold_2
+    :param n_classes:
+    :param threshold_1:
+    :param threshold_2:
+    :return:
+    """
+    x = torch.tensor([[threshold_1] + [(1 - threshold_1)/(n_classes - 1)] * (n_classes - 1)])
+    candidates = np.logspace(np.log(0.5), np.log(1e-5), num=100000, base=np.e)
+    mean = 1/n_classes
+    for sigma in candidates:
+        loss = dice_loss(x, mean=mean, sigma=sigma)
+        if loss <= threshold_2:
+            return mean, sigma
+
+    raise ValueError
+
+
+def dice_loss(logits, mean=0.5, sigma=0.125):
+    x = torch.abs(logits - mean).mean(1)
+    return normal_vector(x, sigma=sigma)
+
+
+def normal_vector(x, mean=0.0, sigma=0.125):
+    root_two_pi_sigma = sigma * 2.5066282
+    exponent = torch.exp(-1 * ((x - mean) ** 2) / (2 * (sigma ** 2)))
+    return exponent/root_two_pi_sigma
+
+
+def get_dice_loss(n_classes, dice_loss_coef=1.0, threshold_1=0.8, threshold_2=1e-2):
+    def zero_fn(logits, labels=None):
+        return 0.0
+    if dice_loss_coef == 0:
+        return zero_fn
+    mean, sigma = mean_sigma_finder_for_dice_loss(n_classes, threshold_1, threshold_2)
+
+    def loss(logits, labels=None):
+        return dice_loss_coef * dice_loss(logits, mean, sigma)
+    return loss
+
+
+def get_auc_loss(n_classes, auc_loss_coef, auc_method=1):
+    def zeros_auc(logits, labels=None):
+        return 0.0
+    assert auc_loss_coef >= 0
+    if n_classes > 2 or auc_loss_coef == 0:
+        return zeros_auc
+
+    def loss_method_1(logits, labels=None):
+        if labels is None:
+            return 0.0
+        probas = logits[:, 1]
+        pos_probas = labels * probas
+        neg_probas = (1 - labels) * probas
+        neg_proba_max = neg_probas.max()
+        pos_proba_min = pos_probas.min()
+        loss_1 = F.leaky_relu(neg_probas - pos_proba_min).mean()
+        loss_2 = F.leaky_relu(neg_proba_max - pos_probas).mean()
+        return auc_loss_coef * (loss_1 + loss_2)/2
+
+    def loss_method_2(logits, labels=None):
+        if labels is None:
+            return 0.0
+        probas = logits[:, 1]
+        pos_probas = labels * probas
+        neg_probas = (1 - labels) * probas
+        neg_proba_max = neg_probas.max()
+        pos_proba_min = pos_probas.min()
+        loss_1, loss_2 = 0.0, 0.0
+
+        pos_probas = pos_probas[pos_probas < neg_proba_max]
+        neg_probas = neg_probas[neg_probas > pos_proba_min]
+
+        num_entries_neg = max(1, int(len(neg_probas) / 4))
+        num_entries_pos = max(1, int(len(pos_probas) / 4))
+        if 1 <= num_entries_neg <= len(neg_probas):
+            neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
+            # neg_probas_max = neg_probas.max()
+            loss_2 = (neg_probas_max - pos_probas).mean()
+
+        if 1 <= num_entries_pos <= len(pos_probas):
+            pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
+            # pos_probas_min = pos_probas.min()
+            loss_1 = (neg_probas - pos_probas_min).mean()
+
+        return auc_loss_coef * (loss_1 + loss_2) / 2
+
+    def loss_method_3(logits, labels=None):
+        if labels is None:
+            return 0.0
+        probas = logits[:, 1]
+        pos_probas = labels * probas
+        neg_probas = (1 - labels) * probas
+        neg_proba_max = neg_probas.max()
+        pos_proba_min = pos_probas.min()
+        loss_1, loss_2 = 0.0, 0.0
+
+        pos_probas = pos_probas[pos_probas < neg_proba_max]
+        neg_probas = neg_probas[neg_probas > pos_proba_min]
+
+        if 1 <= len(neg_probas):
+            loss_2 = (neg_proba_max - pos_probas).mean()
+
+        if 1 <= len(pos_probas):
+            loss_1 = (neg_probas - pos_proba_min).mean()
+
+        return auc_loss_coef * (loss_1 + loss_2) / 2
+
+    if auc_method == 1:
+        return loss_method_1
+    if auc_method == 2:
+        return loss_method_2
+    if auc_method == 3:
+        return loss_method_3
+
+
+def get_auc_dice_loss(n_classes, dice_loss_coef, auc_loss_coef, auc_method=1):
+    dice_ll = get_dice_loss(n_classes, dice_loss_coef)
+    auc_ll = get_auc_loss(n_classes, auc_loss_coef, auc_method)
+
+    def loss(logits, labels=None):
+        return dice_ll(logits, labels) + auc_ll(logits, labels)
+    return loss
+
+
 def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef):
     binary = logits.size(1) == 2
-    eps = 1e-5
     if binary:
         auc_loss = 0.0
+        probas = logits[:, 1]
         if auc_loss_coef > 0:
-            probas = logits[:, 1]
             pos_probas = labels * probas
             neg_probas = (1 - labels) * probas
-            neg_probas = neg_probas[neg_probas > eps]
-            pos_probas = pos_probas[pos_probas > eps]
 
-            pos_probas = pos_probas[pos_probas < (1 - eps)]
-            neg_probas = neg_probas[neg_probas < (1 - eps)]  # TODO: Is this required
-
-            num_entries = max(int(len(labels) / 8), 1)
             loss_1, loss_2 = 0.0, 0.0
-            num_entries_neg, num_entries_pos = 0, 0
+            neg_proba_max = neg_probas.max()
+            pos_proba_min = pos_probas.min()
+            loss_1 = F.leaky_relu(neg_probas - pos_proba_min).mean()
+            loss_2 = F.leaky_relu(neg_proba_max - pos_probas).mean()
 
-            if len(neg_probas) > 1:
-                pos_probas = pos_probas[pos_probas < neg_probas.max()]
-                num_entries_neg = min(num_entries, int(len(neg_probas) / 2))
+            pos_probas = pos_probas[pos_probas < neg_proba_max]
+            neg_probas = neg_probas[neg_probas > pos_proba_min]
 
-            if len(pos_probas) > 1:
-                neg_probas = neg_probas[neg_probas > pos_probas.min()]
-                num_entries_pos = min(num_entries, int(len(pos_probas) / 2))
-
-            if 1 <= num_entries_neg < len(neg_probas):
+            num_entries_neg = max(1, int(len(neg_probas) / 4))
+            num_entries_pos = max(1, int(len(pos_probas) / 4))
+            if 1 <= num_entries_neg <= len(neg_probas):
                 neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
+                # neg_probas_max = neg_probas.max()
                 loss_2 = (neg_probas_max - pos_probas).mean()
 
-            if 1 <= num_entries_pos < len(pos_probas):
+
+            if 1 <= num_entries_pos <= len(pos_probas):
                 pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
+                # pos_probas_min = pos_probas.min()
                 loss_1 = (neg_probas - pos_probas_min).mean()
             auc_loss = loss_1 + loss_2
 
-        dice_loss = torch.prod(logits, 1).mean()
-        loss = (loss + auc_loss_coef * auc_loss + dice_loss_coef * dice_loss) / (1 + auc_loss_coef + dice_loss_coef)
+        dice = dice_loss(probas, sigma=dice_sigma).mean()
+        loss = (loss + auc_loss_coef * auc_loss + dice_loss_coef * dice) / (1 + auc_loss_coef + dice_loss_coef)
 
     return loss
 
