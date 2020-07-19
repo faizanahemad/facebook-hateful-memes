@@ -53,7 +53,6 @@ from transformers import (
     EvalPrediction
 )
 
-from transformers.trainer import is_apex_available, is_tensorboard_available, is_tpu_available, is_wandb_available
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR, EvalPrediction, PredictionOutput, TrainOutput
 from torch.cuda.amp import GradScaler, autocast
 
