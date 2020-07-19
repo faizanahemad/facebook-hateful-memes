@@ -83,7 +83,8 @@ def get_dice_loss(n_classes, dice_loss_coef=1.0, threshold_1=0.8, threshold_2=1e
     mean, sigma = mean_sigma_finder_for_dice_loss(n_classes, threshold_1, threshold_2)
 
     def loss(logits, labels=None):
-        return dice_loss_coef * dice_loss(logits, mean, sigma)
+        dl = dice_loss(logits, mean, sigma).mean()
+        return dice_loss_coef * dl
     return loss
 
 
