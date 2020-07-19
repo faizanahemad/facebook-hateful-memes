@@ -43,30 +43,28 @@ class AlbertClassifer(Fasttext1DCNNModel):
             import fasttext
             ftvc = kwargs["fasttext_vector_config"]
             gru_layers = ftvc.pop("gru_layers", 0)
+            fasttext_dims = ftvc.pop("fasttext_dims", 256)
             n_decoders = ftvc.pop("n_decoders", 2)
             fasttext_crawl = fasttext.load_model("crawl-300d-2M-subword.bin")
             fasttext_wiki = fasttext.load_model("wiki-news-300d-1M-subword.bin")
             bpe = BPEmb(dim=200)
             cngram = CharNGram()
             self.word_vectorizers = dict(fasttext_crawl=fasttext_crawl, fasttext_wiki=fasttext_wiki, bpe=bpe, cngram=cngram)
-            crawl_nn = ExpandContract(900, embedding_dims, dropout,
+            crawl_nn = ExpandContract(900, fasttext_dims, dropout,
                                       use_layer_norm=True, unit_norm=False, groups=(4, 4))
 
             if gru_layers > 0:
                 lstm = nn.Sequential(GaussianNoise(gaussian_noise),
-                                     nn.GRU(embedding_dims, int(embedding_dims / 2), gru_layers, batch_first=True, bidirectional=True, dropout=dropout))
-                pre_query_layer = nn.Sequential(crawl_nn, lstm, LambdaLayer(lambda x: x[0]), nn.LayerNorm(embedding_dims), LambdaLayer(lambda x: x.transpose(0, 1)))
+                                     nn.GRU(fasttext_dims, int(fasttext_dims / 2), gru_layers, batch_first=True, bidirectional=True, dropout=dropout))
+                pre_query_layer = nn.Sequential(crawl_nn, lstm, LambdaLayer(lambda x: x[0]), nn.LayerNorm(fasttext_dims), LambdaLayer(lambda x: x.transpose(0, 1)))
             else:
-                pos_encoder = PositionalEncoding(embedding_dims, dropout)
-                pre_query_layer = nn.Sequential(crawl_nn, LambdaLayer(lambda x: x.transpose(0, 1) * math.sqrt(embedding_dims)),
-                                                pos_encoder, nn.LayerNorm(embedding_dims))
+                pos_encoder = PositionalEncoding(fasttext_dims, dropout)
+                pre_query_layer = nn.Sequential(crawl_nn, LambdaLayer(lambda x: x.transpose(0, 1) * math.sqrt(fasttext_dims)),
+                                                pos_encoder, nn.LayerNorm(fasttext_dims))
             self.pre_query_layer = pre_query_layer
-            self.query_layer = Transformer(embedding_dims, 8, 0, n_decoders, embedding_dims*4, dropout, gaussian_noise)
-            # We need gru+decoder support
-            # n_internal_dims modification
-            # support for selecting which fasttext entities we want
-            # layer norm them and append extra dims
-            pass
+            self.query_layer = Transformer(fasttext_dims, 8, 0, n_decoders, fasttext_dims*4, dropout, gaussian_noise)
+            self.fasttext_dims = fasttext_dims
+            embedding_dims = embedding_dims + fasttext_dims
         if not use_as_super:
             if featurizer == "cnn":
                 self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
@@ -95,7 +93,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
     def fasttext_vectors(self, texts: List[str], last_hidden_states: torch.Tensor):
         word_vectors = self.get_fasttext_vectors(texts, 8 * int(self.n_tokens_in/(8*1.375) + 1), **self.word_vectorizers)
         word_vectors = self.pre_query_layer(word_vectors)
-        last_hidden_states = last_hidden_states.transpose(0, 1)
+        last_hidden_states = last_hidden_states.transpose(0, 1)[:, :, :self.fasttext_dims]
         word_vectors, _ = self.query_layer(word_vectors, last_hidden_states)
         return word_vectors
 
@@ -114,6 +112,6 @@ class AlbertClassifer(Fasttext1DCNNModel):
         last_hidden_states = outputs[0]
         if self.need_fasttext:
             fasttext_vectors = self.fasttext_vectors(texts, last_hidden_states).transpose(0, 1)
-            last_hidden_states = (last_hidden_states + fasttext_vectors) / 2
+            last_hidden_states = torch.cat((last_hidden_states, fasttext_vectors), 2)
         pooled_output = outputs[1]
         return last_hidden_states
