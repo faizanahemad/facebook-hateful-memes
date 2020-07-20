@@ -560,7 +560,7 @@ def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=F
     validation_scores = [map, acc, auc]
     if display_detail:
         few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, all_probas_list, predictions_list, labels_list))), columns=["Proba", "Probas", "Preds", "Labels"])
-        display(few_preds.groupby(["Labels"])[["Proba", "Preds"]].agg(["mean", "median", "min", "max"]))
+        display(few_preds[["Proba", "Preds", "Labels"]].groupby(["Labels"])[["Proba", "Preds"]].agg(["mean", "median", "min", "max"]))
         show_df = pd.concat((few_preds.head(5).reset_index(), few_preds.sample(5).reset_index(), few_preds.tail(5).reset_index()), 1).drop(columns=["index"])
         display(show_df)
         print("scores = ", dict(zip(["map", "acc", "auc"], ["%.4f" % v for v in validation_scores])))
