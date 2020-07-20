@@ -57,7 +57,7 @@ def predict(model, datadict, batch_size):
     ids = test["id"] if "id" in test.columns else test["ID"]
     id_name = "id" if "id" in test.columns else "ID"
     test_dataset = convert_dataframe_to_dataset(test, metadata, False)
-    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate)
+    proba_list, all_probas_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate)
     probas = pd.DataFrame({id_name: ids, "proba": proba_list, "label": predictions_list})
     sf = probas
     if "submission_format" in datadict and type(datadict["submission_format"]) == pd.DataFrame and len(datadict["submission_format"]) == len(probas):

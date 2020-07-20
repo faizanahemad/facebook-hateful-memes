@@ -504,6 +504,7 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
     proba_list = []
     predictions_list = []
     labels_list = []
+    all_probas_list = []
     clean_memory()
     from tqdm.auto import tqdm as tqdm, trange
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
@@ -535,16 +536,18 @@ def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
                 top_class = logits.max(dim=1).indices
                 top_class = top_class.flatten().tolist()
                 probas = logits[:, 1].tolist()
+                all_probas = logits.tolist()
+                all_probas_list.extend(all_probas)
                 predictions_list.extend(top_class)
                 proba_list.extend(probas)
                 clean_memory()
-    return proba_list, predictions_list, labels_list
+    return proba_list, all_probas_list, predictions_list, labels_list
 
 
 def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=False):
     from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
-    proba_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn)
+    proba_list, all_probas_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn)
 
     try:
         auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
@@ -556,9 +559,10 @@ def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=F
     acc = accuracy_score(labels_list, predictions_list)
     validation_scores = [map, acc, auc]
     if display_detail:
-        few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, predictions_list, labels_list))), columns=["Proba", "Preds", "Labels"])
+        few_preds = pd.DataFrame(np.random.permutation(list(zip(proba_list, all_probas_list, predictions_list, labels_list))), columns=["Proba", "Probas", "Preds", "Labels"])
         display(few_preds.groupby(["Labels"])[["Proba", "Preds"]].agg(["mean", "median", "min", "max"]))
-        display(pd.concat((few_preds.sample(4).reset_index(), few_preds.sample(4).reset_index(), few_preds.sample(4).reset_index()), 1))
+        show_df = pd.concat((few_preds.head(5).reset_index(), few_preds.sample(5).reset_index(), few_preds.tail(5).reset_index()), 1).drop(columns=["index"])
+        display(show_df)
         print("scores = ", dict(zip(["map", "acc", "auc"], ["%.4f" % v for v in validation_scores])))
     return validation_scores, prfs
 
