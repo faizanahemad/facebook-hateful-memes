@@ -112,11 +112,12 @@ class VilBertVisualBertModel(nn.Module):
                 print("[WARNING]: Perform finetuning on model since num classes = 2 and featurizer_type = `pass`")
             self.loss = get_loss_by_task(loss)
         else:
+            n_tokens_out = n_tokens_out + len(model_name)
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
             if "vilbert" in model_name:
-                vilbert_seq_v_conv = nn.Conv1d(1024, 768, 1, 1, groups=8)
+                vilbert_seq_v_conv = nn.Linear(1024, 768)
                 init_fc(vilbert_seq_v_conv, "leaky_relu")
-                self.vilbert_seq_v_nn = nn.Sequential(Transpose(), vilbert_seq_v_conv, nn.LeakyReLU(), Transpose(), nn.LayerNorm(768))
+                self.vilbert_seq_v_nn = nn.Sequential(vilbert_seq_v_conv, nn.LeakyReLU())
 
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
@@ -447,17 +448,18 @@ class VilBertVisualBertModel(nn.Module):
         del image
         del textSampleList
 
+        sequenced_pooled_output = torch.cat([p.unsqueeze(1) for p in pooled_output], 1)
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
         sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
         clean_memory()
-        return logits, pooled_output, sequence_output
+        return logits, pooled_output, sequenced_pooled_output, sequence_output
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
         # GPUtil.showUtilization()
-        logits, pooled_output, sequence_output = self.get_vectors(sampleList)
+        logits, pooled_output, sequenced_pooled_output, sequence_output = self.get_vectors(sampleList)
         del sampleList
         clean_memory()
 
@@ -477,6 +479,8 @@ class VilBertVisualBertModel(nn.Module):
             logits, loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
         else:
             vectors = self.featurizer(sequence_output)
+            sequenced_pooled_output = sequenced_pooled_output[:, :, :vectors.size(-1)]
+            vectors = torch.cat([vectors, sequenced_pooled_output], 1)
             logits, loss = self.final_layer(vectors, labels)
 
         if self.training:
