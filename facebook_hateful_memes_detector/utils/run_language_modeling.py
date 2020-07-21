@@ -21,6 +21,9 @@ using a masked language modeling (MLM) loss.
 
 
 import logging
+
+import transformers
+
 logging.basicConfig(filename='run_language_modelling.log', level=logging.WARN)
 
 import math
@@ -61,6 +64,71 @@ logger = logging.getLogger(__name__)
 
 MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
+
+longformer_finetune_conf = {
+    "embeddings": {
+        "finetune": False
+    },
+    "encoder": {
+        "finetune": False,
+        "layer": {
+            "6": {
+                "finetune": False,
+            },
+            "7": {
+                "finetune": True,
+            },
+            "8": {
+                "finetune": True,
+            },
+            "9": {
+                "finetune": True,
+            },
+            "10": {
+                "finetune": True,
+            },
+            "11": {
+                "finetune": True,
+            },
+        }
+    },
+    "pooler": {
+        "finetune": True,
+    },
+    "finetune": False,
+}
+
+def group_wise_finetune(model, group_finetune_conf: Dict, path=""):
+    """
+    Copied from ..training/model_params.py
+    :param model:
+    :param group_finetune_conf:
+    :param path:
+    :return:
+    """
+    assert type(group_finetune_conf) == dict
+    nms = []
+    for kl, vl in group_finetune_conf.items():
+        assert type(kl) == str
+        assert type(vl) == dict or type(vl) == float or type(vl) == int or type(vl) == bool
+
+        if type(vl) == dict:
+            assert hasattr(model, kl)
+            names = group_wise_finetune(getattr(model, kl), vl, path=path + kl + ".")
+            names = list(map(lambda n: kl + "." + n, names))
+            nms.extend(names)
+
+    primitives = {kk: vk for kk, vk in group_finetune_conf.items() if type(vk) == bool}
+    remaining_params = [(k, p) for k, p in model.named_parameters() if k not in nms]
+    if len(remaining_params) > 0 and "finetune" in primitives:
+        names, params = zip(*remaining_params)
+        nms.extend(names)
+        finetune = primitives["finetune"]
+        assert type(finetune) == bool
+        for p in params:
+            p.requires_grad = finetune
+
+    return nms
 
 
 class TorchAmpTrainer(Trainer):
@@ -307,6 +375,12 @@ class ModelArguments:
     cache_dir: Optional[str] = field(
         default=None, metadata={"help": "Where do you want to store the pretrained models downloaded from s3"}
     )
+    apply_finetune_config: bool = field(
+        default=False,
+        metadata={
+            "help": "Fine tuning config to be applied so less layers are trained."
+        },
+    )
 
 
 @dataclass
@@ -434,6 +508,10 @@ def main():
     else:
         logger.info("Training new model from scratch")
         model = AutoModelWithLMHead.from_config(config)
+
+    if model_args.apply_finetune_config:
+        if type(model) == transformers.modeling_longformer.LongformerModel:
+            group_wise_finetune(model, longformer_finetune_conf)
 
     model.resize_token_embeddings(len(tokenizer))
 

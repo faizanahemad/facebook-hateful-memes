@@ -1,1 +1,2 @@
 from .MultiImageMultiTextAttentionEarlyFusion import MultiImageMultiTextAttentionEarlyFusionModel
+from .TransformerImage import TransformerImageModel
