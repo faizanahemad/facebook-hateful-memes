@@ -321,11 +321,13 @@ def stack_and_pad_tensors(batch, max_len=None, padding_index=DEFAULT_PADDING_IND
 
 
 class Transpose(nn.Module):
-    def __init__(self):
+    def __init__(self, dim1=1, dim2=2):
         super().__init__()
+        self.dim1 = dim1
+        self.dim2 = dim2
 
     def forward(self, inp):
-        return inp.transpose(1, 2)
+        return inp.transpose(self.dim1, self.dim2)
 
 
 class Average(nn.Module):
@@ -651,7 +653,7 @@ class PositionalEncoding2D(nn.Module):
         >>> pos_encoder = PositionalEncoding2D(d_model)
     """
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, d_model, dropout=0.1, max_len=5000, channels_first=False):
         super(PositionalEncoding2D, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -663,6 +665,7 @@ class PositionalEncoding2D(nn.Module):
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer('pe', pe)
         self.d_model = d_model
+        self.channels_first = channels_first
 
     def forward(self, x):
         r"""Inputs of forward function
@@ -675,6 +678,8 @@ class PositionalEncoding2D(nn.Module):
             >>> output = pos_encoder(x)
         """
         b = x.size(0)
+        if self.channels_first:
+            x = x.transpose(1, 2).transpose(2, 3)
         assert x.size(-1) == self.d_model
         x = x.transpose(0, 1).transpose(1, 2)  # H, W, B, C
         pe = self.pe[:x.size(0), :] # H, C
@@ -915,7 +920,7 @@ class DecoderEnsemblingHead(nn.Module):
         n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
         assert n_classifier_layers in [1, 2]
         classifiers = nn.ModuleList()
-        for _ in range(n_tokens):
+        for i in range(n_tokens + 1):
             lin0 = nn.Linear(n_dims, n_dims)
             init_fc(lin0, "leaky_relu")
             lin = nn.Linear(n_dims, n_out)
@@ -924,6 +929,13 @@ class DecoderEnsemblingHead(nn.Module):
             classifier = nn.Sequential(dp, lin)
             if n_classifier_layers == 2:
                 classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
+
+            if i == n_tokens:
+                c1 = nn.Conv1d(n_dims, n_out, n_tokens, 1, padding=0, groups=1, bias=True)
+                init_fc(c1, "linear")
+                avp = nn.AdaptiveAvgPool1d(1)
+                dp = nn.Dropout(dropout)
+                classifier = nn.Sequential(dp, Transpose(), c1, avp)
             classifiers.append(classifier)
 
         self.classifiers = classifiers
@@ -932,11 +944,14 @@ class DecoderEnsemblingHead(nn.Module):
     def forward(self, x, labels=None):
         assert len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims)
         losses, logits = [], []
-        for i in range(self.n_tokens):
+        for i in range(self.n_tokens + 1):
             classifier = self.classifiers[i]
-            tokens = x[:, i].squeeze()
-            assert tokens.size() == (x.size(0), x.size(2))
-            logit = classifier(tokens).squeeze()
+            if i == self.n_tokens:
+                logit = classifier(x).squeeze()
+            else:
+                tokens = x[:, i].squeeze()
+                assert tokens.size() == (x.size(0), x.size(2))
+                logit = classifier(tokens).squeeze()
             logit = logit.to(get_device())
             logit, loss = loss_calculator(logit, labels if self.training else None, self.task, self.loss)
             losses.append(loss)
