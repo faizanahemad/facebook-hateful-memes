@@ -92,7 +92,6 @@ class VilBertVisualBertModel(nn.Module):
             n_tokens_out = n_tokens_in
             print("N tokens Out = ", n_tokens_out, "Classifier Dims = ", classifier_dims, "Matches embedding_dims: ", embedding_dims == classifier_dims)
             classifier_dims = embedding_dims
-            assert ("vilbert" in model_name or "visual_bert" in model_name or "mmbt_region" in model_name)
         else:
             raise NotImplementedError()
 
