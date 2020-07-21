@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Union, Callable, Tuple
 
 import numpy as np
 import torch.nn as nn
@@ -32,17 +32,23 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):
     return mtf
 
 
-def train_and_predict(model_fn, datadict, batch_size, epochs,
+def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, epochs,
                       accumulation_steps=1, scheduler_init_fn=None,
                       model_call_back=None, validation_epochs=None,
                       sampling_policy=None, class_weights=None,
                       ):
     train_df = datadict["train"]
+    dev_df = datadict["dev"]
     metadata = datadict["metadata"]
     dataset = convert_dataframe_to_dataset(train_df, metadata, True)
-    model, optimizer = model_fn()
+    dev_dataset = convert_dataframe_to_dataset(dev_df, metadata, True)
+    if callable(model_fn):
+        model, optimizer = model_fn()
+    else:
+        model, optimizer = model_fn
     validation_strategy = dict(validation_epochs=validation_epochs,
-                               train=dict(method=validate, args=[model, batch_size, dataset], kwargs=dict(display_detail=True)))
+                               train=dict(method=validate, args=[model, batch_size, dataset], kwargs=dict(display_detail=False)),
+                               val=dict(method=validate, args=[model, batch_size, dev_dataset], kwargs=dict(display_detail=True)))
     validation_strategy = validation_strategy if validation_epochs is not None else None
     train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
                                          model_call_back=model_call_back, validation_strategy=validation_strategy,
