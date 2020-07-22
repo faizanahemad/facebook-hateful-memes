@@ -59,9 +59,9 @@ class TransformerImageModel(AlbertClassifer):
                 im_model, im_shape = get_torchvision_classification_models(net, large_rf)
                 im_model = LambdaLayer(im_model, module_gaussian, module_dropout)
                 self.torchvision_pool = nn.AdaptiveAvgPool2d(1)
-
+                shape_global = im_shape[1]
                 def global_view(x):
-                    xv = self.torchvision_pool(x).expand(-1, -1, im_shape[1], -1)
+                    xv = self.torchvision_pool(x).expand(-1, -1, shape_global, -1)
                     return torch.cat([x, xv], 3)
 
                 im_shape = list(im_shape)
@@ -72,7 +72,7 @@ class TransformerImageModel(AlbertClassifer):
                 lin = nn.Sequential(lin, nn.LeakyReLU())
                 im_proc = nn.Sequential(LambdaLayer(global_view), Transpose(1, 2), Transpose(2, 3), lin,
                                         LambdaLayer(lambda v: v * math.sqrt(embedding_dims)),
-                                        PositionalEncoding2D(im_shape[0], dropout, channels_first=False), Transpose(0, 1))
+                                        PositionalEncoding2D(embedding_dims, dropout, channels_first=False), Transpose(0, 1))
                 im_shape = (embedding_dims, im_shape[-1] * im_shape[-2])
 
             elif imo == "caption_features":
@@ -170,15 +170,16 @@ class TransformerImageModel(AlbertClassifer):
 
         image_vectors = torch.cat(image_vectors, 1)
         seq_length = word_embeddings.size(1)
-        position_ids = torch.arange(seq_length + 1, seq_length + image_vectors.size(1), dtype=torch.long, device=input_ids.device)  # (max_seq_length)
-        position_ids = position_ids.unsqueeze(0).expand_as(input_ids)  # (bs, max_seq_length)
+        position_ids = torch.arange(seq_length, seq_length + image_vectors.size(1), dtype=torch.long, device=input_ids.device)  # (max_seq_length)
+        position_ids = position_ids.unsqueeze(0).expand(image_vectors.size()[:2])  # (bs, max_seq_length)
         position_embeddings = self.model.embeddings.position_embeddings(position_ids)  # (bs, max_seq_length, dim)
 
         image_vectors = image_vectors + position_embeddings  # (bs, max_seq_length, dim)
         image_vectors = self.LayerNorm(image_vectors)  # (bs, max_seq_length, dim)
         image_vectors = self.dropout(image_vectors)  # (bs, max_seq_length, dim)
-
-        attention_mask = torch.cat([attention_mask, torch.ones(attention_mask.size(0), image_vectors.size(1))], 1)
+        attention_mask = attention_mask.to(get_device())
+        image_vectors = image_vectors.to(get_device())
+        attention_mask = torch.cat([attention_mask, torch.ones(attention_mask.size(0), image_vectors.size(1), device=get_device())], 1)
         embeddings = torch.cat([word_embeddings, image_vectors], 1)
 
         if self.training:
@@ -186,7 +187,8 @@ class TransformerImageModel(AlbertClassifer):
             random.shuffle(head_mask)
         else:
             head_mask = [1] * 12
-        tfmr_output = self.model.transformer(x=embeddings, attn_mask=attention_mask, head_mask=head_mask)
+        encoder = getattr(self.model,"transformer", getattr(self.model, "encoder", None))
+        tfmr_output = encoder(embeddings, attention_mask, head_mask=head_mask)
         hidden_state = tfmr_output[0]
         output = (hidden_state,) + tfmr_output[1:]
         return hidden_state

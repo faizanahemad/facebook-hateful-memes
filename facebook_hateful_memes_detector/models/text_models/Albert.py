@@ -37,6 +37,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
             self.model = AutoModel.from_pretrained(model)
         except Exception as e:
             global_dir = get_global("models_dir")
+            print("Pick stored Model", os.path.join(global_dir, model))
             self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(global_dir, model))
             self.model = AutoModel.from_pretrained(os.path.join(global_dir, model))
         self.need_fasttext = "fasttext_vector_config" in kwargs
