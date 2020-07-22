@@ -117,24 +117,10 @@ class TransformerImageModel(AlbertClassifer):
             model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
             model_class = AutoModel
             tokenizer_class = AutoTokenizer
-            if "distilbert" in model:
-                model_class = DistilBertModel
-                tokenizer_class = DistilBertTokenizer
-                tokenizer = "distilbert-base-uncased"
-            elif "longformer" in model:
-                model_class = LongformerModel
-                tokenizer = "allenai/longformer-base-4096"
-                tokenizer_class = LongformerTokenizer
-            elif "albert" in model:
-                model_class = AlbertModel
-                tokenizer_class = AlbertTokenizer
-                tokenizer = "albert-base-v2"
-            else:
-                raise NotImplementedError
 
             global_dir = get_global("models_dir")
             model = os.path.join(global_dir, model) if model in os.listdir(global_dir) else model
-            self.tokenizer = tokenizer_class.from_pretrained(tokenizer)
+            self.tokenizer = tokenizer_class.from_pretrained(model)
             self.model = model_class.from_pretrained(model)
             print("Pick stored Model", model, "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
             if featurizer == "transformer":
@@ -228,6 +214,8 @@ class TransformerImageModel(AlbertClassifer):
                 pad_token_id=self.model.config.pad_token_id,
             )
             attention_mask = attention_mask.unsqueeze(2)
+        else:
+            attention_mask = attention_mask.unsqueeze(1).unsqueeze(1)
         tfmr_output = encoder(embeddings, attention_mask, head_mask=head_mask)
         hidden_state = tfmr_output[0]
         output = (hidden_state,) + tfmr_output[1:]
