@@ -270,7 +270,7 @@ def in_notebook():
         from IPython import get_ipython
         if 'IPKernelApp' not in get_ipython().config:  # pragma: no cover
             return False
-    except ImportError:
+    except:
         return False
     return True
 
@@ -493,11 +493,11 @@ def get_torchvision_classification_models(net, large_rf=True, finetune=False):
 
 
 def get_vgg_face_model(model='resnet'):
-    from .senet50_256 import senet50_256
     from .resnet50_256 import resnet50_256
     mname = "face_" + model if "face_" not in model else model
     if 'senet' in model:
         raise NotImplementedError
+        from .senet50_256 import senet50_256
         model = senet50_256(f"{DIR}/senet50_256.pth")
     elif 'resnet' in model:
         model = resnet50_256(f"{DIR}/resnet50_256.pth")

@@ -6,8 +6,8 @@ import torch
 import torch.nn.functional as F
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
 from .Fasttext1DCNN import Fasttext1DCNNModel
-from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
-from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
+from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel, DistilBertTokenizer, LongformerTokenizer
+from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification, DistilBertModel, LongformerModel
 import torchvision.models as models
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
@@ -32,14 +32,25 @@ class AlbertClassifer(Fasttext1DCNNModel):
         assert n_tokens_in % n_tokens_out == 0
         model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
+        if "distilbert" in model:
+            model_class = DistilBertModel
+            tokenizer_class = DistilBertTokenizer
+        elif "longformer" in model:
+            model_class = LongformerModel
+            tokenizer_class = LongformerTokenizer
+        elif "albert" in model:
+            model_class = AlbertModel
+            tokenizer_class = AlbertTokenizer
+        else:
+            raise NotImplementedError
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model)
-            self.model = AutoModel.from_pretrained(model)
+            self.tokenizer = tokenizer_class.from_pretrained(model)
+            self.model = model_class.from_pretrained(model)
         except Exception as e:
             global_dir = get_global("models_dir")
             print("Pick stored Model", os.path.join(global_dir, model))
-            self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(global_dir, model))
-            self.model = AutoModel.from_pretrained(os.path.join(global_dir, model))
+            self.tokenizer = tokenizer_class.from_pretrained(os.path.join(global_dir, model))
+            self.model = model_class.from_pretrained(os.path.join(global_dir, model))
         self.need_fasttext = "fasttext_vector_config" in kwargs
         if "fasttext_vector_config" in kwargs:
             import fasttext

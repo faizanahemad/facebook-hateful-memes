@@ -17,6 +17,7 @@ from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_pa
     get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_vgg_face_model, PositionalEncoding2D, Transpose, init_fc, dict2sampleList, \
     clean_memory
 from ..external.detr import get_detr_model
+import transformers
 import os
 import random
 import math
@@ -179,7 +180,7 @@ class TransformerImageModel(AlbertClassifer):
         image_vectors = self.dropout(image_vectors)  # (bs, max_seq_length, dim)
         attention_mask = attention_mask.to(get_device())
         image_vectors = image_vectors.to(get_device())
-        attention_mask = torch.cat([attention_mask, torch.ones(attention_mask.size(0), image_vectors.size(1), device=get_device())], 1)
+        attention_mask = torch.cat([attention_mask, torch.ones(attention_mask.size(0), image_vectors.size(1), device=get_device(), dtype=attention_mask.dtype)], 1)
         embeddings = torch.cat([word_embeddings, image_vectors], 1)
 
         if self.training:
@@ -187,7 +188,23 @@ class TransformerImageModel(AlbertClassifer):
             random.shuffle(head_mask)
         else:
             head_mask = [1] * 12
-        encoder = getattr(self.model,"transformer", getattr(self.model, "encoder", None))
+        encoder = getattr(self.model, "transformer", getattr(self.model, "encoder", None))
+        if type(self.model) == transformers.modeling_longformer.LongformerModel:
+            attention_window = (
+                self.model.config.attention_window
+                if isinstance(self.model.config.attention_window, int)
+                else max(self.model.config.attention_window)
+            )
+            padding_len, input_ids, attention_mask, token_type_ids, position_ids, embeddings = self.model._pad_to_window_size(
+                input_ids=None,
+                attention_mask=attention_mask,
+                token_type_ids=None,
+                position_ids=None,
+                inputs_embeds=embeddings,
+                attention_window=attention_window,
+                pad_token_id=self.model.config.pad_token_id,
+            )
+            attention_mask = attention_mask.unsqueeze(2)
         tfmr_output = encoder(embeddings, attention_mask, head_mask=head_mask)
         hidden_state = tfmr_output[0]
         output = (hidden_state,) + tfmr_output[1:]
