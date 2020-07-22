@@ -20,16 +20,24 @@ pd.options.display.width = 0
 import warnings
 import os
 import torchvision
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--model', type=str, required=False, default='allenai/longformer-base-4096')
+parser.add_argument('--workers', type=str, required=False, default=0)
+parser.add_argument('--dev', action='store_true', default=False)
+args = parser.parse_args()
+
 warnings.filterwarnings('ignore')
 
 from facebook_hateful_memes_detector.utils.globals import set_global, get_global
-set_global("cache_dir", os.path.join(os.getcwd(), "cache"))
-set_global("dataloader_workers", 0)
+
+set_global("cache_dir", "/home/ahemf/cache/cache" if os.path.exists("/home/ahemf/cache/cache") else os.path.join(os.getcwd(), "cache"))
+set_global("dataloader_workers", args.workers)
 set_global("use_autocast", True)
-set_global("models_dir", os.path.join(os.getcwd(), "cache"))
+set_global("models_dir", "/home/ahemf/cache/" if os.path.exists("/home/ahemf/cache/") else os.path.join(os.getcwd(), "cache"))
 
 from facebook_hateful_memes_detector.utils import read_json_lines_into_df, in_notebook, set_device
-get_global("cache_dir")
+print(get_global("cache_dir"))
 from facebook_hateful_memes_detector.models import Fasttext1DCNNModel, MultiImageMultiTextAttentionEarlyFusionModel, LangFeaturesModel, AlbertClassifer, TransformerImageModel
 
 from facebook_hateful_memes_detector.preprocessing import TextImageDataset, my_collate, get_datasets, get_image2torchvision_transforms, TextAugment
@@ -46,7 +54,7 @@ data = get_datasets(data_dir="../data/", train_text_transform=None, train_image_
                     test_text_transform=None, test_image_transform=None,
                     train_torchvision_image_transform=transforms.RandomErasing(p=0.5, scale=(0.05, 0.2), ratio=(0.3, 3.3), value=0, inplace=False),
                     test_torchvision_image_transform=None,
-                    cache_images = True, use_images = True, dev=True, test_dev=True,
+                    cache_images = True, use_images = True, dev=args.dev, test_dev=True,
                     keep_original_text=False, keep_original_image=False,
                     keep_processed_image=True, keep_torchvision_image=True,)
 
@@ -56,29 +64,7 @@ optimizer = adam
 optimizer_params = adam_params
 
 lr_strategy = {
-    "im_models": {
-        "lr": optimizer_params["lr"] / 10,
-        "torchvision_resnet18_ssl-contrastive": {
-            "lambd": {
-                "8": {
-                    "finetune": True
-                }
-            },
-            "lr": optimizer_params["lr"] / 10,
-            "finetune": False,
-        },
-        "vgg_face": {
-            "lr": optimizer_params["lr"] / 10,
-            "lambd": {
-                "0": {
-                    "feat_extract": {
-                        "finetune": True
-                    }
-                }
-            },
-            "finetune": False,
-        }
-    }
+    "finetune": True
 }
 
 
@@ -86,26 +72,6 @@ model_fn = model_builder(
     TransformerImageModel,
     dict(
         image_models=[
-            #             {
-            #                 "model": 'caption_features',
-            #                 "gaussian_noise": 0.0,
-            #                 "dropout": 0.0
-            #             },
-            {
-                "model": 'vgg_face',
-                "gaussian_noise": 0.0,
-                "dropout": 0.0,
-            },
-            #             {
-            #                 "model": 'detr_resnet50',
-            #                 "gaussian_noise": 0.0,
-            #                 "dropout": 0.0
-            #             },
-            #             {
-            #                 "model": 'detr_resnet50_panoptic',
-            #                 "gaussian_noise": 0.0,
-            #                 "dropout": 0.0
-            #             },
             {
                 "model": "torchvision_resnet18_ssl-contrastive",
                 "large_rf": True,
@@ -121,12 +87,12 @@ model_fn = model_builder(
         internal_dims=512,
         final_layer_builder=fb_1d_loss_builder,
         n_layers=2,
-        n_encoders=3,
+        n_encoders=0,
         n_decoders=3,
         n_tokens_in=96,
         n_tokens_out=32,
         featurizer="transformer",
-        model='allenai/longformer-base-4096',
+        model=args.model,
         loss="focal",
         classification_head="decoder_ensemble",  # decoder_ensemble
         dice_loss_coef=0.0,
@@ -137,7 +103,7 @@ model_fn = model_builder(
     optimiser_class=optimizer,
     optimiser_params=optimizer_params)
 
-batch_size=8
+batch_size=128
 epochs = 10
 kfold = False
 results, prfs = train_validate_ntimes(
