@@ -8,7 +8,7 @@ from mmf.common import SampleList
 
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
 from ..text_models import AlbertClassifer
-from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel
+from transformers import AutoModelWithLMHead, AutoTokenizer, AutoModel, LongformerTokenizer, LongformerModel, DistilBertTokenizer, DistilBertModel
 from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassification
 import torchvision.models as models
 from torchnlp.word_to_vector import CharNGram
@@ -115,10 +115,27 @@ class TransformerImageModel(AlbertClassifer):
 
         if not use_as_super:
             model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
+            model_class = AutoModel
+            tokenizer_class = AutoTokenizer
+            if "distilbert" in model:
+                model_class = DistilBertModel
+                tokenizer_class = DistilBertTokenizer
+                tokenizer = "distilbert-base-uncased"
+            elif "longformer" in model:
+                model_class = LongformerModel
+                tokenizer = "allenai/longformer-base-4096"
+                tokenizer_class = LongformerTokenizer
+            elif "albert" in model:
+                model_class = AlbertModel
+                tokenizer_class = AlbertTokenizer
+                tokenizer = "albert-base-v2"
+            else:
+                raise NotImplementedError
+
             global_dir = get_global("models_dir")
             model = os.path.join(global_dir, model) if model in os.listdir(global_dir) else model
-            self.tokenizer = AutoTokenizer.from_pretrained(model)
-            self.model = AutoModel.from_pretrained(model)
+            self.tokenizer = tokenizer_class.from_pretrained(tokenizer)
+            self.model = model_class.from_pretrained(model)
             print("Pick stored Model", model, "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
             if featurizer == "transformer":
                 n_encoders = kwargs.pop("n_encoders", n_layers)
