@@ -23,7 +23,7 @@ import torchvision
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, required=False, default='allenai/longformer-base-4096')
-parser.add_argument('--workers', type=str, required=False, default=0)
+parser.add_argument('--workers', type=int, required=False, default=0)
 parser.add_argument('--dev', action='store_true', default=False)
 args = parser.parse_args()
 
