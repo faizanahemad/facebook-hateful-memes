@@ -44,13 +44,13 @@ class AlbertClassifer(Fasttext1DCNNModel):
         else:
             raise NotImplementedError
         try:
-            self.tokenizer = tokenizer_class.from_pretrained(model)
+            self.tokenizer = AutoTokenizer.from_pretrained(model)
             self.model = model_class.from_pretrained(model)
         except Exception as e:
             global_dir = get_global("models_dir")
-            print("Pick stored Model", os.path.join(global_dir, model))
-            self.tokenizer = tokenizer_class.from_pretrained(os.path.join(global_dir, model))
+            self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(global_dir, model))
             self.model = model_class.from_pretrained(os.path.join(global_dir, model))
+            print("Pick stored Model", os.path.join(global_dir, model), "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
         self.need_fasttext = "fasttext_vector_config" in kwargs
         if "fasttext_vector_config" in kwargs:
             import fasttext
