@@ -30,29 +30,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
                                               featurizer, final_layer_builder,
                                               n_tokens_in, n_tokens_out, True, **kwargs)
         assert n_tokens_in % n_tokens_out == 0
-        model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
-        if "distilbert" in model:
-            model_class = DistilBertModel
-            tokenizer_class = DistilBertTokenizer
-            tokenizer = "distilbert-base-uncased"
-        elif "longformer" in model:
-            model_class = LongformerModel
-            tokenizer_class = LongformerTokenizer
-            tokenizer = "allenai/longformer-base-4096"
-        elif "albert" in model:
-            model_class = AlbertModel
-            tokenizer_class = AlbertTokenizer
-            tokenizer = "albert-base-v2"
-        else:
-            raise NotImplementedError
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
-        try:
-            self.model = model_class.from_pretrained(model)
-        except Exception as e:
-            global_dir = get_global("models_dir")
-            self.model = model_class.from_pretrained(os.path.join(global_dir, model))
-            print("Pick stored Model", os.path.join(global_dir, model), "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
         self.need_fasttext = "fasttext_vector_config" in kwargs
         if "fasttext_vector_config" in kwargs:
             import fasttext
@@ -76,6 +54,12 @@ class AlbertClassifer(Fasttext1DCNNModel):
             self.pre_query_layer = pre_query_layer
 
         if not use_as_super:
+            model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
+            global_dir = get_global("models_dir")
+            model = os.path.join(global_dir, model) if model in os.listdir(global_dir) else model
+            self.tokenizer = AutoTokenizer.from_pretrained(model)
+            self.model = AutoModel.from_pretrained(model)
+            print("Pick stored Model", model, "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
             if featurizer == "cnn":
                 self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                   classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)

@@ -114,6 +114,12 @@ class TransformerImageModel(AlbertClassifer):
         self.text_tokens = n_tokens_in
 
         if not use_as_super:
+            model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
+            global_dir = get_global("models_dir")
+            model = os.path.join(global_dir, model) if model in os.listdir(global_dir) else model
+            self.tokenizer = AutoTokenizer.from_pretrained(model)
+            self.model = AutoModel.from_pretrained(model)
+            print("Pick stored Model", model, "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
             if featurizer == "transformer":
                 n_encoders = kwargs.pop("n_encoders", n_layers)
                 n_decoders = kwargs.pop("n_decoders", n_layers)
