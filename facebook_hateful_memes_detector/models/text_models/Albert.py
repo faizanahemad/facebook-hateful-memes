@@ -35,20 +35,22 @@ class AlbertClassifer(Fasttext1DCNNModel):
         if "distilbert" in model:
             model_class = DistilBertModel
             tokenizer_class = DistilBertTokenizer
+            tokenizer = "distilbert-base-uncased"
         elif "longformer" in model:
             model_class = LongformerModel
             tokenizer_class = LongformerTokenizer
+            tokenizer = "allenai/longformer-base-4096"
         elif "albert" in model:
             model_class = AlbertModel
             tokenizer_class = AlbertTokenizer
+            tokenizer = "albert-base-v2"
         else:
             raise NotImplementedError
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model)
             self.model = model_class.from_pretrained(model)
         except Exception as e:
             global_dir = get_global("models_dir")
-            self.tokenizer = AutoTokenizer.from_pretrained(os.path.join(global_dir, model))
             self.model = model_class.from_pretrained(os.path.join(global_dir, model))
             print("Pick stored Model", os.path.join(global_dir, model), "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
         self.need_fasttext = "fasttext_vector_config" in kwargs
