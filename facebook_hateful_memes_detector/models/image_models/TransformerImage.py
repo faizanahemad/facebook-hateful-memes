@@ -34,7 +34,6 @@ class OutputCombiner(nn.Module):
         return torch.cat(out, self.combine_dim)
 
 
-
 class TransformerImageModel(AlbertClassifer):
     def __init__(self, image_models, classifier_dims, num_classes,
                  gaussian_noise, dropout,
@@ -156,9 +155,11 @@ class TransformerImageModel(AlbertClassifer):
             if featurizer == "transformer":
                 n_encoders = kwargs.pop("n_encoders", n_layers)
                 n_decoders = kwargs.pop("n_decoders", n_layers)
+                self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
                 self.featurizer = TransformerFeaturizer(self.total_tokens, embedding_dims, n_tokens_out,
                                                         classifier_dims,
-                                                        internal_dims, n_encoders, n_decoders, gaussian_noise, dropout)
+                                                        internal_dims, n_encoders, n_decoders,
+                                                        gaussian_noise, dropout, self.attention_drop_proba)
             else:
                 raise NotImplementedError()
 

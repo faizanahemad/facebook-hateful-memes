@@ -13,7 +13,7 @@ import sys
 class TransformerFeaturizer(nn.Module):
     def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_encoders, n_decoders,
-                 gaussian_noise=0.0, dropout=0.0):
+                 gaussian_noise=0.0, dropout=0.0, attention_drop_proba=0.0):
         super(TransformerFeaturizer, self).__init__()
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
@@ -39,7 +39,7 @@ class TransformerFeaturizer(nn.Module):
             self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
             init_fc(self.output_nn, "linear")
 
-        self.transformer = Transformer(n_internal_dims, 8, n_encoders, n_decoders, n_internal_dims*4, dropout, gaussian_noise)
+        self.transformer = Transformer(n_internal_dims, 8, n_encoders, n_decoders, n_internal_dims*4, dropout, gaussian_noise, attention_drop_proba)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.global_layer_norm = nn.LayerNorm(n_internal_dims)
 
@@ -49,7 +49,7 @@ class TransformerFeaturizer(nn.Module):
         x = self.input_nn(x) if self.input_nn is not None else x
 
         x = x.transpose(0, 1) * math.sqrt(self.n_internal_dims)
-        x = self.pos_encoder(x)  # TODO: Do we need pos encoding here given transformers lib already does that?
+        x = self.pos_encoder(x)
         x = self.global_layer_norm(x)
         batch_size = x.size(1)
         transformer_tgt = None
@@ -70,7 +70,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
     def __init__(self, ensemble_config: Dict[str, Dict[str, object]],
                  n_tokens_out, n_channels_out,
                  n_internal_dims, n_encoders, n_decoders,
-                 gaussian_noise=0.0, dropout=0.0):
+                 gaussian_noise=0.0, dropout=0.0, attention_drop_proba=0.0):
         super(TransformerEnsembleFeaturizer, self).__init__()
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
@@ -116,7 +116,7 @@ class TransformerEnsembleFeaturizer(nn.Module):
             self.output_nn = nn.Linear(n_internal_dims, n_channels_out, bias=False)
             init_fc(self.output_nn, "linear")
 
-        self.transformer = Transformer(n_internal_dims, 8, n_encoders, n_decoders, n_internal_dims * 4, dropout, gaussian_noise)
+        self.transformer = Transformer(n_internal_dims, 8, n_encoders, n_decoders, n_internal_dims * 4, dropout, gaussian_noise, attention_drop_proba)
         self.n_tokens_in = sum([v["n_tokens_in"] for k, v in ensemble_config.items()])
 
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)

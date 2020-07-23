@@ -68,7 +68,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cac
 
 
 class LXMERTFeatureExtractor:
-    def __init__(self, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'), do_autocast=True):
+    def __init__(self, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'), do_autocast=False):
         from detectron2.config import get_cfg
         cfg = get_cfg()
         cfg.merge_from_file(f"{DIR}/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml")

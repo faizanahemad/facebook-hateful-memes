@@ -129,8 +129,9 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         # ensemble_conf = text_ensemble_conf
         n_encoders = kwargs.pop("n_encoders", n_layers)
         n_decoders = kwargs.pop("n_decoders", n_layers)
+        self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
         self.featurizer = TransformerEnsembleFeaturizer(ensemble_conf, n_tokens_out, classifier_dims, internal_dims,
-                                                        n_encoders, n_decoders, gaussian_noise, dropout)
+                                                        n_encoders, n_decoders, gaussian_noise, dropout, self.attention_drop_proba)
 
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:

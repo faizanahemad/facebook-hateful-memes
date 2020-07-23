@@ -35,6 +35,7 @@ class VilBertVisualBertModel(nn.Module):
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
+        self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
         max_seq_length = n_tokens_in
         assert type(loss) == str and loss in ["classification", "focal", "regression", "k-classification"]
         self.task = loss
@@ -87,7 +88,8 @@ class VilBertVisualBertModel(nn.Module):
             n_decoders = kwargs["n_decoders"] if "n_decoders" in kwargs else n_layers
             self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                     classifier_dims,
-                                                    internal_dims, n_encoders, n_decoders, gaussian_noise, dropout)
+                                                    internal_dims, n_encoders, n_decoders,
+                                                    gaussian_noise, dropout, self.attention_drop_proba)
         elif featurizer == "pass":
             n_tokens_out = n_tokens_in
             print("N tokens Out = ", n_tokens_out, "Classifier Dims = ", classifier_dims, "Matches embedding_dims: ", embedding_dims == classifier_dims)

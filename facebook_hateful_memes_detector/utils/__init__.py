@@ -24,6 +24,7 @@ from torch import Tensor
 from torch.nn import TransformerDecoder, TransformerDecoderLayer, TransformerEncoder, LayerNorm, TransformerEncoderLayer
 from torch.nn.init import xavier_uniform_
 import math
+import copy
 DIR = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -693,6 +694,132 @@ class PositionalEncoding2D(nn.Module):
         return self.dropout(x)
 
 
+def _get_clones(module, N):
+    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+
+
+class TransformerEncoder(nn.Module):
+    r"""TransformerEncoder is a stack of N encoder layers
+
+    Args:
+        encoder_layer: an instance of the TransformerEncoderLayer() class (required).
+        num_layers: the number of sub-encoder-layers in the encoder (required).
+        norm: the layer normalization component (optional).
+
+    Examples::
+        >>> encoder_layer = nn.TransformerEncoderLayer(d_model=512, nhead=8)
+        >>> transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=6)
+        >>> src = torch.rand(10, 32, 512)
+        >>> out = transformer_encoder(src)
+    """
+    __constants__ = ['norm']
+
+    def __init__(self, encoder_layer, num_layers, norm=None, gaussian_noise=0.0, attention_drop_proba=0.0):
+        super(TransformerEncoder, self).__init__()
+        self.layers = _get_clones(encoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
+        self.gaussian_noise = GaussianNoise(gaussian_noise)
+        self.attention_drop_proba = attention_drop_proba
+
+    def forward(self, src, mask=None, src_key_padding_mask=None):
+        # type: (Tensor, Optional[Tensor], Optional[Tensor]) -> Tensor
+        r"""Pass the input through the encoder layers in turn.
+
+        Args:
+            src: the sequence to the encoder (required).
+            mask: the mask for the src sequence (optional).
+            src_key_padding_mask: the mask for the src keys per batch (optional).
+
+        Shape:
+            see the docs in Transformer class.
+        """
+        output = src
+
+        for mod in self.layers:
+            if self.attention_drop_proba > 0:
+                mask = torch.rand((src.size(0), src.size(0)))
+                drops = mask <= self.attention_drop_proba
+                keeps = mask > self.attention_drop_proba
+                mask[drops] = -1.0e4
+                mask[keeps] = 0.0
+            output = mod(self.gaussian_noise(output), src_mask=mask, src_key_padding_mask=src_key_padding_mask)
+
+        if self.norm is not None:
+            output = self.norm(output)
+
+        return output
+
+
+class TransformerDecoder(nn.Module):
+    r"""TransformerDecoder is a stack of N decoder layers
+
+    Args:
+        decoder_layer: an instance of the TransformerDecoderLayer() class (required).
+        num_layers: the number of sub-decoder-layers in the decoder (required).
+        norm: the layer normalization component (optional).
+
+    Examples::
+        >>> decoder_layer = nn.TransformerDecoderLayer(d_model=512, nhead=8)
+        >>> transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
+        >>> memory = torch.rand(10, 32, 512)
+        >>> tgt = torch.rand(20, 32, 512)
+        >>> out = transformer_decoder(tgt, memory)
+    """
+    __constants__ = ['norm']
+
+    def __init__(self, decoder_layer, num_layers, norm=None, gaussian_noise=0.0, attention_drop_proba=0.0):
+        super(TransformerDecoder, self).__init__()
+        self.layers = _get_clones(decoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
+        self.gaussian_noise = GaussianNoise(gaussian_noise)
+        self.attention_drop_proba = attention_drop_proba
+
+    def forward(self, tgt, memory, tgt_mask=None,
+                memory_mask=None, tgt_key_padding_mask=None,
+                memory_key_padding_mask=None):
+        # type: (Tensor, Tensor, Optional[Tensor], Optional[Tensor], Optional[Tensor], Optional[Tensor]) -> Tensor
+        r"""Pass the inputs (and mask) through the decoder layer in turn.
+
+        Args:
+            tgt: the sequence to the decoder (required).
+            memory: the sequence from the last layer of the encoder (required).
+            tgt_mask: the mask for the tgt sequence (optional).
+            memory_mask: the mask for the memory sequence (optional).
+            tgt_key_padding_mask: the mask for the tgt keys per batch (optional).
+            memory_key_padding_mask: the mask for the memory keys per batch (optional).
+
+        Shape:
+            see the docs in Transformer class.
+        """
+        output = tgt
+
+        for mod in self.layers:
+            if self.attention_drop_proba > 0:
+                memory_mask = torch.rand((memory.size(0), memory.size(0)))
+                drops = memory_mask <= self.attention_drop_proba
+                keeps = memory_mask > self.attention_drop_proba
+                memory_mask[drops] = -1.0e4
+                memory_mask[keeps] = 0.0
+
+                tgt_mask = torch.rand((tgt.size(0), memory.size(0)))
+                drops = tgt_mask <= self.attention_drop_proba
+                keeps = tgt_mask > self.attention_drop_proba
+                tgt_mask[drops] = -1.0e4
+                tgt_mask[keeps] = 0.0
+
+            output = mod(self.gaussian_noise(output), self.gaussian_noise(memory), tgt_mask=tgt_mask,
+                         memory_mask=memory_mask,
+                         tgt_key_padding_mask=tgt_key_padding_mask,
+                         memory_key_padding_mask=memory_key_padding_mask)
+
+        if self.norm is not None:
+            output = self.norm(output)
+
+        return output
+
+
 class Transformer(nn.Module):
     r"""A transformer model. User is able to modify the attributes as needed. The architecture
     is based on the paper "Attention Is All You Need". Ashish Vaswani, Noam Shazeer,
@@ -722,7 +849,7 @@ class Transformer(nn.Module):
 
     def __init__(self, d_model: int = 512, nhead: int = 8, num_encoder_layers: int = 6,
                  num_decoder_layers: int = 6, dim_feedforward: int = 2048,
-                 dropout: float = 0.1, gaussian_noise: float = 0.0,
+                 dropout: float = 0.1, gaussian_noise: float = 0.0, attention_drop_proba=0.0,
                  activation: str = "relu") -> None:
         super(Transformer, self).__init__()
         assert num_encoder_layers > 0 or num_decoder_layers > 0
@@ -733,12 +860,12 @@ class Transformer(nn.Module):
         if num_encoder_layers > 0:
             encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
             encoder_norm = LayerNorm(d_model)
-            self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
+            self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm, gaussian_noise, attention_drop_proba)
 
         if num_decoder_layers > 0:
             decoder_norm = LayerNorm(d_model)
             decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
-            self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
+            self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm, gaussian_noise, attention_drop_proba)
 
         self._reset_parameters()
 
@@ -805,7 +932,7 @@ class Transformer(nn.Module):
                 raise RuntimeError("the batch number of src and tgt must be equal")
             if src.size(2) != self.d_model or tgt.size(2) != self.d_model:
                 raise RuntimeError("the feature number of src and tgt must be equal to d_model")
-            output = self.decoder(self.gaussian_noise(tgt), self.gaussian_noise(memory), tgt_mask=tgt_mask, memory_mask=memory_mask,
+            output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
                                   tgt_key_padding_mask=tgt_key_padding_mask,
                                   memory_key_padding_mask=memory_key_padding_mask)
         return output, memory

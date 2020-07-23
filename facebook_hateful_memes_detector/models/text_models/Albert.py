@@ -71,11 +71,13 @@ class AlbertClassifer(Fasttext1DCNNModel):
                                                   classifier_dims,
                                                   internal_dims, n_layers, gaussian_noise, dropout)
             elif featurizer == "transformer":
+                self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
                 n_encoders = kwargs.pop("n_encoders", n_layers)
                 n_decoders = kwargs.pop("n_decoders", n_layers)
                 self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
                                                         classifier_dims,
-                                                        internal_dims, n_encoders, n_decoders, gaussian_noise, dropout)
+                                                        internal_dims, n_encoders, n_decoders,
+                                                        gaussian_noise, dropout, self.attention_drop_proba)
             else:
                 raise NotImplementedError()
 
