@@ -23,6 +23,18 @@ import random
 import math
 
 
+class OutputCombiner(nn.Module):
+    def __init__(self, combine_dim, *args):
+        super().__init__()
+        self.combine_dim = combine_dim
+        self.combine_modules = nn.ModuleList(list(args))
+
+    def forward(self, x):
+        out = [m(x) for m in self.combine_modules]
+        return torch.cat(out, self.combine_dim)
+
+
+
 class TransformerImageModel(AlbertClassifer):
     def __init__(self, image_models, classifier_dims, num_classes,
                  gaussian_noise, dropout,
@@ -60,7 +72,9 @@ class TransformerImageModel(AlbertClassifer):
                 im_model, im_shape = get_torchvision_classification_models(net, large_rf)
                 im_model = LambdaLayer(im_model, module_gaussian, module_dropout)
                 self.torchvision_pool = nn.AdaptiveAvgPool2d(1)
+
                 shape_global = im_shape[1]
+
                 def global_view(x):
                     xv = self.torchvision_pool(x).expand(-1, -1, shape_global, -1)
                     return torch.cat([x, xv], 3)
@@ -70,11 +84,27 @@ class TransformerImageModel(AlbertClassifer):
 
                 lin = nn.Linear(im_shape[0], embedding_dims)
                 init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(lin, nn.LeakyReLU())
-                im_proc = nn.Sequential(LambdaLayer(global_view), Transpose(1, 2), Transpose(2, 3), lin,
-                                        LambdaLayer(lambda v: v * math.sqrt(embedding_dims)),
-                                        PositionalEncoding2D(embedding_dims, dropout, channels_first=False), Transpose(0, 1))
-                im_shape = (embedding_dims, im_shape[-1] * im_shape[-2])
+                lin = nn.Sequential(nn.Dropout(dropout), lin, nn.LeakyReLU())
+                im_proc1 = nn.Sequential(LambdaLayer(global_view), Transpose(1, 2), Transpose(2, 3), lin,
+                                         LambdaLayer(lambda v: v * math.sqrt(embedding_dims)),
+                                         PositionalEncoding2D(embedding_dims, dropout, channels_first=False), Transpose(0, 1))
+
+                self.max_pool = nn.AdaptiveMaxPool2d(5)
+
+                def global_view_large(x):
+                    x = self.max_pool(x)
+                    xv = self.torchvision_pool(x).expand(-1, -1, 5, -1)
+                    return torch.cat([x, xv], 3)
+
+                lin = nn.Linear(im_shape[0], embedding_dims)
+                init_fc(lin, "leaky_relu")
+                lin = nn.Sequential(nn.Dropout(dropout), lin, nn.LeakyReLU())
+                im_proc2 = nn.Sequential(LambdaLayer(global_view_large), Transpose(1, 2), Transpose(2, 3), lin,
+                                         LambdaLayer(lambda v: v * math.sqrt(embedding_dims)),
+                                         PositionalEncoding2D(embedding_dims, dropout, channels_first=False), Transpose(0, 1))
+
+                im_proc = OutputCombiner(1, im_proc1, im_proc2)
+                im_shape = (embedding_dims, (im_shape[-1] * im_shape[-2]) + (5*6))
 
             elif imo == "caption_features":
                 im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"], module_gaussian, module_dropout)
