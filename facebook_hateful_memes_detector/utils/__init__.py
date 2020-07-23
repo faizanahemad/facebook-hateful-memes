@@ -798,14 +798,14 @@ class TransformerDecoder(nn.Module):
 
         for mod in self.layers:
             if self.attention_drop_proba > 0:
-                memory_mask = torch.rand((memory.size(0), memory.size(0)))
+                memory_mask = torch.rand((tgt.size(0), memory.size(0)))
                 drops = memory_mask <= self.attention_drop_proba
                 keeps = memory_mask > self.attention_drop_proba
                 memory_mask[drops] = -1.0e4
                 memory_mask[keeps] = 0.0
                 memory_mask = memory_mask.to(get_device())
 
-                tgt_mask = torch.rand((tgt.size(0), memory.size(0)))
+                tgt_mask = torch.rand((tgt.size(0), tgt.size(0)))
                 drops = tgt_mask <= self.attention_drop_proba
                 keeps = tgt_mask > self.attention_drop_proba
                 tgt_mask[drops] = -1.0e4
