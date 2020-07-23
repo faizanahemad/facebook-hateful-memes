@@ -68,7 +68,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cac
 
 
 class LXMERTFeatureExtractor:
-    def __init__(self, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')):
+    def __init__(self, device=torch.device('cuda' if torch.cuda.is_available() else 'cpu'), do_autocast=True):
         from detectron2.config import get_cfg
         cfg = get_cfg()
         cfg.merge_from_file(f"{DIR}/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml")
@@ -79,6 +79,8 @@ class LXMERTFeatureExtractor:
         # VG Weight
         cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe_attr.pkl"
         self.cfg = cfg
+        self.do_autocast = do_autocast
+        self.device = device
 
     def __call__(self, url):
         if not hasattr(self.__class__, 'predictor'):
@@ -86,7 +88,19 @@ class LXMERTFeatureExtractor:
             predictor = DefaultPredictor(self.cfg)
             setattr(self.__class__, "predictor", predictor)
             print(self.__class__.__name__, ": Loaded Model...")
-        detectron_features = self.doit(url)
+
+        autocast_supported = False
+        try:
+            from torch.cuda.amp import autocast
+            autocast_supported = "cuda" in str(self.device)
+        except:
+            pass
+        if autocast_supported:
+            with autocast(enabled=self.do_autocast and get_global("use_autocast")):
+                detectron_features = self.doit(url, self.do_autocast and get_global("use_autocast"))
+        else:
+            detectron_features = self.doit(url, False)
+
         return detectron_features
 
     def get_cv2_image(self, image_path):
@@ -101,7 +115,7 @@ class LXMERTFeatureExtractor:
 
         return np.array(Image.open(path).convert('RGB'))[:, :, ::-1]
 
-    def doit(self, raw_image):
+    def doit(self, raw_image, autocasting=True):
         raw_image = self.get_cv2_image(raw_image)
         from detectron2.modeling.postprocessing import detector_postprocess
         from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs, fast_rcnn_inference_single_image
@@ -122,7 +136,7 @@ class LXMERTFeatureExtractor:
             proposal = proposals[0]
             proposal_boxes = [x.proposal_boxes for x in proposals]
             features = [features[f] for f in predictor.model.roi_heads.in_features]
-            if "cuda" in str(get_device()):
+            if autocasting:
                 # Half precision casting for fp16
                 for box in proposal_boxes:
                     box.tensor = box.tensor.type(torch.cuda.HalfTensor)
