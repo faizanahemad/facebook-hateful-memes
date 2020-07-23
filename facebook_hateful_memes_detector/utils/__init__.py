@@ -743,6 +743,7 @@ class TransformerEncoder(nn.Module):
                 keeps = mask > self.attention_drop_proba
                 mask[drops] = -1.0e4
                 mask[keeps] = 0.0
+                mask = mask.to(get_device())
             output = mod(self.gaussian_noise(output), src_mask=mask, src_key_padding_mask=src_key_padding_mask)
 
         if self.norm is not None:
@@ -802,12 +803,14 @@ class TransformerDecoder(nn.Module):
                 keeps = memory_mask > self.attention_drop_proba
                 memory_mask[drops] = -1.0e4
                 memory_mask[keeps] = 0.0
+                memory_mask = memory_mask.to(get_device())
 
                 tgt_mask = torch.rand((tgt.size(0), memory.size(0)))
                 drops = tgt_mask <= self.attention_drop_proba
                 keeps = tgt_mask > self.attention_drop_proba
                 tgt_mask[drops] = -1.0e4
                 tgt_mask[keeps] = 0.0
+                tgt_mask = tgt_mask.to(get_device())
 
             output = mod(self.gaussian_noise(output), self.gaussian_noise(memory), tgt_mask=tgt_mask,
                          memory_mask=memory_mask,
@@ -1140,8 +1143,7 @@ class LinearHead(CNNHead):
         lin = nn.Linear(n_dims, n_out)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        ll = nn.LayerNorm(n_dims)
-        self.classifier = nn.Sequential(ll, dp, lin0, nn.LeakyReLU(), lin)
+        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
 
 
 class PositionExtract(nn.Module):

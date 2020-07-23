@@ -16,7 +16,7 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...training import calculate_auc_dice_loss, get_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
-    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask, load_stored_params
+    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask, load_stored_params, LinearHead
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer, get_mmbt_region
@@ -44,6 +44,7 @@ class VilBertVisualBertModel(nn.Module):
         n_tokens_in, pooled_dims = 0, 0
         model_name = [model_name] if type(model_name) == str else model_name
         self.model_regularizers = nn.ModuleDict()
+        self.model_heads = nn.ModuleDict()
         assert type(model_name) == dict
         for k, v in model_name.items():
             dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
@@ -56,23 +57,27 @@ class VilBertVisualBertModel(nn.Module):
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
             for p in self.vilbert.parameters():
                 p.requires_grad = False
+            self.model_heads["vilbert"] = LinearHead(1024, 1, num_classes, dropout, self.task)
         if "visual_bert" in model_name:
             self.visual_bert = get_visual_bert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
             for p in self.visual_bert.parameters():
                 p.requires_grad = False
+            self.model_heads["visual_bert"] = LinearHead(768, 1, num_classes, dropout, self.task)
         if "lxmert" in model_name:
             self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
             for p in self.lxmert.parameters():
                 p.requires_grad = False
+            self.model_heads["lxmert"] = LinearHead(768, 1, num_classes, dropout, self.task)
 
         if "mmbt_region" in model_name:
             self.mmbt_region = get_mmbt_region(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
             for p in self.mmbt_region.parameters():
                 p.requires_grad = False
+            self.model_heads["mmbt_region"] = LinearHead(768, 1, num_classes, dropout, self.task)
 
         if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
             raise NotImplementedError()
@@ -225,7 +230,7 @@ class VilBertVisualBertModel(nn.Module):
         params = {k: v.to(get_device()) if type(v) == torch.Tensor else v for k, v in params.items()}
         return params
 
-    def vilbert_processor(self, sample_list: SampleList):
+    def vilbert_processor(self, sample_list: SampleList, labels):
         params = self.__vilbert_preprocessing__(sample_list)
         clean_memory()
         # GPUtil.showUtilization()
@@ -255,18 +260,13 @@ class VilBertVisualBertModel(nn.Module):
         else:
             raise AssertionError
 
-
-        logits = None
-        if self.featurizer_type == "pass":
-            pooled_output = self.vilbert.model.dropout(pooled_output)
-            logits = self.vilbert.model.classifier(pooled_output).contiguous().squeeze()
+        logits, loss = self.model_heads["vilbert"](pooled_output, labels)
         output = dict(sequence_output_t=sequence_output_t,
                       sequence_output_v=sequence_output_v,
                       pooled_output_t=pooled_output_t,
                       pooled_output_v=pooled_output_v,
                       pooled_output=pooled_output,
-                      logits=logits)
-        # GPUtil.showUtilization()
+                      logits=logits, loss=loss)
         return output
 
     def __visual_bert_preprocessing__(self, sample_list: SampleList):
@@ -337,21 +337,19 @@ class VilBertVisualBertModel(nn.Module):
         output_dict["pooled_output"] = pooled_output
         del params
         clean_memory()
-        logits = None
-        if self.featurizer_type == "pass":
-            pooled_output = self.visual_bert.model.dropout(pooled_output)
-            logits = self.visual_bert.model.classifier(pooled_output).contiguous().squeeze()
-        output_dict["logits"] = logits
         return output_dict
 
-    def visual_bert_forward(self, sl: SampleList):
+    def visual_bert_forward(self, sl: SampleList, labels):
         params = self.__visual_bert_preprocessing__(sl)
         del sl
         clean_memory()
         out = self.visual_bert_processor(params)
+        logits, loss = self.model_heads["visual_bert"](out["pooled_output"], labels)
+        out["logits"] = logits
+        out["loss"] = loss
         return out
 
-    def lxmert_forward(self, orig_image, textSampleList):
+    def lxmert_forward(self, orig_image, textSampleList, labels):
         lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
         for k, v in lx_sl.items():
             if type(v) == torch.Tensor:
@@ -360,9 +358,10 @@ class VilBertVisualBertModel(nn.Module):
 
         del lx_sl
         clean_memory()
-        return torch.cat(feat_seq, 1), pooled
+        logits, loss = self.model_heads["lxmert"](pooled, labels)
+        return dict(seq=torch.cat(feat_seq, 1), pooled=pooled, logits=logits, loss=loss)
 
-    def mmbt_region_forward(self, sl: SampleList):
+    def mmbt_region_forward(self, sl: SampleList, labels):
         sl = sl.to(get_device())
         sl.image_feature_0 = sl.image_feature_0.type(torch.float)
         module_output = self.mmbt_region.model.bert(sl)
@@ -371,10 +370,9 @@ class VilBertVisualBertModel(nn.Module):
         output["sequence_output"] = module_output[0]
         output["pooled_output"] = pooled_output
         logits = None
-        if self.featurizer_type == "pass":
-            pooled_output = self.mmbt_region.model.dropout(pooled_output)
-            logits = self.mmbt_region.model.classifier(pooled_output).contiguous().squeeze()
+        logits, loss = self.model_heads["mmbt_region"](pooled_output, labels)
         output["logits"] = logits
+        output["loss"] = loss
         del sl
         clean_memory()
         return output
@@ -383,6 +381,7 @@ class VilBertVisualBertModel(nn.Module):
         sampleList = dict2sampleList(sampleList, device=get_device())
         texts = sampleList.text
         image = sampleList.image  # orig_image = sampleList.original_image
+        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
 
         textSampleList = self.get_tokens(texts)
         textSampleList.id = sampleList.id
@@ -392,11 +391,12 @@ class VilBertVisualBertModel(nn.Module):
         pooled_output = []
         sequence_output = []
         logits = None
+        loss = []
         if "vilbert" in self.model_name or "visual_bert" in self.model_name or "mmbt_region" in self.model_name:
             sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
             logit = []
             if "vilbert" in self.model_name:
-                out = self.vilbert_processor(sl)
+                out = self.vilbert_processor(sl, labels)
                 if self.featurizer_type != "pass":
                     out["sequence_output_v"] = self.vilbert_seq_v_nn(out["sequence_output_v"])
                 else:
@@ -408,43 +408,48 @@ class VilBertVisualBertModel(nn.Module):
                 pool = self.model_regularizers["vilbert"](pool) if "vilbert" in self.model_regularizers else pool
                 pooled_output.append(pool)
                 logit.append(out["logits"])
+                loss.append(out["loss"])
                 del out
                 clean_memory()
 
             if "mmbt_region" in self.model_name:
-                out = self.mmbt_region_forward(sl)
+                out = self.mmbt_region_forward(sl, labels)
                 seq, pool = out["sequence_output"], out["pooled_output"]
                 seq = self.model_regularizers["mmbt_region"](seq) if "mmbt_region" in self.model_regularizers else seq
                 pool = self.model_regularizers["mmbt_region"](pool) if "mmbt_region" in self.model_regularizers else pool
                 logit.append(out["logits"])
+                loss.append(out["loss"])
                 del out
                 sequence_output.append(seq)
                 pooled_output.append(pool)
                 clean_memory()
 
             if "visual_bert" in self.model_name:
-                out = self.visual_bert_forward(sl)
+                out = self.visual_bert_forward(sl, labels)
                 seq, pool = out["sequence_output"], out["pooled_output"]
                 seq = self.model_regularizers["visual_bert"](seq) if "visual_bert" in self.model_regularizers else seq
                 pool = self.model_regularizers["visual_bert"](pool) if "visual_bert" in self.model_regularizers else pool
                 logit.append(out["logits"])
+                loss.append(out["loss"])
                 del out
                 sequence_output.append(seq)
                 pooled_output.append(pool)
-
-            if self.featurizer_type == "pass":
-                logit = [torch.softmax(l, dim=1) for l in logit]
-                logits = torch.stack(logit).mean(0)
 
             del sl
             clean_memory()
 
         if "lxmert" in self.model_name:
-            seq, pool = self.lxmert_forward(image, textSampleList)
+            out = self.lxmert_forward(image, textSampleList, labels)
+            seq, pool = out["seq"], out["pooled"]
             seq = self.model_regularizers["lxmert"](seq) if "lxmert" in self.model_regularizers else seq
             pool = self.model_regularizers["lxmert"](pool) if "lxmert" in self.model_regularizers else pool
+            logit.append(out["logits"])
             pooled_output.append(pool)
             sequence_output.append(seq)
+            loss.append(out["loss"])
+            del out
+        logits = torch.stack(logit).mean(0)
+        loss = torch.cat(loss) / len(loss)
 
         del image
         del textSampleList
@@ -453,37 +458,27 @@ class VilBertVisualBertModel(nn.Module):
         pooled_output = torch.cat(pooled_output, 1) if len(pooled_output) > 1 else pooled_output[0]
         sequence_output = torch.cat(sequence_output, 1) if len(sequence_output) > 1 else sequence_output[0]
         clean_memory()
-        return logits, pooled_output, sequenced_pooled_output, sequence_output
+        return logits, loss, pooled_output, sequenced_pooled_output, sequence_output
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
         # GPUtil.showUtilization()
-        logits, pooled_output, sequenced_pooled_output, sequence_output = self.get_vectors(sampleList)
+        pre_logits, pre_loss, pooled_output, sequenced_pooled_output, sequence_output = self.get_vectors(sampleList)
         del sampleList
         clean_memory()
 
-        num_labels_pretrained = -1
-        if hasattr(self, "visual_bert"):
-            num_labels_pretrained = self.visual_bert.config.num_labels
-        elif hasattr(self, "vilbert"):
-            num_labels_pretrained = self.vilbert.config.num_labels
-        elif hasattr(self, "mmbt_region"):
-            num_labels_pretrained = self.mmbt_region.config.num_labels
-
-        num_labels_pretrained = -1 if hasattr(self, "lxmert") else num_labels_pretrained
-
         if self.featurizer_type == "pass":
-            if num_labels_pretrained != self.num_classes:
-                logits = self.final_layer(pooled_output)
+            logits = self.final_layer(pooled_output)
             logits, loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
         else:
             vectors = self.featurizer(sequence_output)
             sequenced_pooled_output = sequenced_pooled_output[:, :, :vectors.size(-1)]
             vectors = torch.cat([vectors, sequenced_pooled_output], 1)
             logits, loss = self.final_layer(vectors, labels)
-
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
+        loss = 0.75 * loss + 0.25 * pre_loss
+        logits = (0.75 * logits + 0.25 * pre_logits)
         return logits, pooled_output, sequence_output, loss

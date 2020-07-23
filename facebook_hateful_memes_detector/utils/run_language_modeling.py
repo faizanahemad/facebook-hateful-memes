@@ -66,36 +66,42 @@ MODEL_CONFIG_CLASSES = list(MODEL_WITH_LM_HEAD_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
 longformer_finetune_conf = {
-    "embeddings": {
-        "finetune": False
-    },
-    "encoder": {
+    "longformer": {
+        "embeddings": {
+            "finetune": False
+        },
+        "encoder": {
+            "finetune": False,
+            "layer": {
+                "6": {
+                    "finetune": False,
+                },
+                "7": {
+                    "finetune": True,
+                },
+                "8": {
+                    "finetune": True,
+                },
+                "9": {
+                    "finetune": True,
+                },
+                "10": {
+                    "finetune": True,
+                },
+                "11": {
+                    "finetune": True,
+                },
+            }
+        },
+        "pooler": {
+            "finetune": True,
+        },
         "finetune": False,
-        "layer": {
-            "6": {
-                "finetune": False,
-            },
-            "7": {
-                "finetune": True,
-            },
-            "8": {
-                "finetune": True,
-            },
-            "9": {
-                "finetune": True,
-            },
-            "10": {
-                "finetune": True,
-            },
-            "11": {
-                "finetune": True,
-            },
-        }
     },
-    "pooler": {
+    "lm_head": {
         "finetune": True,
     },
-    "finetune": False,
+
 }
 
 def group_wise_finetune(model, group_finetune_conf: Dict, path=""):
@@ -510,7 +516,8 @@ def main():
         model = AutoModelWithLMHead.from_config(config)
 
     if model_args.apply_finetune_config:
-        if type(model) == transformers.modeling_longformer.LongformerModel:
+        print("Apply Finetune conf", longformer_finetune_conf)
+        if "longformer" in str(type(model)).lower():
             group_wise_finetune(model, longformer_finetune_conf)
 
     model.resize_token_embeddings(len(tokenizer))
