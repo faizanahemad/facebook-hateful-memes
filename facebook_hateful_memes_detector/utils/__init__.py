@@ -1028,8 +1028,6 @@ class CNNHead(nn.Module):
         :param labels: task specific labels with shape: (Batch,) for classification and (Batch,*) for regression and k-classification
         :return: loss, logits
         """
-        assert ((len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims))
-                or (len(x.size()) == 4 and x.size()[1] == self.n_dims))
         logits = self.classifier(x).squeeze()
         logits = logits.to(get_device())
         return loss_calculator(logits, labels if self.training else None, self.task, self.loss)
