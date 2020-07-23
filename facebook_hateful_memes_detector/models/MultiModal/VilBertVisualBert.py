@@ -391,7 +391,8 @@ class VilBertVisualBertModel(nn.Module):
         pooled_output = []
         sequence_output = []
         logits = None
-        loss = []
+        loss = 0.0
+        loss_counts = 0
         logit = []
         if "vilbert" in self.model_name or "visual_bert" in self.model_name or "mmbt_region" in self.model_name:
             sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
@@ -408,7 +409,8 @@ class VilBertVisualBertModel(nn.Module):
                 pool = self.model_regularizers["vilbert"](pool) if "vilbert" in self.model_regularizers else pool
                 pooled_output.append(pool)
                 logit.append(out["logits"])
-                loss.append(out["loss"])
+                loss+=out["loss"]
+                loss_counts+=1
                 del out
                 clean_memory()
 
@@ -418,7 +420,8 @@ class VilBertVisualBertModel(nn.Module):
                 seq = self.model_regularizers["mmbt_region"](seq) if "mmbt_region" in self.model_regularizers else seq
                 pool = self.model_regularizers["mmbt_region"](pool) if "mmbt_region" in self.model_regularizers else pool
                 logit.append(out["logits"])
-                loss.append(out["loss"])
+                loss += out["loss"]
+                loss_counts += 1
                 del out
                 sequence_output.append(seq)
                 pooled_output.append(pool)
@@ -430,7 +433,8 @@ class VilBertVisualBertModel(nn.Module):
                 seq = self.model_regularizers["visual_bert"](seq) if "visual_bert" in self.model_regularizers else seq
                 pool = self.model_regularizers["visual_bert"](pool) if "visual_bert" in self.model_regularizers else pool
                 logit.append(out["logits"])
-                loss.append(out["loss"])
+                loss += out["loss"]
+                loss_counts += 1
                 del out
                 sequence_output.append(seq)
                 pooled_output.append(pool)
@@ -446,10 +450,11 @@ class VilBertVisualBertModel(nn.Module):
             logit.append(out["logits"])
             pooled_output.append(pool)
             sequence_output.append(seq)
-            loss.append(out["loss"])
+            loss += out["loss"]
+            loss_counts += 1
             del out
         logits = torch.stack(logit).mean(0)
-        loss = torch.cat(loss) / len(loss)
+        loss = loss / loss_counts
 
         del image
         del textSampleList
