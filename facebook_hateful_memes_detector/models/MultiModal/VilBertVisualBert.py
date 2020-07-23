@@ -392,9 +392,9 @@ class VilBertVisualBertModel(nn.Module):
         sequence_output = []
         logits = None
         loss = []
+        logit = []
         if "vilbert" in self.model_name or "visual_bert" in self.model_name or "mmbt_region" in self.model_name:
             sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
-            logit = []
             if "vilbert" in self.model_name:
                 out = self.vilbert_processor(sl, labels)
                 if self.featurizer_type != "pass":
