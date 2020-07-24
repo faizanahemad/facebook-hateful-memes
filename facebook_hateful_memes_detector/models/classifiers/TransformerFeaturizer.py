@@ -13,8 +13,10 @@ import sys
 class TransformerFeaturizer(nn.Module):
     def __init__(self, n_tokens_in, n_channels_in, n_tokens_out, n_channels_out,
                  n_internal_dims, n_encoders, n_decoders,
+                 n_decoder_ensembles=1,
                  gaussian_noise=0.0, dropout=0.0, attention_drop_proba=0.0):
         super(TransformerFeaturizer, self).__init__()
+        assert n_tokens_out % n_decoder_ensembles == 0
         gn = GaussianNoise(gaussian_noise)
         dp = nn.Dropout(dropout)
         self.n_tokens_out = n_tokens_out

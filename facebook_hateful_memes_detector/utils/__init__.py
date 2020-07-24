@@ -1046,24 +1046,14 @@ class DecoderEnsemblingHead(nn.Module):
         self.task = loss
         self.loss = get_loss_by_task(loss)
         n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
+        n_classifiers = kwargs["n_classifiers"] if "n_classifiers" in kwargs else 2
+        assert n_classifiers <= n_tokens
         assert n_classifier_layers in [1, 2]
         classifiers = nn.ModuleList()
-        for i in range(n_tokens + 1):
-            lin0 = nn.Linear(n_dims, n_dims)
-            init_fc(lin0, "leaky_relu")
-            lin = nn.Linear(n_dims, n_out)
-            init_fc(lin, "linear")
-            dp = nn.Dropout(dropout)
-            classifier = nn.Sequential(dp, lin)
-            if n_classifier_layers == 2:
-                classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
-
-            if i == n_tokens:
-                c1 = nn.Conv1d(n_dims, n_out, n_tokens, 1, padding=0, groups=1, bias=True)
-                init_fc(c1, "linear")
-                avp = nn.AdaptiveAvgPool1d(1)
-                dp = nn.Dropout(dropout)
-                classifier = nn.Sequential(dp, Transpose(), c1, avp)
+        for i in range(n_classifiers):
+            classifier = LinearHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
+            if i == n_classifiers:
+                classifier = CNNHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
             classifiers.append(classifier)
 
         self.classifiers = classifiers
@@ -1072,16 +1062,13 @@ class DecoderEnsemblingHead(nn.Module):
     def forward(self, x, labels=None):
         assert len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims)
         losses, logits = [], []
-        for i in range(self.n_tokens + 1):
-            classifier = self.classifiers[i]
-            if i == self.n_tokens:
-                logit = classifier(x).squeeze()
+        for i, classifier in enumerate(self.classifiers):
+            if i == len(self.classifiers) - 1:
+                logit, loss = classifier(x, labels if self.training else None)
             else:
                 tokens = x[:, i].squeeze()
-                assert tokens.size() == (x.size(0), x.size(2))
-                logit = classifier(tokens).squeeze()
-            logit = logit.to(get_device())
-            logit, loss = loss_calculator(logit, labels if self.training else None, self.task, self.loss)
+                logit, loss = classifier(tokens, labels if self.training else None)
+
             losses.append(loss)
             logits.append(logit)
 
@@ -1090,42 +1077,9 @@ class DecoderEnsemblingHead(nn.Module):
         return logits, loss
 
 
-class CNN2DHead(CNNHead):
-    def __init__(self, n_dims, n_out, dropout,
-                 loss=None, ):
-        super().__init__(n_dims, 1, n_out, dropout, loss)
-
-        conv = nn.Conv2d(n_dims, n_out, 3)
-        init_fc(conv, "linear")
-        dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(dp, conv, nn.AdaptiveAvgPool2d(1))
-
-
-class AveragedLinearHead(CNNHead):
-    def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 loss ):
-        """
-        Expected input in format (Batch, Seq, Embedding_dims)
-        :param n_dims: Embedding_dims
-        :param n_tokens: Sequence Length
-        :param n_out:
-        :param dropout:
-        :param task:
-        :param loss:
-        """
-        super().__init__(n_dims, n_tokens, n_out, dropout, loss)
-        lin0 = nn.Linear(n_dims, n_dims)
-        init_fc(lin0, "leaky_relu")
-        lin = nn.Linear(n_dims, n_out)
-        init_fc(lin, "linear")
-        dp = nn.Dropout(dropout)
-        ll = nn.LayerNorm(n_dims)
-        self.classifier = nn.Sequential(ll, dp, Average(1), lin0, nn.LeakyReLU(), lin)
-
-
 class LinearHead(CNNHead):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 loss ):
+                 loss, **kwargs):
         """
         Expected input in format (Batch, Seq, Embedding_dims)
         :param n_dims: Embedding_dims
@@ -1136,59 +1090,15 @@ class LinearHead(CNNHead):
         :param loss:
         """
         super().__init__(n_dims, n_tokens, n_out, dropout, loss)
+        n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
         lin0 = nn.Linear(n_dims, n_dims)
         init_fc(lin0, "leaky_relu")
         lin = nn.Linear(n_dims, n_out)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
-
-
-class PositionExtract(nn.Module):
-    def __init__(self, pos):
-        super().__init__()
-        self.pos = pos
-
-    def forward(self, inp):
-        return inp[:, self.pos].squeeze()
-
-
-class OneTokenPositionLinearHead(nn.Module):
-    def __init__(self, n_dims, n_tokens, n_out, dropout,
-                 task, loss=None, extract_pos=0):
-        super().__init__(n_dims, n_tokens, n_out, dropout,
-                         task, loss)
-        lin0 = nn.Linear(n_dims, n_dims)
-        init_fc(lin0, "leaky_relu")
-        lin = nn.Linear(n_dims, n_out)
-        init_fc(lin, "linear")
-        dp = nn.Dropout(dropout)
-        ll = nn.LayerNorm(n_dims)
-        self.classifier = nn.Sequential(ll, dp, PositionExtract(extract_pos), lin0, nn.LeakyReLU(), lin)
-
-
-class MultiTaskForward(nn.Module):
-    def __init__(self, task_heads: List, task_weights=None):
-        super().__init__()
-        self.heads = nn.ModuleList(task_heads)
-        assert task_weights is None or len(task_weights) == len(task_heads)
-        if task_weights is None:
-            task_weights = torch.ones(len(task_heads), dtype=float, device=get_device())  # use device= param for directly creating on target device
-        self.task_weights = task_weights.to(get_device())
-
-    def forward(self, x, labels=None):
-        assert labels is None or len(labels) == len(self.heads) or len(self.heads) == 1
-        logits_list = []
-        loss_total = torch.tensor(0.0, device=get_device())
-        if len(self.heads) == 1 and type(labels) not in [list, tuple]:
-            labels = [labels]
-
-        for i, m in enumerate(self.heads):
-            logits, loss = m(x, labels[i])
-            logits_list.append(logits)
-            loss_total += loss * self.task_weights[i]
-
-        return logits_list if len(logits_list) > 1 else logits_list[0], loss_total
+        self.classifier = nn.Sequential(dp, lin)
+        if n_classifier_layers == 2:
+            self.classifier = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
 
 
 class LambdaLayer(nn.Module):

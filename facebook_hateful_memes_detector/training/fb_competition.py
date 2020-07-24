@@ -10,7 +10,7 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, CNNHead, AveragedLinearHead, OneTokenPositionLinearHead, MultiTaskForward, CNN2DHead, DecoderEnsemblingHead
+from ..utils import in_notebook, CNNHead, DecoderEnsemblingHead
 from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -28,8 +28,7 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):
         head = DecoderEnsemblingHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
     else:
         raise NotImplementedError
-    mtf = MultiTaskForward([head])
-    return mtf
+    return head
 
 
 def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, epochs,
