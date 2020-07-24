@@ -54,7 +54,7 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
         nms.extend(names)
 
     plen = sum([len(list(c["params"])) for c in confs])
-    assert len(list(model.parameters())) == plen
+    assert len(list(filter(lambda p: p.requires_grad, model.parameters()))) == plen
     assert set(list(zip(*model.named_parameters()))[0]) == set(nms)
     assert plen == len(nms)
     if path == "":
