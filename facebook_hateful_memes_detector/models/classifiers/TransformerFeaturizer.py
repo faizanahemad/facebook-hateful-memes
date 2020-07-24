@@ -42,6 +42,7 @@ class TransformerFeaturizer(nn.Module):
         self.transformer = Transformer(n_internal_dims, 8, n_encoders, n_decoders, n_internal_dims*4, dropout, gaussian_noise, attention_drop_proba)
         self.pos_encoder = PositionalEncoding(n_internal_dims, dropout)
         self.global_layer_norm = nn.LayerNorm(n_internal_dims)
+        self.tgt_norm = nn.LayerNorm(n_internal_dims)
 
     def forward(self, x):
         if not self.transformer_needed:
@@ -55,7 +56,9 @@ class TransformerFeaturizer(nn.Module):
         transformer_tgt = None
         if self.n_decoders > 0:
             transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-            transformer_tgt = transformer_tgt.transpose(0, 1) #* math.sqrt(self.n_internal_dims)
+            transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+            transformer_tgt = self.pos_encoder(transformer_tgt)
+            transformer_tgt = self.tgt_norm(transformer_tgt)
             # TODO: do we need tgt_norm?
         x, _ = self.transformer(x, transformer_tgt)
         x = x[:self.n_tokens_out]
