@@ -46,7 +46,7 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
             nms.extend(names)
 
     primitives = {kk: vk for kk, vk in group_lr_conf.items() if type(vk) == float or type(vk) == int or type(vk) == bool}
-    remaining_params = [(k, p) for k, p in model.named_parameters() if k not in nms]
+    remaining_params = [(k, p) for k, p in model.named_parameters() if k not in nms and p.requires_grad]
     if len(remaining_params) > 0:
         names, params = zip(*remaining_params)
         conf = dict(params=params, **primitives)
