@@ -1049,8 +1049,9 @@ class DecoderEnsemblingHead(nn.Module):
         n_classifiers = kwargs["n_classifiers"] if "n_classifiers" in kwargs else 2
         assert n_classifiers <= n_tokens
         assert n_classifier_layers in [1, 2]
+        # TODO add a averaging head here as well?
         classifiers = nn.ModuleList()
-        for i in range(n_classifiers):
+        for i in range(n_classifiers + 1):
             classifier = LinearHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
             if i == n_classifiers:
                 classifier = CNNHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
@@ -1061,19 +1062,20 @@ class DecoderEnsemblingHead(nn.Module):
 
     def forward(self, x, labels=None):
         assert len(x.size()) == 3 and x.size()[1:] == (self.n_tokens, self.n_dims)
-        losses, logits = [], []
+        losses, logits, weights = [], [], []
         for i, classifier in enumerate(self.classifiers):
             if i == len(self.classifiers) - 1:
                 logit, loss = classifier(x, labels if self.training else None)
+                weights.append(1.0)
             else:
                 tokens = x[:, i].squeeze()
                 logit, loss = classifier(tokens, labels if self.training else None)
-
+                weights.append(0.5)
             losses.append(loss)
             logits.append(logit)
-
-        loss = torch.stack(losses).mean()
-        logits = torch.stack(logits).mean(0)
+        ws = sum(weights)
+        loss = torch.stack([w * l / ws for w, l in zip(weights, losses)]).sum()
+        logits = torch.stack([w * l / ws for w, l in zip(weights, logits)]).sum()
         return logits, loss
 
 
