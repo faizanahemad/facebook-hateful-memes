@@ -1075,7 +1075,7 @@ class DecoderEnsemblingHead(nn.Module):
             logits.append(logit)
         ws = sum(weights)
         loss = torch.stack([w * l / ws for w, l in zip(weights, losses)]).sum()
-        logits = torch.stack([w * l / ws for w, l in zip(weights, logits)]).sum()
+        logits = torch.stack([w * l / ws for w, l in zip(weights, logits)]).sum(0)
         return logits, loss
 
 
