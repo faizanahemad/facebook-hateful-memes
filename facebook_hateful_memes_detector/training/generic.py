@@ -587,8 +587,8 @@ def model_builder(model_class, model_params,
             if type(per_param_opts_fn) == list:
                 params_conf = per_param_opts_fn
             elif type(per_param_opts_fn) == dict:
-                params_conf, _ = group_wise_lr(model, per_param_opts_fn)
                 _ = group_wise_finetune(model, per_param_opts_fn)
+                params_conf, _ = group_wise_lr(model, per_param_opts_fn)
             else:
                 raise NotImplementedError()
             assert type(params_conf) == list
