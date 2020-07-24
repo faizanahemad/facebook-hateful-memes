@@ -30,8 +30,9 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):
         gaussian_noise = kwargs.pop("gaussian_noise", 0.5)
         n_classifier_layers = kwargs.pop("n_classifier_layers", 3)
         n_classifier_decoders = kwargs.pop("n_classifier_decoders", 2)
+        attention_drop_proba = kwargs.pop("attention_drop_proba", 0.0)
         head = MultiLayerTransformerDecoderHead(n_dims, n_tokens, n_out, dropout,
-                                                gaussian_noise, loss, n_layers=n_classifier_layers,
+                                                gaussian_noise, attention_drop_proba, loss, n_layers=n_classifier_layers,
                                                 n_queries=16, n_decoders=n_classifier_decoders)
     else:
         raise NotImplementedError
