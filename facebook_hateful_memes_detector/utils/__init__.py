@@ -950,27 +950,35 @@ class Transformer(nn.Module):
 
 class MultiLayerTransformerDecoderHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout, gaussian_noise,
-                 loss=None, n_queries=16, n_layers=3):
+                 attention_drop_proba,
+                 loss=None, n_queries=16, n_layers=3, n_decoders=2):
         super().__init__()
         self.task = loss
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
 
-        decoder_query = nn.Parameter(torch.randn(n_queries, n_dims) * (1 / n_dims), requires_grad=True)
-        self.register_parameter("decoder_query", decoder_query)
-        self.tgt_norm = nn.LayerNorm(n_dims)
-
         decoders = nn.ModuleList()
+        classifiers = nn.ModuleList()
+        decoder_queries = nn.ParameterList()
+        tgt_norms = nn.ModuleList()
+
         decoder_layer = TransformerDecoderLayer(n_dims, 8, n_dims*4, dropout, "relu")
-        for i in range(n_layers):
+        for i in range(n_decoders):
             decoder_norm = LayerNorm(n_dims)
-            decoder = TransformerDecoder(decoder_layer, 1, decoder_norm)
+            decoder = TransformerDecoder(decoder_layer, n_layers, decoder_norm, gaussian_noise, attention_drop_proba)
             decoders.append(decoder)
-        self.classifier = DecoderEnsemblingHead(n_dims, n_queries, n_out, dropout, loss)
+            classifier = DecoderEnsemblingHead(n_dims, n_queries, n_out, dropout, loss)
+            classifiers.append(classifier)
+            decoder_query = nn.Parameter(torch.randn(n_queries, n_dims) * (1 / n_dims), requires_grad=True)
+            tgt_norm = nn.LayerNorm(n_dims)
+            decoder_queries.append(decoder_query)
+            tgt_norms.append(tgt_norm)
 
         self.decoders = decoders
-        self.decoder_query = decoder_query
-        self.n_tokens, self.n_dims, self.n_out, self.n_layers = n_tokens, n_dims, n_out, n_layers
+        self.tgt_norms = tgt_norms
+        self.decoder_queries = decoder_queries
+        self.classifiers = classifiers
+        self.n_tokens, self.n_dims, self.n_out, self.n_layers, self.n_decoders = n_tokens, n_dims, n_out, n_layers, n_decoders
         self.gaussian_noise = GaussianNoise(gaussian_noise)
         self._reset_parameters()
 
@@ -979,19 +987,24 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         # x = self.pos_encoder(x)
         # x = self.global_layer_norm(x ) # R
         batch_size = x.size(1)
-        transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1) # * math.sqrt(self.n_dims)
         # transformer_tgt = self.pos_encoder(transformer_tgt)
         # transformer_tgt = self.tgt_norm(transformer_tgt) # R
-        loss = 0.0
-        dsum = 0.0
-        for i, decoder in enumerate(self.decoders):
-            transformer_tgt = decoder(self.gaussian_noise(transformer_tgt), self.gaussian_noise(x))
-            multiple = 2 ** i
-            logits, loss_cur = self.classifier(transformer_tgt.transpose(0, 1), labels)
-            loss = loss + (loss_cur * multiple)
-            dsum += multiple
-        loss = loss / dsum
+        losses, logits = [], []
+        for i in range(self.n_decoders):
+            decoder = self.decoders[i]
+            classifier = self.classifiers[i]
+            decoder_query = self.decoder_queries[i]
+            tgt_norm = self.tgt_norms[i]
+
+            transformer_tgt = decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
+            transformer_tgt = transformer_tgt.transpose(0, 1)  # * math.sqrt(self.n_dims)
+            transformer_tgt = decoder(transformer_tgt, x).transpose(0, 1)
+
+            logit, loss = classifier(transformer_tgt, labels)
+            losses.append(loss)
+            logits.append(logit)
+        loss = torch.stack(losses).mean()
+        logits = torch.stack(logits).mean(0)
         return logits, loss
 
     def _reset_parameters(self):
@@ -1049,7 +1062,6 @@ class DecoderEnsemblingHead(nn.Module):
         n_classifiers = kwargs["n_classifiers"] if "n_classifiers" in kwargs else 2
         assert n_classifiers <= n_tokens
         assert n_classifier_layers in [1, 2]
-        # TODO add a averaging head here as well?
         classifiers = nn.ModuleList()
         for i in range(n_classifiers + 1):
             classifier = LinearHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)

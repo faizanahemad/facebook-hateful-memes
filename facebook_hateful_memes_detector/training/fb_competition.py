@@ -10,7 +10,7 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, CNNHead, DecoderEnsemblingHead
+from ..utils import in_notebook, CNNHead, DecoderEnsemblingHead, MultiLayerTransformerDecoderHead
 from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -24,8 +24,15 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):
     classification_head = kwargs.pop("classification_head", "cnn1d")
     if classification_head == "cnn1d":
         head = CNNHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
-    elif classification_head == "decoder_ensemble":
+    elif classification_head == "head_ensemble":
         head = DecoderEnsemblingHead(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
+    elif classification_head == "decoder_ensemble":
+        gaussian_noise = kwargs.pop("gaussian_noise", 0.5)
+        n_classifier_layers = kwargs.pop("n_classifier_layers", 3)
+        n_classifier_decoders = kwargs.pop("n_classifier_decoders", 2)
+        head = MultiLayerTransformerDecoderHead(n_dims, n_tokens, n_out, dropout,
+                                                gaussian_noise, loss, n_layers=n_classifier_layers,
+                                                n_queries=16, n_decoders=n_classifier_decoders)
     else:
         raise NotImplementedError
     return head
