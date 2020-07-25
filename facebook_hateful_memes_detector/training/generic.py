@@ -427,7 +427,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                                  collate_fn=None,
                                  plot=False):
     import copy
-    orig_model = copy.deepcopy(model)
+    orig_model = copy.deepcopy(model).to(get_device())
     from tqdm.auto import tqdm as tqdm, trange
     assert accumulation_steps >= 1 and type(accumulation_steps) == int
     _ = model.train()
