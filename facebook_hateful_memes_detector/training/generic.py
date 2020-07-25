@@ -483,6 +483,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                             scaler.step(optimizer)
                             scaler.update()
                             optimizer.zero_grad()
+                            clean_memory()
                     else:
                         repr = model(augmented_batch)
                         with torch.no_grad():
@@ -493,12 +494,13 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                         if (batch_idx + 1) % accumulation_steps == 0:
                             optimizer.step()
                             optimizer.zero_grad()
+                            clean_memory()
                     if update_in_batch:
                         scheduler.step()
                     train_losses.append(float(loss.cpu().detach().item()))
                     train_losses_cur_epoch.append(float(loss.cpu().detach().item()))
                     learning_rates.append(float(optimizer.param_groups[0]['lr']))
-                    clean_memory()
+
             print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
 
     if plot:
