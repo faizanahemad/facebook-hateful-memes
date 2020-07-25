@@ -160,7 +160,7 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=5):
             return 0.0
         probas = logits[:, 1]
         rmse_labels = torch.tensor(labels, device=labels.device)
-        k1 = 0.4
+        k1 = 0.4 # K1 <= 0.5 is necessary
         rmse_labels[labels == 0] = torch.rand_like(labels == 0) * k1
         rmse_labels[labels == 1] = (1 - k1) + torch.rand_like(labels == 1) * k1
 
@@ -465,7 +465,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                 for batch_idx, batch in enumerate(data_batch):
                     if model_call_back is not None:
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
-                    if type(batch) == list and type(batch[0]) == torch.Tensor:
+                    if type(batch) == list and len(batch) == 2:
                         augmented_batch = batch[1]
                         batch = batch[0]
                     else:
