@@ -598,7 +598,7 @@ def generate_predictions(model, batch_size, dataset,
                         labels = batch["label"]
                     except:
                         labels = batch[-1]
-                    labels_list.extend(labels.tolist())
+                    labels_list.extend(labels.tolist() if type(labels) == torch.Tensor else labels)
                     logits = logits.cpu().detach()
                     logits_list.extend(logits.tolist())
             logits_all.append(logits_list)
