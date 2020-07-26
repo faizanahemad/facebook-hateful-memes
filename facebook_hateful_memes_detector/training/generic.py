@@ -88,7 +88,7 @@ def get_dice_loss(n_classes, dice_loss_coef=1.0, threshold_1=0.8, threshold_2=1e
     return loss
 
 
-def get_auc_loss(n_classes, auc_loss_coef, auc_method=5):
+def get_auc_loss(n_classes, auc_loss_coef, auc_method=6):
     def zeros_auc(logits, labels=None):
         return 0.0
     assert auc_loss_coef >= 0
@@ -101,8 +101,8 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=5):
         probas = logits[:, 1]
         pos_probas = labels * probas
         neg_probas = (1 - labels) * probas
-        neg_proba_max = neg_probas.max()
-        pos_proba_min = pos_probas.min()
+        neg_proba_max = neg_probas.max().detach()
+        pos_proba_min = pos_probas.min().detach()
         loss_1 = F.leaky_relu(neg_probas - pos_proba_min).mean()
         loss_2 = F.leaky_relu(neg_proba_max - pos_probas).mean()
         return auc_loss_coef * (loss_1 + loss_2)/2
@@ -113,8 +113,8 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=5):
         probas = logits[:, 1]
         pos_probas = labels * probas
         neg_probas = (1 - labels) * probas
-        neg_proba_max = neg_probas.max()
-        pos_proba_min = pos_probas.min()
+        neg_proba_max = neg_probas.max().detach()
+        pos_proba_min = pos_probas.min().detach()
         loss_1, loss_2 = 0.0, 0.0
 
         pos_probas = pos_probas[pos_probas < neg_proba_max]
@@ -139,9 +139,9 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=5):
             return 0.0
         probas = logits[:, 1]
         pos_probas = labels * probas
-        neg_probas = (1 - labels) * probas
-        neg_proba_max = neg_probas.max()
-        pos_proba_min = pos_probas.min()
+        neg_probas = (1 - labels) * (1 - logits[:, 0])
+        neg_proba_max = neg_probas.max().detach()
+        pos_proba_min = pos_probas.min().detach()
         loss_1, loss_2 = 0.0, 0.0
 
         pos_probas = pos_probas[pos_probas < neg_proba_max]
@@ -154,31 +154,55 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=5):
             loss_1 = (neg_probas - pos_proba_min).mean()
 
         return auc_loss_coef * (loss_1 + loss_2) / 2
-    
+
     def loss_method_4(logits, labels=None):
         if labels is None:
             return 0.0
         probas = logits[:, 1]
-        rmse_labels = torch.tensor(labels, device=labels.device)
-        k1 = 0.4 # K1 <= 0.5 is necessary
-        rmse_labels[labels == 0] = torch.rand_like(labels == 0) * k1
-        rmse_labels[labels == 1] = (1 - k1) + torch.rand_like(labels == 1) * k1
+        pos_probas = labels * probas
+        neg_probas = (1 - labels) * (1 - logits[:, 0])
+        neg_proba_max = neg_probas.max().detach()
+        pos_proba_min = pos_probas.min().detach()
+        loss_1, loss_2 = 0.0, 0.0
 
-        loss = ((rmse_labels - probas) ** 2).mean()
-        return auc_loss_coef * loss
+        pos_probas = pos_probas[pos_probas < neg_proba_max]
+        neg_probas = neg_probas[neg_probas > pos_proba_min]
 
+        neg_proba_mean = neg_probas.mean()
+        pos_proba_mean = pos_probas.mean()
+
+        if 1 <= len(neg_probas):
+            loss_2 = (neg_proba_mean - pos_probas).mean()
+
+        if 1 <= len(pos_probas):
+            loss_1 = (neg_probas - pos_proba_mean).mean()
+
+        return auc_loss_coef * (loss_1 + loss_2) / 2
+    
     def loss_method_5(logits, labels=None):
         if labels is None:
             return 0.0
-        probas = logits[:, 1]
-        rmse_labels = torch.tensor(labels, device=labels.device)
+        pos_probas = logits[:, 1][labels == 1]
+        neg_probas = logits[:, 0][labels == 0]
+        k1 = 0.4 # K1 <= 0.5 is necessary
+        neg_rmse_labels = torch.rand_like(labels == 0) * k1
+        pos_rmse_labels = (1 - k1) + torch.rand_like(labels == 1) * k1
+
+        loss = (((neg_rmse_labels - neg_probas) ** 2) + ((pos_rmse_labels - pos_probas) ** 2)).mean()
+        return auc_loss_coef * loss
+
+    def loss_method_6(logits, labels=None):
+        if labels is None:
+            return 0.0
+        pos_probas = logits[:, 1][labels == 1]
+        neg_probas = logits[:, 0][labels == 0]
         k1 = 0.4
         k2 = 0.2
         k = k1 + torch.rand(1)[0] * k2
-        rmse_labels[labels == 0] = torch.rand_like(labels == 0) * k
-        rmse_labels[labels == 1] = k + torch.rand_like(labels == 1) * (1 - k)
+        neg_rmse_labels = torch.rand_like(labels == 0) * k
+        pos_rmse_labels = k + torch.rand_like(labels == 1) * (1 - k)
 
-        loss = ((rmse_labels - probas) ** 2).mean()
+        loss = (((neg_rmse_labels - neg_probas) ** 2) + ((pos_rmse_labels - pos_probas) ** 2)).mean()
         return auc_loss_coef * loss
 
     if auc_method == 1:
@@ -191,6 +215,8 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=5):
         return loss_method_4
     if auc_method == 5:
         return loss_method_5
+    if auc_method == 6:
+        return loss_method_6
 
 
 def get_auc_dice_loss(n_classes, dice_loss_coef, auc_loss_coef, auc_method=1):
