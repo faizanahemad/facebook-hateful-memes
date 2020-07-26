@@ -737,7 +737,7 @@ class TransformerEncoder(nn.Module):
         output = src
 
         for mod in self.layers:
-            if self.attention_drop_proba > 0:
+            if self.attention_drop_proba > 0 and self.training:
                 mask = torch.rand((src.size(0), src.size(0)))
                 drops = mask <= self.attention_drop_proba
                 keeps = mask > self.attention_drop_proba
@@ -797,7 +797,7 @@ class TransformerDecoder(nn.Module):
         output = tgt
 
         for mod in self.layers:
-            if self.attention_drop_proba > 0:
+            if self.attention_drop_proba > 0 and self.training:
                 memory_mask = torch.rand((tgt.size(0), memory.size(0)))
                 drops = memory_mask <= self.attention_drop_proba
                 keeps = memory_mask > self.attention_drop_proba

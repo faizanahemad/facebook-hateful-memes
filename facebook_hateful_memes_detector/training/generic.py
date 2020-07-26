@@ -585,6 +585,7 @@ def generate_predictions(model, batch_size, dataset,
 
         for i in range(prediction_iters):
             labels_list = []
+            logits_list = []
             with tqdm(test_loader, "Generate Predictions") as test_loader:
                 for batch in test_loader:
                     if use_autocast:
@@ -597,10 +598,11 @@ def generate_predictions(model, batch_size, dataset,
                         labels = batch["label"]
                     except:
                         labels = batch[-1]
-                    labels_list.extend(labels)
+                    labels_list.extend(labels.tolist())
                     logits = logits.cpu().detach()
-                    logits_all.append(logits)
-        torch.stack(logits_all).mean(0)
+                    logits_list.extend(logits.tolist())
+            logits_all.append(logits_list)
+        logits = torch.tensor(logits_all).mean(0)
         top_class = logits.max(dim=1).indices
         top_class = top_class.flatten().tolist()
         probas = logits[:, 1].tolist()

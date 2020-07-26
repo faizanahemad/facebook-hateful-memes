@@ -102,7 +102,7 @@ class TransformerImageModel(AlbertClassifer):
                                          LambdaLayer(lambda v: v * math.sqrt(embedding_dims)),
                                          PositionalEncoding2D(embedding_dims, dropout, channels_first=False), Transpose(0, 1))
 
-                im_proc = OutputCombiner(1, im_proc1, im_proc2)
+                im_proc = nn.Sequential(OutputCombiner(1, im_proc1, im_proc2), nn.LayerNorm(embedding_dims))
                 im_shape = (embedding_dims, (im_shape[-1] * im_shape[-2]) + (5*6))
 
             elif imo == "caption_features":
@@ -110,21 +110,21 @@ class TransformerImageModel(AlbertClassifer):
                 im_shape = (512, 100)
                 lin = nn.Linear(im_shape[0], embedding_dims)
                 init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(lin, nn.LeakyReLU())
+                lin = nn.Sequential(lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
                 im_proc = lin
             elif "detr" in imo:
                 im_shape = (256, 100)
                 im_model = LambdaLayer(get_detr_model(get_device(), imo)["batch_detr_fn"], module_gaussian, module_dropout)
                 lin = nn.Linear(im_shape[0], embedding_dims)
                 init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(lin, nn.LeakyReLU())
+                lin = nn.Sequential(lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
                 im_proc = lin
             elif "vgg_face" in imo:
                 im_shape = (256, 1)
                 im_model = LambdaLayer(get_vgg_face_model(), module_gaussian, module_dropout)
                 lin = nn.Linear(im_shape[0], embedding_dims)
                 init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(lin, nn.LeakyReLU())
+                lin = nn.Sequential(lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
                 im_proc = lin
             else:
                 raise NotImplementedError(imo)
