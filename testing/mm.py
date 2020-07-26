@@ -71,7 +71,7 @@ adam_params = params = dict(lr=1e-3, weight_decay=1e-7)
 optimizer = adam
 optimizer_params = adam_params
 
-batch_size=8
+batch_size=2
 
 lr_strategy = {
     "vilbert": {
@@ -93,27 +93,30 @@ lr_strategy = {
             }
         },
         "finetune": False
-    }
+    },
+    # "lxmert": {
+    #     "finetune": False
+    # }
 }
 
-lr_strategy = {
-    "visual_bert": {
-        "model": {
-            "bert": {
-                "pooler": {
-                    "lr": optimizer_params["lr"] / 1e1,
-                    "finetune": True
-                }
-            }
-        },
-        "finetune": False
-    },
-}
+# lr_strategy = {
+#     "visual_bert": {
+#         "model": {
+#             "bert": {
+#                 "pooler": {
+#                     "lr": optimizer_params["lr"] / 1e1,
+#                     "finetune": True
+#                 }
+#             }
+#         },
+#         "finetune": False
+#     },
+# }
 
 model_fn = model_builder(
     VilBertVisualBertModel,
     dict(
-        model_name={"visual_bert": dict(gaussian_noise=0.0, dropout=0.0)},
+        model_name={"vilbert": dict(gaussian_noise=0.0, dropout=0.0)},
         num_classes=2,
         gaussian_noise=0.0,
         dropout=0.0,
@@ -124,10 +127,12 @@ model_fn = model_builder(
         classifier_dims=768,
         n_tokens_in=128,
         n_tokens_out=16,
-        n_layers=2,
+        n_layers=0,
         loss="classification",
         dice_loss_coef=0.0,
         auc_loss_coef=0.0,
+        bbox_swaps=1,
+        bbox_copies=1,
     ),
     per_param_opts_fn=lr_strategy,
     optimiser_class=optimizer,

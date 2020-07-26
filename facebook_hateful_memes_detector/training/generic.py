@@ -100,7 +100,7 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=6):
             return 0.0
         probas = logits[:, 1]
         pos_probas = labels * probas
-        neg_probas = (1 - labels) * probas
+        neg_probas = (1 - labels) * (1 - logits[:, 0])
         neg_proba_max = neg_probas.max().detach()
         pos_proba_min = pos_probas.min().detach()
         loss_1 = F.leaky_relu(neg_probas - pos_proba_min).mean()
@@ -112,7 +112,7 @@ def get_auc_loss(n_classes, auc_loss_coef, auc_method=6):
             return 0.0
         probas = logits[:, 1]
         pos_probas = labels * probas
-        neg_probas = (1 - labels) * probas
+        neg_probas = (1 - labels) * (1 - logits[:, 0])
         neg_proba_max = neg_probas.max().detach()
         pos_proba_min = pos_probas.min().detach()
         loss_1, loss_2 = 0.0, 0.0
@@ -557,8 +557,13 @@ def plot_loss_lr(train_losses, learning_rates):
     plt.show()
 
 
-def generate_predictions(model, batch_size, dataset, collate_fn=my_collate):
-    _ = model.eval()
+def generate_predictions(model, batch_size, dataset,
+                         prediction_iters=1, evaluate_in_train_mode=False,
+                         collate_fn=my_collate):
+    if evaluate_in_train_mode:
+        _ = model.train()
+    else:
+        _ = model.eval()
     proba_list = []
     predictions_list = []
     labels_list = []

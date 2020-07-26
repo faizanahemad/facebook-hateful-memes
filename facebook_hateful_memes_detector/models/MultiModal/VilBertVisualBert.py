@@ -22,6 +22,7 @@ from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer, get_mmbt_region
 from ..external.lxrt import get_lxrt_model
 import GPUtil
+import random
 
 
 class VilBertVisualBertModel(nn.Module):
@@ -45,6 +46,9 @@ class VilBertVisualBertModel(nn.Module):
         model_name = [model_name] if type(model_name) == str else model_name
         self.model_regularizers = nn.ModuleDict()
         self.model_heads = nn.ModuleDict()
+        self.bbox_swaps = kwargs.pop("bbox_swaps", 0)
+        self.bbox_copies = kwargs.pop("bbox_copies", 0)
+        self.bbox_gaussian_noise = kwargs.pop("bbox_gaussian_noise", 0.0)
         assert type(model_name) == dict
         for k, v in model_name.items():
             dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
@@ -105,17 +109,14 @@ class VilBertVisualBertModel(nn.Module):
         self.featurizer_type = featurizer
         if self.featurizer_type == "pass":
             self.num_classes = num_classes
-            if self.num_classes != 2 or "lxmert" in model_name or len(model_name) > 1:
-                lin0 = nn.Linear(pooled_dims, pooled_dims * 2)
-                init_fc(lin0, "leaky_relu")
-                lin1 = nn.Linear(pooled_dims * 2, 512)
-                init_fc(lin1, "leaky_relu")
-                lin = nn.Linear(512, num_classes)
-                init_fc(lin, "linear")
-                dp = nn.Dropout(dropout)
-                self.final_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), dp, lin)
-            else:
-                print("[WARNING]: Perform finetuning on model since num classes = 2 and featurizer_type = `pass`")
+            lin0 = nn.Linear(pooled_dims, pooled_dims * 2)
+            init_fc(lin0, "leaky_relu")
+            lin1 = nn.Linear(pooled_dims * 2, 512)
+            init_fc(lin1, "leaky_relu")
+            lin = nn.Linear(512, num_classes)
+            init_fc(lin, "linear")
+            dp = nn.Dropout(dropout)
+            self.final_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), dp, lin)
             self.loss = get_loss_by_task(loss)
         else:
             n_tokens_out = n_tokens_out + len(model_name)
@@ -148,15 +149,61 @@ class VilBertVisualBertModel(nn.Module):
         samples = [Sample(dict(feats=pad_tensor(feats, 36),
                                boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
                                masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
+        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_gaussian_noise, "lxmert") for s in samples]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
         sl.segment_ids = textSampleList.segment_ids
         return sl
 
+    def bbox_aug(self, sample, swaps=0, copies=0, gaussian_noise=0.0,
+                 extractor_type="vilbert_visual_bert"):
+
+        # TODO: Do manual inspection
+        if not self.training:
+            return sample
+        if extractor_type == "vilbert_visual_bert":
+            imf = sample["image_feature_0"]
+            imi = sample["image_info_0"]
+            bbox = imi["bbox"]
+            cls_prob = imi["cls_prob"]
+            changes = [imf, bbox, cls_prob]
+
+            for i in range(swaps):
+                swap = random.sample(range(36), 2)
+                for v in changes:
+                    t = v[swap[1]]
+                    v[swap[1]] = v[swap[0]]
+                    v[swap[0]] = t
+
+            for i in range(copies):
+                copi = random.sample(range(36), 2)
+                for v in changes:
+                    v[copi[0]] = v[copi[1]]
+
+        elif extractor_type == "lxmert":
+            for i in range(swaps):
+                swap = random.sample(range(36), 2)
+                for k, v in sample.items():
+                    t = v[swap[1]]
+                    v[swap[1]] = v[swap[0]]
+                    v[swap[0]] = t
+
+            for i in range(copies):
+                copi = random.sample(range(36), 2)
+                for k, v in sample.items():
+                    v[copi[0]] = v[copi[1]]
+
+        else:
+            raise NotImplementedError
+        return sample
+
     def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList):
+        # Rank swap higher and lower ranked boxes+features
+        # Copy one bbox to another and erase the 2nd one entirely
         imgfs = [self.get_img_details(im) for im in orig_image]
         samples = [Sample(dict(image_feature_0=feat_list, image_info_0=info_list)) for feat_list, info_list in imgfs]
+        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_gaussian_noise, "vilbert_visual_bert") for s in samples]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask

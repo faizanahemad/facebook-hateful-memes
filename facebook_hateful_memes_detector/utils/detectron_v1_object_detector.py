@@ -309,13 +309,13 @@ class FeatureExtractor:
             info_list.append(
                 {
                     "bbox": bbox.cpu().numpy(),
-                    "boxes": bbox.cpu().numpy(),
-                    "num_boxes": num_boxes.item(),
-                    "objects": objects.cpu().numpy(),
+                    # "boxes": bbox.cpu().numpy(),
+                    # "num_boxes": num_boxes.item(),
+                    # "objects": objects.cpu().numpy(),
                     "image_width": im_infos[i]["width"],
                     "image_height": im_infos[i]["height"],
-                    "image_h": im_infos[i]["height"],
-                    "image_w": im_infos[i]["width"],
+                    # "image_h": im_infos[i]["height"],
+                    # "image_w": im_infos[i]["width"],
                     "cls_prob": scores[keep_boxes].cpu().numpy(),
                     "max_features": num_boxes.item(),
                 }
