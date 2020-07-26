@@ -44,7 +44,7 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
                       model_call_back=None, validation_epochs=None,
                       sampling_policy=None, class_weights=None,
                       prediction_iters=1, evaluate_in_train_mode=False,
-                      ):
+                      show_model_stats=False, give_probas=True):
     train_df = datadict["train"]
     dev_df = datadict["dev"]
     metadata = datadict["metadata"]
@@ -54,6 +54,11 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
         model, optimizer = model_fn()
     else:
         model, optimizer = model_fn
+    if show_model_stats:
+        model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        print("Trainable Params = %s" % (params), "\n", model)
+        show_model_stats = not show_model_stats
     validation_strategy = dict(validation_epochs=validation_epochs,
                                train=dict(method=validate, args=[model, batch_size, dataset], kwargs=dict(display_detail=False)),
                                val=dict(method=validate, args=[model, batch_size, dev_dataset], kwargs=dict(display_detail=True,
@@ -64,10 +69,10 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
                                          model_call_back=model_call_back, validation_strategy=validation_strategy,
                                          accumulation_steps=accumulation_steps, plot=True,
                                          sampling_policy=sampling_policy, class_weights=class_weights)
-    return predict(model, datadict, batch_size, prediction_iters=prediction_iters, evaluate_in_train_mode=evaluate_in_train_mode)
+    return predict(model, datadict, batch_size, prediction_iters=prediction_iters, evaluate_in_train_mode=evaluate_in_train_mode, give_probas=give_probas)
 
 
-def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_mode=False,):
+def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_mode=False, give_probas=True):
     metadata = datadict["metadata"]
     test = datadict["test"]
     ids = test["id"] if "id" in test.columns else test["ID"]
@@ -84,7 +89,8 @@ def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_m
         sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="inner", on="id")
         sf["proba"] = sf["p"]
         sf["label"] = sf["l"]
-        sf = sf[["id", "proba", "label"]]
+        cols = ["id", "proba", "label"] if give_probas else ["id", "label"]
+        sf = sf[cols]
     return sf, model
 
 

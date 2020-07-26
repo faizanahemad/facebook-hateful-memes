@@ -25,6 +25,9 @@ import GPUtil
 import random
 
 
+def identity(x): return x
+
+
 class VilBertVisualBertModel(nn.Module):
     def __init__(self, model_name: Union[List, Dict], num_classes,
                  gaussian_noise, dropout,
@@ -48,7 +51,7 @@ class VilBertVisualBertModel(nn.Module):
         self.model_heads = nn.ModuleDict()
         self.bbox_swaps = kwargs.pop("bbox_swaps", 0)
         self.bbox_copies = kwargs.pop("bbox_copies", 0)
-        self.bbox_gaussian_noise = kwargs.pop("bbox_gaussian_noise", 0.0)
+        self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
         assert type(model_name) == dict
         for k, v in model_name.items():
             dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
@@ -156,17 +159,17 @@ class VilBertVisualBertModel(nn.Module):
         sl.segment_ids = textSampleList.segment_ids
         return sl
 
-    def bbox_aug(self, sample, swaps=0, copies=0, gaussian_noise=0.0,
+    def bbox_aug(self, sample, swaps=0, copies=0, gaussian_noise=identity,
                  extractor_type="vilbert_visual_bert"):
 
         # TODO: Do manual inspection
         if not self.training:
             return sample
         if extractor_type == "vilbert_visual_bert":
-            imf = sample["image_feature_0"]
+            imf = gaussian_noise(sample["image_feature_0"])
             imi = sample["image_info_0"]
-            bbox = imi["bbox"]
-            cls_prob = imi["cls_prob"]
+            bbox = gaussian_noise(imi["bbox"])
+            cls_prob = gaussian_noise(imi["cls_prob"])
             changes = [imf, bbox, cls_prob]
 
             for i in range(swaps):
@@ -185,9 +188,11 @@ class VilBertVisualBertModel(nn.Module):
             for i in range(swaps):
                 swap = random.sample(range(36), 2)
                 for k, v in sample.items():
+                    v = gaussian_noise(v)
                     t = v[swap[1]]
                     v[swap[1]] = v[swap[0]]
                     v[swap[0]] = t
+                    sample[k] = v
 
             for i in range(copies):
                 copi = random.sample(range(36), 2)

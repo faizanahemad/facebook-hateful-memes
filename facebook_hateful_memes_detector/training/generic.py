@@ -621,11 +621,12 @@ def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=F
 
     try:
         auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
+        map = average_precision_score(labels_list, proba_list)
     except:
         auc = 0
+        map = 0
     # p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="micro")
     prfs = precision_recall_fscore_support(labels_list, predictions_list, average=None, labels=[0, 1])
-    map = average_precision_score(labels_list, proba_list)
     acc = accuracy_score(labels_list, predictions_list)
     validation_scores = [map, acc, auc]
     if display_detail:

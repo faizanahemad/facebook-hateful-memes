@@ -133,6 +133,7 @@ model_fn = model_builder(
         auc_loss_coef=0.0,
         bbox_swaps=1,
         bbox_copies=1,
+        bbox_gaussian_noise=0.1,
     ),
     per_param_opts_fn=lr_strategy,
     optimiser_class=optimizer,
