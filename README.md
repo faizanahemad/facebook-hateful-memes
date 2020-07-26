@@ -24,7 +24,7 @@ pip install transformers==2.11
 # pip install https://download.pytorch.org/whl/nightly/cu101/torch-1.6.0.dev20200625%2Bcu101-cp37-cp37m-linux_x86_64.whl
 
 
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git'
+pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git@old' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git'
 
 
 
@@ -44,7 +44,7 @@ CFLAGS="-Wno-narrowing" pip install cld2-cffi
 pip install multi-rake
 
 # wget -c "https://s3.amazonaws.com/dl4j-distribution/GoogleNews-vectors-negative300.bin.gz"
-git clone https://github.com/facebookresearch/mmf.git && cd mmf && pip install --no-dependencies --editable .
+git clone https://github.com/facebookresearch/mmf.git && cd mmf && git checkout a79bb9985a3c1347741796d350030ced20043195 && pip install --no-dependencies --editable .
 cd ..
 git clone https://gitlab.com/vedanuj/vqa-maskrcnn-benchmark.git && cd vqa-maskrcnn-benchmark && python setup.py clean && python setup.py build && python setup.py develop
 cd ~
