@@ -995,7 +995,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
             classifier = self.classifiers[i]
             decoder_query = self.decoder_queries[i]
             tgt_norm = self.tgt_norms[i]
-
+            # TODO: TGT norm test here with pos encoding
             transformer_tgt = decoder_query.unsqueeze(0).expand(batch_size, *decoder_query.size())
             transformer_tgt = transformer_tgt.transpose(0, 1)  # * math.sqrt(self.n_dims)
             transformer_tgt = decoder(transformer_tgt, x).transpose(0, 1)

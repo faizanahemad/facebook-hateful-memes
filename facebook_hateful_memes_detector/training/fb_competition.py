@@ -43,6 +43,7 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
                       accumulation_steps=1, scheduler_init_fn=None,
                       model_call_back=None, validation_epochs=None,
                       sampling_policy=None, class_weights=None,
+                      prediction_iters=1, evaluate_in_train_mode=False,
                       ):
     train_df = datadict["train"]
     dev_df = datadict["dev"]
@@ -55,22 +56,26 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
         model, optimizer = model_fn
     validation_strategy = dict(validation_epochs=validation_epochs,
                                train=dict(method=validate, args=[model, batch_size, dataset], kwargs=dict(display_detail=False)),
-                               val=dict(method=validate, args=[model, batch_size, dev_dataset], kwargs=dict(display_detail=True)))
+                               val=dict(method=validate, args=[model, batch_size, dev_dataset], kwargs=dict(display_detail=True,
+                                                                                                            prediction_iters=prediction_iters,
+                                                                                                            evaluate_in_train_mode=evaluate_in_train_mode)))
     validation_strategy = validation_strategy if validation_epochs is not None else None
     train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
                                          model_call_back=model_call_back, validation_strategy=validation_strategy,
                                          accumulation_steps=accumulation_steps, plot=True,
                                          sampling_policy=sampling_policy, class_weights=class_weights)
-    return predict(model, datadict, batch_size)
+    return predict(model, datadict, batch_size, prediction_iters=prediction_iters, evaluate_in_train_mode=evaluate_in_train_mode)
 
 
-def predict(model, datadict, batch_size):
+def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_mode=False,):
     metadata = datadict["metadata"]
     test = datadict["test"]
     ids = test["id"] if "id" in test.columns else test["ID"]
     id_name = "id" if "id" in test.columns else "ID"
     test_dataset = convert_dataframe_to_dataset(test, metadata, False)
-    proba_list, all_probas_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate)
+    proba_list, all_probas_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate,
+                                                                                      prediction_iters=prediction_iters,
+                                                                                      evaluate_in_train_mode=evaluate_in_train_mode,)
     probas = pd.DataFrame({id_name: ids, "proba": proba_list, "label": predictions_list})
     sf = probas
     if "submission_format" in datadict and type(datadict["submission_format"]) == pd.DataFrame and len(datadict["submission_format"]) == len(probas):

@@ -566,7 +566,6 @@ def generate_predictions(model, batch_size, dataset,
         _ = model.eval()
     proba_list = []
     predictions_list = []
-    labels_list = []
     all_probas_list = []
     clean_memory()
     from tqdm.auto import tqdm as tqdm, trange
@@ -582,35 +581,43 @@ def generate_predictions(model, batch_size, dataset,
     use_autocast = use_autocast and get_global("use_autocast")
     with torch.no_grad():
         clean_memory()
-        with tqdm(test_loader, "Generate Predictions") as test_loader:
-            for batch in test_loader:
-                if use_autocast:
-                    with autocast():
+        logits_all = []
+
+        for i in range(prediction_iters):
+            labels_list = []
+            with tqdm(test_loader, "Generate Predictions") as test_loader:
+                for batch in test_loader:
+                    if use_autocast:
+                        with autocast():
+                            logits, _, _, _ = model(batch)
+                    else:
                         logits, _, _, _ = model(batch)
-                else:
-                    logits, _, _, _ = model(batch)
-                try:
-                    batch = dict2sampleList(batch, device=get_device())
-                    labels = batch["label"]
-                except:
-                    labels = batch[-1]
-                labels_list.extend(labels)
-                logits = logits.cpu().detach()
-                top_class = logits.max(dim=1).indices
-                top_class = top_class.flatten().tolist()
-                probas = logits[:, 1].tolist()
-                all_probas = logits.tolist()
-                all_probas_list.extend(all_probas)
-                predictions_list.extend(top_class)
-                proba_list.extend(probas)
-                clean_memory()
+                    try:
+                        batch = dict2sampleList(batch, device=get_device())
+                        labels = batch["label"]
+                    except:
+                        labels = batch[-1]
+                    labels_list.extend(labels)
+                    logits = logits.cpu().detach()
+                    logits_all.append(logits)
+        torch.stack(logits_all).mean(0)
+        top_class = logits.max(dim=1).indices
+        top_class = top_class.flatten().tolist()
+        probas = logits[:, 1].tolist()
+        all_probas = logits.tolist()
+        all_probas_list.extend(all_probas)
+        predictions_list.extend(top_class)
+        proba_list.extend(probas)
+        clean_memory()
     return proba_list, all_probas_list, predictions_list, labels_list
 
 
-def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=False):
+def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=False, prediction_iters=1, evaluate_in_train_mode=False,):
     from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
-    proba_list, all_probas_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn)
+    proba_list, all_probas_list, predictions_list, labels_list = generate_predictions(model, batch_size, dataset, collate_fn=collate_fn,
+                                                                                      prediction_iters=prediction_iters,
+                                                                                      evaluate_in_train_mode=evaluate_in_train_mode,)
 
     try:
         auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
@@ -735,7 +742,10 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           scheduler_init_fn=None, model_call_back=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
-                          class_weights=None):
+                          class_weights=None,
+                          prediction_iters=1,
+                          evaluate_in_train_mode=False
+                          ):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
     from tqdm.auto import tqdm as tqdm, trange
@@ -766,13 +776,16 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
             show_model_stats = not show_model_stats
         validation_strategy = dict(validation_epochs=validation_epochs,
                                    train=dict(method=validate, args=[model, batch_size, training_test_dataset], kwargs=dict(display_detail=False)),
-                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset], kwargs=dict(display_detail=True)))
+                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset], kwargs=dict(display_detail=True,
+                                                                                                                         prediction_iters=prediction_iters,
+                                                                                                                         evaluate_in_train_mode=evaluate_in_train_mode)))
         validation_strategy = validation_strategy if validation_epochs is not None else None
         train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, model_call_back, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)
-        train_scores, prfs_train = validate(model, batch_size, training_test_dataset, display_detail=False)
+        train_scores, prfs_train = validate(model, batch_size, training_test_dataset, display_detail=False, prediction_iters=prediction_iters,
+                                                                                                            evaluate_in_train_mode=evaluate_in_train_mode)
         prfs_list.append(prfs_train + prfs_val)
         rdf = dict(train=train_scores, val=validation_scores)
         rdf = pd.DataFrame(data=rdf, index=index)
