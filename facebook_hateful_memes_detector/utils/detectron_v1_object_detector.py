@@ -115,7 +115,7 @@ class LXMERTFeatureExtractor:
 
         return np.array(Image.open(path).convert('RGB'))[:, :, ::-1]
 
-    def doit(self, raw_image, autocasting=True):
+    def doit(self, raw_image, autocasting=False):
         raw_image = self.get_cv2_image(raw_image)
         from detectron2.modeling.postprocessing import detector_postprocess
         from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs, fast_rcnn_inference_single_image
@@ -123,7 +123,7 @@ class LXMERTFeatureExtractor:
         with torch.no_grad():
             NUM_OBJECTS = 36
             raw_height, raw_width = raw_image.shape[:2]
-            image = predictor.aug.get_transform(raw_image).apply_image(raw_image)
+            image = predictor.transform_gen.get_transform(raw_image).apply_image(raw_image)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
             inputs = [{"image": image, "height": raw_height, "width": raw_width}]
             images = predictor.model.preprocess_image(inputs)
@@ -150,9 +150,18 @@ class LXMERTFeatureExtractor:
             # Predict classes and boxes for each proposal.
             pred_class_logits, pred_attr_logits, pred_proposal_deltas = predictor.model.roi_heads.box_predictor(feature_pooled)
 
+            outputs = FastRCNNOutputs(
+                predictor.model.roi_heads.box2box_transform,
+                pred_class_logits,
+                pred_proposal_deltas,
+                proposals,
+                predictor.model.roi_heads.smooth_l1_beta,
+            )
+            probs = outputs.predict_probs()[0]
+            boxes = outputs.predict_boxes()[0]
 
-            probs = predictor.model.roi_heads.box_predictor.predict_probs((pred_class_logits, pred_proposal_deltas,), proposals)[0]
-            boxes = predictor.model.roi_heads.box_predictor.predict_boxes((pred_class_logits, pred_proposal_deltas,), proposals)[0]
+            # probs = predictor.model.roi_heads.box_predictor.predict_probs((pred_class_logits, pred_proposal_deltas,), proposals)[0]
+            # boxes = predictor.model.roi_heads.box_predictor.predict_boxes((pred_class_logits, pred_proposal_deltas,), proposals)[0]
 
             attr_prob = pred_attr_logits[..., :-1].softmax(-1)
             max_attr_prob, max_attr_label = attr_prob.max(-1)
