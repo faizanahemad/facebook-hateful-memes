@@ -688,6 +688,7 @@ def convert_dataframe_to_dataset(df, metadata, train=True, **kwargs):
     ds = TextImageDataset(ids, text, list(df.img), labels, sample_weights,
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
                           torchvision_image_transform=metadata["train_torchvision_image_transform"] if train else metadata["test_torchvision_image_transform"],
+                          torchvision_pre_image_transform=metadata["train_torchvision_pre_image_transform"] if train else metadata["test_torchvision_pre_image_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
                           cache_images=metadata["cache_images"], use_images=metadata["use_images"],
                           keep_original_text=metadata["keep_original_text"], keep_original_image=metadata["keep_original_image"],

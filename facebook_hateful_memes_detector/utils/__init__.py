@@ -962,7 +962,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         decoder_queries = nn.ParameterList()
         tgt_norms = nn.ModuleList()
 
-        decoder_layer = TransformerDecoderLayer(n_dims, 8, n_dims*4, dropout, "relu")
+        decoder_layer = TransformerDecoderLayer(n_dims, 16, n_dims*4, dropout, "relu")
         for i in range(n_decoders):
             decoder_norm = LayerNorm(n_dims)
             decoder = TransformerDecoder(decoder_layer, n_layers, decoder_norm, gaussian_noise, attention_drop_proba)

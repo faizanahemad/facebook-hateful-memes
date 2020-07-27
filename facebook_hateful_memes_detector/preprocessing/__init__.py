@@ -42,6 +42,23 @@ class DefinedRotation(torchvision.transforms.RandomRotation):
         return angle
 
 
+class HalfSwap:
+    def __call__(self, image):
+        arr = np.array(image)
+        shape = list(arr.shape)
+        shape[0] = (shape[0] - 1) if shape[0] % 2 == 1 else shape[0]
+        shape[1] = (shape[1] - 1) if shape[1] % 2 == 1 else shape[1]
+        arr = arr[:shape[0], :shape[1]]
+        height_half = int(shape[0] / 2)
+        width_half = int(shape[1] / 2)
+        if random.random() < 0.5:
+            arr[:height_half], arr[height_half:] = arr[height_half:], arr[:height_half]
+        else:
+            arr[:, :width_half], arr[:, width_half:] = arr[:, width_half:], arr[:, :width_half]
+
+        return Image.fromarray(arr)
+
+
 class QuadrantCut:
     def __call__(self, image):
         arr = np.array(image)  # H, W, C PIL image
@@ -529,6 +546,7 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
 
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
                  train_torchvision_image_transform=None, test_torchvision_image_transform=None,
+                 train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
                  cache_images: bool = True, use_images: bool = True, dev: bool = False, test_dev: bool = True,
                  keep_original_text: bool = False, keep_original_image: bool = False,
@@ -559,6 +577,8 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
                             train_torchvision_image_transform=train_torchvision_image_transform,
                             test_torchvision_image_transform=test_torchvision_image_transform,
+                            train_torchvision_pre_image_transform=train_torchvision_pre_image_transform,
+                            test_torchvision_pre_image_transform=test_torchvision_pre_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform,
                             data_dir=data_dir))
     return rd
@@ -581,7 +601,7 @@ class TextImageDataset(Dataset):
     def __init__(self, identifiers: List, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
                  sample_weights: List[float] = None, cached_images: Dict = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
-                 torchvision_image_transform=None,
+                 torchvision_image_transform=None, torchvision_pre_image_transform=None,
                  keep_original_text: bool = False, keep_original_image: bool = False,
                  keep_processed_image: bool = False, keep_torchvision_image: bool = False):
         self.texts = list(texts)
@@ -604,6 +624,7 @@ class TextImageDataset(Dataset):
         self.keep_original_image = keep_original_image
         self.to_torchvision = get_image2torchvision_transforms()
         self.torchvision_image_transform = torchvision_image_transform if torchvision_image_transform is not None else identity
+        self.torchvision_pre_image_transform = torchvision_pre_image_transform if torchvision_pre_image_transform is not None else identity
         self.keep_processed_image = keep_processed_image
         self.keep_torchvision_image = keep_torchvision_image
 
@@ -627,7 +648,7 @@ class TextImageDataset(Dataset):
                 image = self.image_transform(image.copy())
                 s.image = image
             if self.keep_torchvision_image:
-                torchvision_image = self.torchvision_image_transform(self.to_torchvision(image))
+                torchvision_image = self.torchvision_image_transform(self.to_torchvision(self.torchvision_pre_image_transform(image)))
                 s.torchvision_image = torchvision_image
 
         if self.keep_original_text:
