@@ -981,7 +981,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         self.n_tokens, self.n_dims, self.n_out, self.n_layers, self.n_decoders = n_tokens, n_dims, n_out, n_layers, n_decoders
         self.gaussian_noise = GaussianNoise(gaussian_noise)
         self.global_layer_norm = nn.LayerNorm(self.n_dims)
-        self.pos_encoder = PositionalEncoding()
+        self.pos_encoder = PositionalEncoding(self.n_dims)
 
         self._reset_parameters()
 
