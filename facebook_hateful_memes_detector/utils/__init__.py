@@ -21,7 +21,7 @@ import os
 import random
 from typing import Optional, Any
 from torch import Tensor
-from torch.nn import TransformerDecoder, TransformerDecoderLayer, TransformerEncoder, LayerNorm, TransformerEncoderLayer
+from torch.nn import TransformerDecoder, TransformerDecoderLayer, TransformerEncoder, LayerNorm, TransformerEncoderLayer, CrossEntropyLoss
 from torch.nn.init import xavier_uniform_
 import math
 import copy
@@ -1088,7 +1088,7 @@ class DecoderEnsemblingHead(nn.Module):
             else:
                 tokens = x[:, i].squeeze()
                 logit, loss = classifier(tokens, labels if self.training else None)
-                weights.append(0.5)
+                weights.append(0.1)  # TODO check other weights usefulness here
             losses.append(loss)
             logits.append(logit)
         ws = sum(weights)
@@ -1193,3 +1193,46 @@ def random_word_mask(text: str, tokenizer, probability: float) -> str:
 
             # rest 10% keep the original token as it is
     return tokenizer.convert_tokens_to_string(tokens)
+
+
+class BertPredictionHeadTransform(nn.Module):
+    def __init__(self, hidden_size, hidden_act):
+        super().__init__()
+        self.dense = nn.Linear(hidden_size, hidden_size)
+        if isinstance(hidden_act, str):
+            from transformers.modeling_bert import ACT2FN
+            self.transform_act_fn = ACT2FN[hidden_act]
+        else:
+            self.transform_act_fn = hidden_act
+        self.LayerNorm = nn.LayerNorm(hidden_size)
+
+    def forward(self, hidden_states):
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.transform_act_fn(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states)
+        return hidden_states
+
+
+class BertLMPredictionHead(nn.Module):
+    def __init__(self, hidden_size, vocab_size, hidden_act, n_tokens_in):
+        super().__init__()
+        self.transform = BertPredictionHeadTransform(hidden_size, hidden_act)
+
+        # The output weights are the same as the input embeddings, but there is
+        # an output-only bias for each token.
+        self.decoder = nn.Linear(hidden_size, vocab_size, bias=False)
+
+        self.bias = nn.Parameter(torch.zeros(vocab_size))
+        self.vocab_size = vocab_size
+
+        # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
+        self.decoder.bias = self.bias
+        self.n_tokens_in = n_tokens_in
+        self.loss_fct = CrossEntropyLoss(reduction='mean')
+
+    def forward(self, hidden_states, input_ids):
+        hidden_states = hidden_states[:, :self.n_tokens_in]
+        hidden_states = self.transform(hidden_states)
+        hidden_states = self.decoder(hidden_states)
+        masked_lm_loss = self.loss_fct(hidden_states.view(-1, self.vocab_size), input_ids.view(-1))
+        return masked_lm_loss

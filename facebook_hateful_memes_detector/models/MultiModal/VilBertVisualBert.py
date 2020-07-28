@@ -41,6 +41,7 @@ class VilBertVisualBertModel(nn.Module):
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
         self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
         max_seq_length = n_tokens_in
+        self.text_tokens = max_seq_length
         assert type(loss) == str and loss in ["classification", "focal", "regression", "k-classification"]
         self.task = loss
         assert max_seq_length >= 64
