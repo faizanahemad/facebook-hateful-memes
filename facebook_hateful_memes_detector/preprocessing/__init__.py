@@ -548,6 +548,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
                  train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                  train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
+                 train_mixup_config=None, test_mixup_config=None,
                  cache_images: bool = True, use_images: bool = True, dev: bool = False, test_dev: bool = True,
                  keep_original_text: bool = False, keep_original_image: bool = False,
                  keep_processed_image: bool = False, keep_torchvision_image: bool = False):
@@ -577,6 +578,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
                             train_torchvision_image_transform=train_torchvision_image_transform,
                             test_torchvision_image_transform=test_torchvision_image_transform,
+                            train_mixup_config=train_mixup_config, test_mixup_config=test_mixup_config,
                             train_torchvision_pre_image_transform=train_torchvision_pre_image_transform,
                             test_torchvision_pre_image_transform=test_torchvision_pre_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform,
