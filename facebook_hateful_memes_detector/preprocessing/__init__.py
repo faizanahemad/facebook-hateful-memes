@@ -697,22 +697,26 @@ class TextImageDataset(Dataset):
 
         return s
 
+    def mixup(self, sample):
+        indices = random.sample(range(len(self.texts)), random.randint(1, 3))
+        samples = [self.item_getter(i) for i in indices] + [sample]
+        random.shuffle(samples)
+        image = None
+        if sample.image is not None:
+            positions = random.sample([(0, 0), (0, 1), (1, 0), (1, 1)], len(samples))
+            image = create_collage(640, 640, [s.image for s in samples], filled_position=positions)
+        text = " ".join([s.text for s in samples])
+        label = min(sum([s.label for s in samples]), 1)
+        sample_weight = sum([s.sample_weight for s in samples]) / len(indices)
+        sample = Sample({"id": -1, "text": text, "label": label, "sample_weight": sample_weight, "image": image})
+        return sample
+
     def __getitem__(self, item):
         sample = self.item_getter(item)
         if self.mixup_config is not None:
             proba = self.mixup_config.pop("proba", 1.0)
             if random.random() < proba:
-                indices = random.sample(range(len(self.texts)), random.randint(1, 3))
-                samples = [self.item_getter(i) for i in indices] + [sample]
-                random.shuffle(samples)
-                image = None
-                if self.use_images:
-                    positions = random.sample([(0, 0), (0, 1), (1, 0), (1, 1)], len(samples))
-                    image = create_collage(640, 640, [s.image for s in samples], filled_position=positions)
-                text = " ".join([s.text for s in samples])
-                label = min(sum([s.label for s in samples]), 1)
-                sample_weight = sum([s.sample_weight for s in samples]) / len(indices)
-                sample = Sample({"id": -1, "text": text, "label": label, "sample_weight": sample_weight, "image": image})
+                sample = self.mixup(sample)
 
         return self.process_example(sample)
 
@@ -727,6 +731,19 @@ class TextImageDataset(Dataset):
         print(text, "|", "Label = ", label)
         image.show()
         return image
+
+    def show_mixup(self, item):
+        image = self.show(item)
+        sample = self.item_getter(item)
+        sample.image = image
+        sample = self.mixup(sample)
+        text = sample.text
+        label = sample.label
+        image = sample.image
+        print("Example Mixup", "\n", text, "|", "Label = ", label)
+        image.show()
+        return image
+
 
 
 class ImageFolderDataset(torch.utils.data.Dataset):
