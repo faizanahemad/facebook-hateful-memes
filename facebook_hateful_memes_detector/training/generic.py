@@ -692,7 +692,8 @@ def convert_dataframe_to_dataset(df, metadata, train=True, **kwargs):
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
                           cache_images=metadata["cache_images"], use_images=metadata["use_images"],
                           keep_original_text=metadata["keep_original_text"], keep_original_image=metadata["keep_original_image"],
-                          keep_processed_image=metadata["keep_processed_image"], keep_torchvision_image=metadata["keep_torchvision_image"], **kwargs)
+                          keep_processed_image=metadata["keep_processed_image"], keep_torchvision_image=metadata["keep_torchvision_image"],
+                          mixup_config=metadata["train_mixup_config"] if train else None,  **kwargs)
     return ds
 
 

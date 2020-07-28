@@ -595,6 +595,35 @@ def make_weights_for_balanced_classes(labels, weight_per_class: Dict = None):
     return torch.DoubleTensor(weight)
 
 
+def create_collage(width, height, images, filled_position=None):
+    cols = 2
+    rows = 2
+    assert len(images) <= cols * rows
+    thumbnail_width = width//cols
+    thumbnail_height = height//rows
+    size = thumbnail_width, thumbnail_height
+    new_im = Image.new('RGB', (width, height))
+    ims = []
+    for p in images:
+        im = Image.open(p)
+        im.thumbnail(size)
+        ims.append(im)
+    i = 0
+    x = 0
+    y = 0
+    for col in range(cols):
+        for row in range(rows):
+            if filled_position is not None and (row, col) not in filled_position:
+                continue
+            print(i, x, y)
+            new_im.paste(ims[i], (x, y))
+            i += 1
+            y += thumbnail_height
+        x += thumbnail_width
+        y = 0
+    return new_im
+
+
 def identity(x): return x
 
 class TextImageDataset(Dataset):
@@ -602,6 +631,7 @@ class TextImageDataset(Dataset):
                  sample_weights: List[float] = None, cached_images: Dict = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
                  torchvision_image_transform=None, torchvision_pre_image_transform=None,
+                 mixup_config=None,
                  keep_original_text: bool = False, keep_original_image: bool = False,
                  keep_processed_image: bool = False, keep_torchvision_image: bool = False):
         self.texts = list(texts)
@@ -627,21 +657,32 @@ class TextImageDataset(Dataset):
         self.torchvision_pre_image_transform = torchvision_pre_image_transform if torchvision_pre_image_transform is not None else identity
         self.keep_processed_image = keep_processed_image
         self.keep_torchvision_image = keep_torchvision_image
+        self.mixup_config = mixup_config
 
-    def __getitem__(self, item):
+    def item_getter(self, item):
         text = self.texts[item]
         identifier = self.identifiers[item]
         label = self.labels[item] if self.labels is not None else 0
         sample_weight = self.sample_weights[item]
         # clean_text
-        orig_text = text
-        text = self.text_transform(text)
-        s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight})
+        s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight, "image": None})
+
         if self.use_images and (self.keep_torchvision_image or self.keep_original_image or self.keep_processed_image):
             l = self.image_locations[item]
             image = self.images.get(l)
             if image is None:
                 image = Image.open(l).convert('RGB')
+            s.image = image
+
+        return s
+
+    def process_example(self, sample):
+        identifier, text, image, label, sample_weight = sample["id"], sample["text"], sample["image"], sample["label"], sample["sample_weight"]
+        # clean_text
+        orig_text = text
+        text = self.text_transform(text) # Give ID here to retrieve DAB examples
+        s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight})
+        if image is not None:
             if self.keep_original_image:
                 s.original_image = image
             if self.keep_processed_image:
@@ -655,6 +696,25 @@ class TextImageDataset(Dataset):
             s.original_text = orig_text
 
         return s
+
+    def __getitem__(self, item):
+        sample = self.item_getter(item)
+        if self.mixup_config is not None:
+            proba = self.mixup_config.pop("proba", 1.0)
+            if random.random() < proba:
+                indices = random.sample(range(len(self.texts)), random.randint(1, 3))
+                samples = [self.item_getter(i) for i in indices] + [sample]
+                random.shuffle(samples)
+                image = None
+                if self.use_images:
+                    positions = random.sample([(0, 0), (0, 1), (1, 0), (1, 1)], len(samples))
+                    image = create_collage(640, 640, [s.image for s in samples], filled_position=positions)
+                text = " ".join([s.text for s in samples])
+                label = min(sum([s.label for s in samples]), 1)
+                sample_weight = sum([s.sample_weight for s in samples]) / len(indices)
+                sample = Sample({"id": -1, "text": text, "label": label, "sample_weight": sample_weight, "image": image})
+
+        return self.process_example(sample)
 
     def __len__(self):
         return len(self.texts)
