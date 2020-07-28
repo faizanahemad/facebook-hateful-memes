@@ -980,12 +980,15 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         self.classifiers = classifiers
         self.n_tokens, self.n_dims, self.n_out, self.n_layers, self.n_decoders = n_tokens, n_dims, n_out, n_layers, n_decoders
         self.gaussian_noise = GaussianNoise(gaussian_noise)
+        self.global_layer_norm = nn.LayerNorm(self.n_dims)
+        self.pos_encoder = PositionalEncoding()
+
         self._reset_parameters()
 
     def forward(self, x, labels=None):
-        x = x.transpose(0, 1) # * math.sqrt(self.n_dims)
-        # x = self.pos_encoder(x)
-        # x = self.global_layer_norm(x ) # R
+        x = x.transpose(0, 1) * math.sqrt(self.n_dims)
+        x = self.pos_encoder(x)
+        x = self.global_layer_norm(x)
         batch_size = x.size(1)
         # transformer_tgt = self.pos_encoder(transformer_tgt)
         # transformer_tgt = self.tgt_norm(transformer_tgt) # R
@@ -996,8 +999,11 @@ class MultiLayerTransformerDecoderHead(nn.Module):
             decoder_query = self.decoder_queries[i]
             tgt_norm = self.tgt_norms[i]
             # TODO: TGT norm test here with pos encoding
+
             transformer_tgt = decoder_query.unsqueeze(0).expand(batch_size, *decoder_query.size())
-            transformer_tgt = transformer_tgt.transpose(0, 1)  # * math.sqrt(self.n_dims)
+            transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_dims)
+            transformer_tgt = self.pos_encoder(transformer_tgt)
+            transformer_tgt = tgt_norm(transformer_tgt)
             transformer_tgt = decoder(transformer_tgt, x).transpose(0, 1)
 
             logit, loss = classifier(transformer_tgt, labels)
