@@ -606,8 +606,7 @@ def create_collage(width, height, images, filled_position=None):
     size = thumbnail_width, thumbnail_height
     new_im = Image.new('RGB', (width, height))
     ims = []
-    for p in images:
-        im = Image.open(p)
+    for im in images:
         im.thumbnail(size)
         ims.append(im)
     i = 0
