@@ -2,6 +2,10 @@ from pprint import pprint
 from typing import Optional, List
 
 import torch
+try:
+    from ....utils import PositionalEncoding, TransformerDecoder, TransformerDecoderLayer
+except:
+    from facebook_hateful_memes_detector.utils import PositionalEncoding, TransformerDecoder, TransformerDecoderLayer
 from torch import nn
 from torchvision.models import resnet50
 import torchvision.transforms as T
@@ -9,13 +13,14 @@ from PIL import Image
 import requests
 import numpy as np
 import random
+import math
 
 
 class DETRTransferBase(nn.Module):
     def __init__(self, model_name,  device, im_size=360):
         super().__init__()
         self.to_tensor = T.Compose([
-            T.Resize(im_size),
+            T.Resize((im_size, im_size)),
             T.ToTensor(),
             T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
@@ -337,6 +342,7 @@ class DETR(DETRTransferBase):
                     pred_boxes, pred_logits = outputs_coord, outputs_class
                     return {'pred_logits': pred_logits, 'pred_boxes': pred_boxes, "pred_masks": pred_masks if pred_masks is not None else None}
             elif "demo" in self.model_name:
+                assert self.enable_plot
                 x = self.backbone.conv1(samples.tensors)
                 x = self.backbone.bn1(x)
                 x = self.backbone.relu(x)
@@ -375,10 +381,10 @@ class DETR(DETRTransferBase):
                     outputs_coord = self.model.bbox_embed(hs[-1]).sigmoid()
                     return {'pred_logits': outputs_class, 'pred_boxes': outputs_coord}
             # enc_repr = enc_repr.flatten(2, 3).transpose(1, 2)
-            return h
+            return torch.cat((h.squeeze(), enc_repr.squeeze().flatten(1, 2).transpose(0, 1)), dim=0)
 
 
-def get_detr_model(device: torch.device, model_name: str, decoder_layer=-2, im_size=360):
+def get_detr_model(device: torch.device, model_name: str, decoder_layer=-2, im_size=360, cache_allow_writes=True):
     from ....utils import persistent_caching_fn, clean_memory
     model = DETR(device, model_name, decoder_layer, im_size, False)
 
@@ -386,13 +392,49 @@ def get_detr_model(device: torch.device, model_name: str, decoder_layer=-2, im_s
         clean_memory()
         return model(image)
 
-    detr_fn = persistent_caching_fn(detr_fn, model_name)
+    detr_fn = persistent_caching_fn(detr_fn, model_name, cache_allow_writes=cache_allow_writes)
 
     def batch_detr_fn(images: List):
         results = [detr_fn(i) for i in images]
-        return torch.cat(results, 0)
+        return torch.stack(results, 0)
 
     return {"model": model, "detr_fn": detr_fn, "batch_detr_fn": batch_detr_fn}
+
+
+class DETRShim(nn.Module):
+    def __init__(self, tokens, n_decoders, dropout, attention_drop_proba, device: torch.device, im_size=480):
+        super().__init__()
+        n_dims = 256
+        self.n_dims = 256
+        self.detr = get_detr_model(device, 'detr_resnet101', -1, im_size)["batch_detr_fn"]
+        self.detr_panoptic = get_detr_model(device, 'detr_resnet101_panoptic', -1, im_size)["batch_detr_fn"]
+        self.global_layer_norm = nn.LayerNorm(n_dims)
+        self.pos_encoder = PositionalEncoding(n_dims)
+        self.tgt_norm = nn.LayerNorm(n_dims)
+        decoder_query = nn.Parameter(torch.randn((tokens, n_dims)) * (1 / n_dims),
+                                     requires_grad=True)
+
+        self.register_parameter("decoder_query", decoder_query)
+        decoder_layer = TransformerDecoderLayer(n_dims, 8, n_dims * 4, dropout, "relu")
+        decoder = TransformerDecoder(decoder_layer, n_decoders, nn.LayerNorm(n_dims), 0.0, attention_drop_proba)
+        self.decoder = decoder
+
+    def forward(self, images: List):
+        detr_out = self.detr(images)
+        detrp_out = self.detr_panoptic(images)
+        x = torch.cat((detr_out, detrp_out), 1)
+        x = x.transpose(0, 1) * math.sqrt(self.n_dims)
+        x = self.pos_encoder(x)
+        x = self.global_layer_norm(x)
+
+        batch_size = x.size(1)
+
+        transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
+        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+        transformer_tgt = self.pos_encoder(transformer_tgt)
+        transformer_tgt = self.tgt_norm(transformer_tgt)
+        out = self.decoder(transformer_tgt, x).transpose(0, 1)
+        return out
 
 
 if __name__ == "__main__":
@@ -408,9 +450,9 @@ if __name__ == "__main__":
     # "http://images.cocodataset.org/val2017/000000281759.jpg"
     # 'http://images.cocodataset.org/val2017/000000039769.jpg'
 
-    detr = DETR(torch.device('cpu'), 'detr_resnet50', decoder_layer=-1, im_size=360)
-    detrd = DETR(torch.device('cpu'), 'detr_demo', decoder_layer=-1, im_size=360)
-    detrp = DETR(torch.device('cpu'), 'detr_resnet50_panoptic', decoder_layer=-1, im_size=360)
+    detr = DETR(torch.device('cpu'), 'detr_resnet50', decoder_layer=-1, im_size=480)
+    detrd = DETR(torch.device('cpu'), 'detr_demo', decoder_layer=-1, im_size=480)
+    detrp = DETR(torch.device('cpu'), 'detr_resnet50_panoptic', decoder_layer=-1, im_size=480)
     import time
     s = time.time()
     detr.show(image_url)
@@ -429,14 +471,14 @@ if __name__ == "__main__":
 
     # Measure time without display
     detr.enable_plot = False
-    detrd.enable_plot = False
+    detrp.enable_plot = False
     s = time.time()
     h = detr(image_url)
     e = time.time() - s
     print("Time Taken For DETR Calc = %.4f" % e, h.size())
 
     s = time.time()
-    h = detrd(image_url)
+    h = detrp(image_url)
     e = time.time() - s
     print("Time Taken For DETR Demo Calc = %.4f" % e, h.size())
 

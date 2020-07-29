@@ -16,7 +16,7 @@ from torchnlp.word_to_vector import BPEmb
 from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global, \
     get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_vgg_face_model, PositionalEncoding2D, Transpose, init_fc, dict2sampleList, \
     clean_memory
-from ..external.detr import get_detr_model
+from ..external.detr import get_detr_model, DETRShim
 import transformers
 import os
 import random
@@ -51,6 +51,8 @@ class TransformerImageModel(AlbertClassifer):
         #
         self.head_masks = head_masks
         assert self.head_masks <= 12
+        attention_drop_proba = kwargs.pop("attention_drop_proba", 0.0)
+        self.attention_drop_proba = attention_drop_proba
 
         names, im_models, im_shapes, im_procs = [], [], [], []
         for imo in image_models:
@@ -114,10 +116,10 @@ class TransformerImageModel(AlbertClassifer):
                 im_proc = lin
             elif "detr" in imo:
                 im_shape = (256, 100)
-                im_model = LambdaLayer(get_detr_model(get_device(), imo)["batch_detr_fn"], module_gaussian, module_dropout)
+                im_model = DETRShim(128, 1, module_dropout, attention_drop_proba, device=get_device())
                 lin = nn.Linear(im_shape[0], embedding_dims)
                 init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
+                lin = nn.Sequential(GaussianNoise(module_gaussian), lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
                 im_proc = lin
             elif "vgg_face" in imo:
                 im_shape = (256, 1)
@@ -136,7 +138,7 @@ class TransformerImageModel(AlbertClassifer):
         self.im_models = nn.ModuleDict(dict(zip(names, im_models)))
         self.post_procs = nn.ModuleDict(dict(zip(names, im_procs)))
         self.im_shapes = dict(zip(names, im_shapes))
-        self.require_raw_img = {"detr_demo", 'detr_resnet50', 'detr_resnet50_panoptic', 'detr_resnet101', 'detr_resnet101_panoptic',
+        self.require_raw_img = {"detr", "detr_demo", 'detr_resnet50', 'detr_resnet50_panoptic', 'detr_resnet101', 'detr_resnet101_panoptic',
                                 "ssd", "faster_rcnn", "lxmert_faster_rcnn", "caption_features"}
 
         self.total_tokens = n_tokens_in + 1 + ((8 * int(self.n_tokens_in/(8*1.375) + 1)) if self.need_fasttext else 0) + sum([s[-1] for s in im_shapes])
@@ -155,7 +157,6 @@ class TransformerImageModel(AlbertClassifer):
             if featurizer == "transformer":
                 n_encoders = kwargs.pop("n_encoders", n_layers)
                 n_decoders = kwargs.pop("n_decoders", n_layers)
-                self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
                 self.featurizer = TransformerFeaturizer(self.total_tokens, embedding_dims, n_tokens_out,
                                                         classifier_dims,
                                                         internal_dims, n_encoders, n_decoders,
@@ -250,13 +251,13 @@ class TransformerImageModel(AlbertClassifer):
         tfmr_output = encoder(embeddings, attention_mask, head_mask=head_mask)
         hidden_state = tfmr_output[0]
         output = (hidden_state,) + tfmr_output[1:]
-        return hidden_state
+        return (hidden_state,)
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         labels = torch.tensor(sampleList.label).to(get_device())
         # sample_weights = torch.tensor(sampleList.sample_weight, dtype=float).to(get_device())
-        vectors = self.get_vectors(sampleList)
+        vectors = self.get_vectors(sampleList)[-1]
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
 
