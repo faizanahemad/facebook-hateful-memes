@@ -430,7 +430,7 @@ class DETRShim(nn.Module):
         batch_size = x.size(1)
 
         transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_internal_dims)
+        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_dims)
         transformer_tgt = self.pos_encoder(transformer_tgt)
         transformer_tgt = self.tgt_norm(transformer_tgt)
         out = self.decoder(transformer_tgt, x).transpose(0, 1)
