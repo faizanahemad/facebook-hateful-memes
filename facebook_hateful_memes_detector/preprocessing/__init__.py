@@ -616,7 +616,6 @@ def create_collage(width, height, images, filled_position=None):
         for row in range(rows):
             if filled_position is not None and (row, col) not in filled_position:
                 continue
-            print(i, x, y)
             new_im.paste(ims[i], (x, y))
             i += 1
             y += thumbnail_height
