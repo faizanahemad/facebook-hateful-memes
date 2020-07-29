@@ -1239,9 +1239,9 @@ class BertLMPredictionHead(nn.Module):
 
 
 class MLMPretraining(nn.Module):
-    def __init__(self, model, tokenizer, hidden_size, vocab_size, hidden_act, n_tokens_in):
+    def __init__(self, model, tokenizer, hidden_size, hidden_act, n_tokens_in):
         self.model = model
-        self.mlm = BertLMPredictionHead(hidden_size, vocab_size, hidden_act, n_tokens_in)
+        self.mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, hidden_act, n_tokens_in)
         self.tokenizer = tokenizer
         self.n_tokens_in = n_tokens_in
 
