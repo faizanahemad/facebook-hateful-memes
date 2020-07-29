@@ -1236,3 +1236,26 @@ class BertLMPredictionHead(nn.Module):
         hidden_states = self.decoder(hidden_states)
         masked_lm_loss = self.loss_fct(hidden_states.view(-1, self.vocab_size), input_ids.view(-1))
         return masked_lm_loss
+
+
+class MLMPretraining(nn.Module):
+    def __init__(self, model, tokenizer, hidden_size, vocab_size, hidden_act, n_tokens_in):
+        self.model = model
+        self.mlm = BertLMPredictionHead(hidden_size, vocab_size, hidden_act, n_tokens_in)
+        self.tokenizer = tokenizer
+        self.n_tokens_in = n_tokens_in
+
+    def tokenise(self, texts: List[str]):
+        tokenizer = self.tokenizer
+        n_tokens_in = self.text_tokens
+        converted_texts = tokenizer.batch_encode_plus(texts, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
+        input_ids, attention_mask = converted_texts["input_ids"], converted_texts["attention_mask"]
+        return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())
+
+    def forward(self, samples: SampleList):
+        _, pooled, seq, _ = self.model(samples)
+        input_ids, _ = self.tokenise(samples.text)
+        loss = self.mlm(seq, input_ids)
+        return [loss]
+
+

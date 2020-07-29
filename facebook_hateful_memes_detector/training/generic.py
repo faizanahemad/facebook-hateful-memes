@@ -404,7 +404,8 @@ def train(model, optimizer, scheduler_init_fn,
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
                     if use_autocast:
                         with autocast():
-                            _, _, _, loss = model(batch)
+                            res = model(batch)
+                            loss = res[-1]
                             loss = loss / accumulation_steps
                             loss_monitor += loss.cpu().detach().item()
                         scaler.scale(loss).backward()
@@ -413,7 +414,8 @@ def train(model, optimizer, scheduler_init_fn,
                             scaler.update()
 
                     else:
-                        _, _, _, loss = model(batch)
+                        res = model(batch)
+                        loss = res[-1]
                         loss = loss / accumulation_steps
                         loss_monitor += loss.cpu().detach().item()
                         loss.backward()
