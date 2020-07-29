@@ -644,7 +644,7 @@ class TextImageDataset(Dataset):
                 self.images = cached_images
             elif cache_images:
                 self.images = {l: Image.open(l).convert('RGB') for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")}
-        self.labels = labels
+        self.labels = labels if labels is not None else ([0] * len(texts))
         self.text_transform = text_transform if text_transform is not None else identity
         self.image_transform = image_transform if image_transform is not None else identity
         self.use_images = use_images
