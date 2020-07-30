@@ -513,6 +513,7 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
                      test_text_transform=None, test_image_transform=None,
                      cache_images: bool = True, use_images: bool = True, dev: bool = False,
                      keep_original_text: bool = False, keep_original_image: bool = False,
+                     train_mixup_config=None, test_mixup_config=None,
                      keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     from functools import partial
     use_dev = dev
@@ -532,6 +533,7 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
                             train_torchvision_image_transform=train_torchvision_image_transform,
                             train_torchvision_pre_image_transform=train_torchvision_pre_image_transform,
+                            train_mixup_config=train_mixup_config, test_mixup_config=test_mixup_config,
                             test_torchvision_pre_image_transform=test_torchvision_pre_image_transform,
                             test_torchvision_image_transform=test_torchvision_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform))
