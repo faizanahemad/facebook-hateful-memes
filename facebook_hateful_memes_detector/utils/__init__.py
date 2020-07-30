@@ -1248,14 +1248,15 @@ class MLMPretraining(nn.Module):
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
-        n_tokens_in = self.text_tokens
+        n_tokens_in = self.n_tokens_in
         converted_texts = tokenizer.batch_encode_plus(texts, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
         input_ids, attention_mask = converted_texts["input_ids"], converted_texts["attention_mask"]
         return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())
 
     def forward(self, samples: SampleList):
         _, pooled, seq, _ = self.model(samples)
-        input_ids, _ = self.tokenise(samples.text)
+        text = samples["text"]
+        input_ids, _ = self.tokenise(text)
         loss = self.mlm(seq, input_ids)
         return [loss]
 
