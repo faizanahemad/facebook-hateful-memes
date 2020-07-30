@@ -148,8 +148,8 @@ class VilBertVisualBertModel(nn.Module):
             texts[k] = texts[k].to(get_device())
         return texts
 
-    def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
-        imgfs = [self.get_lxmert_details(im) for im in orig_image]
+    def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList, mixup: List[bool]):
+        imgfs = [self.get_lxmert_details(im, ignore_cache=ignore_cache) for im, ignore_cache in zip(orig_image, mixup)]
         samples = [Sample(dict(feats=pad_tensor(feats, 36),
                                boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
                                masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
@@ -204,10 +204,10 @@ class VilBertVisualBertModel(nn.Module):
             raise NotImplementedError
         return sample
 
-    def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList):
+    def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList, mixup: List[bool]):
         # Rank swap higher and lower ranked boxes+features
         # Copy one bbox to another and erase the 2nd one entirely
-        imgfs = [self.get_img_details(im) for im in orig_image]
+        imgfs = [self.get_img_details(im, ignore_cache=ignore_cache) for im, ignore_cache in zip(orig_image, mixup)]
         samples = [Sample(dict(image_feature_0=feat_list, image_info_0=info_list)) for feat_list, info_list in imgfs]
         samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_gaussian_noise, "vilbert_visual_bert") for s in samples]
         sl = SampleList(samples)
@@ -402,8 +402,8 @@ class VilBertVisualBertModel(nn.Module):
         out["loss"] = loss
         return out
 
-    def lxmert_forward(self, orig_image, textSampleList, labels):
-        lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
+    def lxmert_forward(self, orig_image, textSampleList, labels, mixup: List[bool]):
+        lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList, mixup)
         for k, v in lx_sl.items():
             if type(v) == torch.Tensor:
                 lx_sl[k] = v.to(get_device())
@@ -435,6 +435,7 @@ class VilBertVisualBertModel(nn.Module):
         texts = sampleList.text
         image = sampleList.image  # orig_image = sampleList.original_image
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
+        mixup = sampleList.mixup
 
         textSampleList = self.get_tokens(texts)
         textSampleList.id = sampleList.id
@@ -448,7 +449,7 @@ class VilBertVisualBertModel(nn.Module):
         loss_counts = 0
         logit = []
         if "vilbert" in self.model_name or "visual_bert" in self.model_name or "mmbt_region" in self.model_name:
-            sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
+            sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList, mixup)
             if "vilbert" in self.model_name:
                 out = self.vilbert_processor(sl, labels)
                 if self.featurizer_type != "pass":
@@ -496,7 +497,7 @@ class VilBertVisualBertModel(nn.Module):
             clean_memory()
 
         if "lxmert" in self.model_name:
-            out = self.lxmert_forward(image, textSampleList, labels)
+            out = self.lxmert_forward(image, textSampleList, labels, mixup)
             seq, pool = out["seq"], out["pooled"]
             seq = self.model_regularizers["lxmert"](seq) if "lxmert" in self.model_regularizers else seq
             pool = self.model_regularizers["lxmert"](pool) if "lxmert" in self.model_regularizers else pool

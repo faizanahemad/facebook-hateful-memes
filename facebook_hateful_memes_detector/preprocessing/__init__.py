@@ -668,11 +668,11 @@ class TextImageDataset(Dataset):
         return s
 
     def process_example(self, sample):
-        identifier, text, image, label, sample_weight = sample["id"], sample["text"], sample["image"], sample["label"], sample["sample_weight"]
+        identifier, text, image, label, sample_weight, mixup = sample["id"], sample["text"], sample["image"], sample["label"], sample["sample_weight"], sample["mixup"]
         # clean_text
         orig_text = text
         text = self.text_transform(text) # Give ID here to retrieve DAB examples
-        s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight})
+        s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight, "mixup": mixup})
         if image is not None:
             if self.keep_original_image:
                 s.original_image = image
@@ -704,10 +704,12 @@ class TextImageDataset(Dataset):
 
     def __getitem__(self, item):
         sample = self.item_getter(item)
+        sample.mixup = False
         if self.mixup_config is not None:
             proba = self.mixup_config.pop("proba", 1.0)
             if random.random() < proba:
                 sample = self.mixup(sample)
+                sample.mixup = True
 
         return self.process_example(sample)
 

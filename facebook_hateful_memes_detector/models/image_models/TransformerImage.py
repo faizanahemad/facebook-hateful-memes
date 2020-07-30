@@ -186,6 +186,7 @@ class TransformerImageModel(AlbertClassifer):
         sampleList = dict2sampleList(sampleList, device=get_device())
         img = sampleList.torchvision_image
         image = sampleList.image
+        mixup = sampleList.mixup
         input_ids, attention_mask = self.tokenise(sampleList.text)
         word_embeddings = self.model.embeddings(input_ids) # B, S, C
         image_vectors = list()
@@ -205,7 +206,9 @@ class TransformerImageModel(AlbertClassifer):
             word_embeddings = torch.cat([word_embeddings, fasttext_vectors], 1)
 
         for k, m in self.im_models.items():
-            im_repr = m(image if k in self.require_raw_img else img)
+            x = image if k in self.require_raw_img else img
+            kw = dict(ignore_cache=mixup) if k in self.require_raw_img else dict()
+            im_repr = m(x, **kw)
             im_repr = self.post_procs[k](im_repr)
             image_vectors.append(im_repr.to(get_device()))
             clean_memory()

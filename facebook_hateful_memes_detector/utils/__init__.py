@@ -1137,8 +1137,8 @@ class LambdaLayer(nn.Module):
         self.gaussian_noise = GaussianNoise(gaussian_noise)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
-        x = self.lambd(x)
+    def forward(self, x, *args, **kwargs):
+        x = self.lambd(x, *args, **kwargs)
         x = x.to(get_device())
         x = self.dropout(x)
         x = self.gaussian_noise(x)

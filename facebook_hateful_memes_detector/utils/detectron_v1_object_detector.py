@@ -1,3 +1,5 @@
+from typing import List, Callable
+
 import numpy as np
 
 import sys
@@ -25,7 +27,7 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cache_allow_writes=True, retries=5):
+def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cache_allow_writes=True, retries=5) -> Callable:
     cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
     try:
         cache_allow_writes = get_global("cache_allow_writes")
@@ -61,6 +63,10 @@ def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cac
             fnh = joblib.hashing.hash(name, 'sha1')
 
     def cfn(*args, **kwargs):
+        ignore_cache = kwargs.pop("ignore_cache", False)
+        if ignore_cache:
+            r = fn(*args, **kwargs)
+            return r
         hsh = fnh + joblib.hashing.hash(args, 'sha1')
         if len(kwargs) > 0:
             hsh = hsh + joblib.hashing.hash(kwargs, 'sha1')
@@ -511,8 +517,9 @@ def get_image_info_fn(enable_encoder_feats=False,
         imcm = ImageCaptionFeatures(get_img_details, device, enable_image_captions)
         get_encoder_feats = persistent_caching_fn(imcm, "get_encoder_feats")
 
-        def get_batch_encoder_feats(images):
-            img_feats = [get_encoder_feats(i).squeeze() for i in images]
+        def get_batch_encoder_feats(images, ignore_cache: List[bool] = None):
+            ignore_cache = ([False] * len(images)) if ignore_cache is None else ignore_cache
+            img_feats = [get_encoder_feats(i, ignore_cache=ic).squeeze() for i, ic in zip(images, ignore_cache)]
             clean_memory()
             return torch.stack(img_feats, 0).to(device)
 

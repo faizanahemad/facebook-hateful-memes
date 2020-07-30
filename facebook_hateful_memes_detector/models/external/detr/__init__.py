@@ -392,10 +392,11 @@ def get_detr_model(device: torch.device, model_name: str, decoder_layer=-2, im_s
         clean_memory()
         return model(image)
 
-    detr_fn = persistent_caching_fn(detr_fn, model_name, cache_allow_writes=cache_allow_writes)
+    detr_cache_fn = persistent_caching_fn(detr_fn, model_name, cache_allow_writes=cache_allow_writes)
 
-    def batch_detr_fn(images: List):
-        results = [detr_fn(i) for i in images]
+    def batch_detr_fn(images: List, ignore_cache: List[bool]=None):
+        ignore_cache = ([False] * len(images)) if ignore_cache is None else ignore_cache
+        results = [detr_cache_fn(i, ignore_cache=ic) for i, ic in zip(images, ignore_cache)]
         return torch.stack(results, 0)
 
     return {"model": model, "detr_fn": detr_fn, "batch_detr_fn": batch_detr_fn}
@@ -419,7 +420,8 @@ class DETRShim(nn.Module):
         decoder = TransformerDecoder(decoder_layer, n_decoders, nn.LayerNorm(n_dims), 0.0, attention_drop_proba)
         self.decoder = decoder
 
-    def forward(self, images: List):
+    def forward(self, images: List, ignore_cache: List[bool]=None):
+
         detr_out = self.detr(images)
         detrp_out = self.detr_panoptic(images)
         x = torch.cat((detr_out, detrp_out), 1)
