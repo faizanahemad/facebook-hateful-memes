@@ -10,8 +10,8 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, CNNHead, DecoderEnsemblingHead, MultiLayerTransformerDecoderHead
-from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
+from ..utils import in_notebook, CNNHead, DecoderEnsemblingHead, MultiLayerTransformerDecoderHead, my_collate
+from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
