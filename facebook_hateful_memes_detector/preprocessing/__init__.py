@@ -509,6 +509,7 @@ def get_image2torchvision_transforms():
 
 def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None, train_image_transform=None,
                      train_torchvision_image_transform=None, test_torchvision_image_transform=None,
+                     train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
                      test_text_transform=None, test_image_transform=None,
                      cache_images: bool = True, use_images: bool = True, dev: bool = False,
                      keep_original_text: bool = False, keep_original_image: bool = False,
@@ -530,6 +531,8 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
                             keep_processed_image=keep_processed_image, keep_torchvision_image=keep_torchvision_image,
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
                             train_torchvision_image_transform=train_torchvision_image_transform,
+                            train_torchvision_pre_image_transform=train_torchvision_pre_image_transform,
+                            test_torchvision_pre_image_transform=test_torchvision_pre_image_transform,
                             test_torchvision_image_transform=test_torchvision_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform))
     return rd

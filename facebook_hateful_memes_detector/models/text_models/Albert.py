@@ -29,7 +29,6 @@ class AlbertClassifer(Fasttext1DCNNModel):
                                               internal_dims, n_layers,
                                               featurizer, final_layer_builder,
                                               n_tokens_in, n_tokens_out, True, **kwargs)
-        assert n_tokens_in % n_tokens_out == 0
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
         self.need_fasttext = "fasttext_vector_config" in kwargs
         if "fasttext_vector_config" in kwargs:
