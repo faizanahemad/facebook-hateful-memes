@@ -17,17 +17,27 @@ import torchvision.transforms as transforms
 from PIL import Image
 from io import BytesIO
 from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, set_global, get_global
+from collections import defaultdict, Counter
+from time import time, sleep
+from random import random
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cache_allow_writes=True):
+def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cache_allow_writes=True, retries=5):
     cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
     try:
         cache_allow_writes = get_global("cache_allow_writes")
     except:
         pass
+
+    try:
+        cache_stats = get_global("cache_stats")
+    except:
+        cache_stats = defaultdict(Counter)
+        set_global("cache_stats", cache_stats)
+
     from diskcache import Cache, Index
     import joblib
     if check_cache_exists:
@@ -54,14 +64,33 @@ def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cac
         hsh = fnh + joblib.hashing.hash(args, 'sha1')
         if len(kwargs) > 0:
             hsh = hsh + joblib.hashing.hash(kwargs, 'sha1')
-        if hsh in cache:
+
+        cache_stats[name]["tried"] += 1
+
+        for retry in range(retries):
             try:
-                return cache[hsh]
-            except KeyError as ke:
-                pass
+                if hsh in cache:
+                    try:
+                        r = cache[hsh]
+                        cache_stats[name]["hit"] += 1
+                        return r
+                    except KeyError as ke:
+                        break
+            except Exception as e:
+                sleep(0.01 + random() * 0.1)
+            cache_stats[name]["retries"] += 1
+
         r = fn(*args, **kwargs)
         if cache_allow_writes:
-            cache[hsh] = r
+            for retry in range(retries):
+                try:
+                    cache[hsh] = r
+                    cache_stats[name]["writes"] += 1
+                    break
+                except:
+                    sleep(0.01 + random() * 0.1)
+                cache_stats[name]["write_retries"] += 1
+        cache_stats[name]["miss"] += 1
         return r
 
     return cfn
