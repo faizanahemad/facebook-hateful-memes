@@ -11,8 +11,8 @@ import re
 import contractions
 import pandas as pd
 
-from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise
-from ..preprocessing import my_collate, make_weights_for_balanced_classes, TextImageDataset
+from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise, my_collate
+from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset

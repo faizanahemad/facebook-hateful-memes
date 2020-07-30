@@ -25,10 +25,19 @@ from torch.nn import TransformerDecoder, TransformerDecoderLayer, TransformerEnc
 from torch.nn.init import xavier_uniform_
 import math
 import copy
+from sklearn.metrics import accuracy_score
 DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 RE_D = re.compile('\d')
+
+def my_collate(batch):
+    # Create and return sample list with proper name and type set
+    sample_list = SampleList(batch)
+    sample_list.dataset_name = ""
+    sample_list.dataset_type = ""
+    clean_memory()
+    return sample_list
 
 
 def has_digits(string):
@@ -1234,8 +1243,15 @@ class BertLMPredictionHead(nn.Module):
         hidden_states = hidden_states[:, :self.n_tokens_in]
         hidden_states = self.transform(hidden_states)
         hidden_states = self.decoder(hidden_states)
-        masked_lm_loss = self.loss_fct(hidden_states.view(-1, self.vocab_size), input_ids.view(-1))
-        return masked_lm_loss
+        hidden_states = hidden_states.view(-1, self.vocab_size)
+        input_ids = input_ids.view(-1)
+        masked_lm_loss = 0.0
+        if self.training:
+            masked_lm_loss = self.loss_fct(hidden_states, input_ids)
+
+        predictions = hidden_states.max(dim=1).indices
+        accuracy = accuracy_score(input_ids, predictions)
+        return masked_lm_loss, accuracy, input_ids, predictions
 
 
 class MLMPretraining(nn.Module):
@@ -1257,7 +1273,41 @@ class MLMPretraining(nn.Module):
         _, pooled, seq, _ = self.model(samples)
         text = samples["text"]
         input_ids, _ = self.tokenise(text)
-        loss = self.mlm(seq, input_ids)
-        return [loss]
+        loss, accuracy, input_ids, predictions = self.mlm(seq, input_ids)
+        return [accuracy, input_ids, predictions, loss]
+
+    def test_accuracy(self, batch_size, dataset, collate_fn=my_collate):
+        from tqdm.auto import tqdm as tqdm, trange
+        test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
+                                 shuffle=False, num_workers=get_global("dataloader_workers"), pin_memory=True)
+
+        use_autocast = False
+        try:
+            from torch.cuda.amp import autocast
+            use_autocast = "cuda" in str(get_device())
+        except:
+            pass
+        use_autocast = use_autocast and get_global("use_autocast")
+        labels_list = []
+        predictions_list = []
+        with torch.no_grad():
+            clean_memory()
+            with tqdm(test_loader, "Test MLM Accuracy") as test_loader:
+                for batch in test_loader:
+                    if use_autocast:
+                        with autocast():
+                            accuracy, labels, predictions, loss = self(batch)
+                    else:
+                        accuracy, labels, predictions, loss = self(batch)
+
+                    labels_list.extend(labels.tolist() if type(labels) == torch.Tensor else labels)
+                    predictions = predictions.cpu().detach()
+                    predictions_list.extend(predictions.tolist())
+            accuracy = accuracy_score(labels_list, predictions_list)
+            print("MLM Accuracy = %.4f" % accuracy)
+            clean_memory()
+            return accuracy
+
+
 
 

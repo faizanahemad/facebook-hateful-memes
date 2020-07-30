@@ -507,15 +507,6 @@ def get_image2torchvision_transforms():
     return preprocess
 
 
-def my_collate(batch):
-    # Create and return sample list with proper name and type set
-    sample_list = SampleList(batch)
-    sample_list.dataset_name = ""
-    sample_list.dataset_type = ""
-    clean_memory()
-    return sample_list
-
-
 def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None, train_image_transform=None,
                      train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                      test_text_transform=None, test_image_transform=None,
