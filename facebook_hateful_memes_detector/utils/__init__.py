@@ -1250,7 +1250,7 @@ class BertLMPredictionHead(nn.Module):
             masked_lm_loss = self.loss_fct(hidden_states, input_ids)
 
         predictions = hidden_states.max(dim=1).indices
-        accuracy = accuracy_score(input_ids, predictions)
+        accuracy = accuracy_score(input_ids.cpu(), predictions.cpu())
         return masked_lm_loss, accuracy, input_ids, predictions
 
 
@@ -1261,6 +1261,8 @@ class MLMPretraining(nn.Module):
         self.mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, hidden_act, n_tokens_in)
         self.tokenizer = tokenizer
         self.n_tokens_in = n_tokens_in
+        self.accuracy_hist = []
+        self.loss_hist = []
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
@@ -1274,7 +1276,30 @@ class MLMPretraining(nn.Module):
         text = samples["text"]
         input_ids, _ = self.tokenise(text)
         loss, accuracy, input_ids, predictions = self.mlm(seq, input_ids)
+        self.accuracy_hist.append(accuracy)
+        self.loss_hist.append(float(loss.cpu().detach()))
         return [accuracy, input_ids, predictions, loss]
+
+    def plot_loss_acc_hist(self):
+        import matplotlib.pyplot as plt
+        t = list(range(1, len(self.loss_hist) + 1))
+        fig, ax1 = plt.subplots(figsize=(8, 8))
+
+        color = 'tab:red'
+        ax1.set_xlabel('Training Batches')
+        ax1.set_ylabel('Loss', color=color)
+        ax1.plot(t, self.loss_hist, color=color)
+        ax1.tick_params(axis='y', labelcolor=color)
+
+        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+        color = 'tab:blue'
+        ax2.set_ylabel('Accuracy', color=color)  # we already handled the x-label with ax1
+        ax2.plot(t, self.accuracy_hist, color=color)
+        ax2.tick_params(axis='y', labelcolor=color)
+
+        fig.tight_layout()  # otherwise the right y-label is slightly clipped
+        plt.show()
 
     def test_accuracy(self, batch_size, dataset, collate_fn=my_collate):
         from tqdm.auto import tqdm as tqdm, trange
