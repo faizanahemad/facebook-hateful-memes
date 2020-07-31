@@ -291,6 +291,8 @@ class TextAugment:
 
         def part_select(text, sp=0.6, lp=0.9):
             splits = text.split()
+            if len(splits) <= 2:
+                return text
             actual_len = random.randint(int(len(splits) * sp), int(len(splits) * lp))
             if actual_len == len(splits):
                 return text
