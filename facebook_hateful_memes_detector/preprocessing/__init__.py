@@ -289,6 +289,13 @@ class TextAugment:
         import nlpaug.augmenter.word as naw
         from gensim.similarities.index import AnnoyIndexer
 
+        def gibberish_insert(text):
+            words = text.split()
+            idx = random.randint(0, len(words) - 1)
+            sw = "".join(random.sample("abcdefghijklmnopqrstuvwxyz.!", random.randint(3, 15)))
+            words = words[:idx] + [sw] + words[idx:]
+            return " ".join(words)
+
         def part_select(text, sp=0.6, lp=0.9):
             splits = text.split()
             if len(splits) <= 2:
@@ -349,7 +356,7 @@ class TextAugment:
         self.augs = ["keyboard", "ocr", "char_insert", "char_substitute", "char_swap", "char_delete",
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
                      "stopword_insert", "word_join", "word_cutout",
-                     "fasttext", "glove_twitter", "glove_wiki", "word2vec",
+                     "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
                      "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
@@ -359,6 +366,8 @@ class TextAugment:
                 continue
             if k == "part_select":
                 self.augments["part_select"] = part_select
+            if k == "gibberish_insert":
+                self.augments["gibberish_insert"] = gibberish_insert
             if k == "stopword_insert":
                 self.augments["stopword_insert"] = stopword_insert
             if k == "word_join":
