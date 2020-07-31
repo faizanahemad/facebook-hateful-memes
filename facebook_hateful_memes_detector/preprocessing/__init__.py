@@ -289,29 +289,20 @@ class TextAugment:
         import nlpaug.augmenter.word as naw
         from gensim.similarities.index import AnnoyIndexer
 
-        def one_third_cut(text):
-            words = text.split()
-            if len(words) <= 3:
+        def part_select(text, sp=0.6, lp=0.9):
+            splits = text.split()
+            actual_len = random.randint(int(len(splits) * sp), int(len(splits) * lp))
+            if actual_len == len(splits):
                 return text
-            part = random.randint(0, 1)
-            psize = int(len(words)/3)
-            if bool(part):
-                words = words[psize:]
-            else:
-                words = words[:len(words) - psize]
-            return " ".join(words)
+            left_length = len(splits) - actual_len
+            start = random.randint(0, left_length)
+            return " ".join(splits[start:start + actual_len])
+
+        def one_third_cut(text):
+            return part_select(text, 0.666, 0.666)
 
         def half_cut(text):
-            words = text.split()
-            if len(words) <= 2:
-                return text
-            part = random.randint(0, 1)
-            psize = int(len(words)/2)
-            if bool(part):
-                words = words[psize:]
-            else:
-                words = words[:len(words) - psize]
-            return " ".join(words)
+            return part_select(text, 0.5, 0.5)
 
         def sentence_shuffle(text):
             sents = sent_tokenize(text)
@@ -357,13 +348,15 @@ class TextAugment:
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
                      "stopword_insert", "word_join", "word_cutout",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec",
-                     "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut"]
+                     "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
         for k, v in choice_probas.items():
             if v <= 0:
                 continue
+            if k == "part_select":
+                self.augments["part_select"] = part_select
             if k == "stopword_insert":
                 self.augments["stopword_insert"] = stopword_insert
             if k == "word_join":
