@@ -775,7 +775,10 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         folds = random_split_for_augmented_dataset(data, random_state=random_state)
 
     for training_fold_dataset, training_test_dataset, testing_fold_dataset in folds:
-        model, optimizer = model_fn()
+        if callable(model_fn):
+            model, optimizer = model_fn()
+        else:
+            model, optimizer = model_fn
         if show_model_stats:
             model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
             params = sum([np.prod(p.size()) for p in model_parameters])
