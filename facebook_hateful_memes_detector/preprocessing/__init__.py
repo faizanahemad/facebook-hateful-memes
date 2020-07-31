@@ -480,11 +480,12 @@ class TextAugment:
                     text = self.__fasttext_replace__(self.augments[aug], self.indexes[aug], text)
                 elif aug in ["glove_twitter", "glove_wiki", "word2vec"]:
                     text = self.__w2v_replace__(self.augments[aug], self.indexes[aug], text)
-                elif aug in ["sentence_shuffle", "text_rotate", "stopword_insert", "word_join", "word_cutout",
-                             "half_cut", "one_third_cut"]:
+                elif callable(self.augments[aug]):
                     text = self.augments[aug](text)
-                else:
+                elif hasattr(self.augments[aug], "augment"):
                     text = self.augments[aug].augment(text)
+                else:
+                    raise ValueError()
             except Exception as e:
                 print("Exception for: ", aug, "|", text, "|", augs, e)
         return text
