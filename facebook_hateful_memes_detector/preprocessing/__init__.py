@@ -814,4 +814,4 @@ class NegativeSamplingDataset(torch.utils.data.Dataset):
             return [self.dataset[item], self.dataset[random.randint(0, len(self.dataset) - 1)], 0]
 
     def __len__(self):
-        return len(self.dataset) * (self.negative_proportion + 1)
+        return len(self.dataset)
