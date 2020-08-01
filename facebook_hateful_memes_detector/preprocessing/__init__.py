@@ -803,14 +803,15 @@ class ZipDatasets(torch.utils.data.Dataset):
 
 class NegativeSamplingDataset(torch.utils.data.Dataset):
     def __init__(self, dataset: torch.utils.data.Dataset, negative_proportion=5):
-        x = torch.utils.data.ConcatDataset([dataset] * (negative_proportion + 1))
-        y = [dataset] + [torch.utils.data.Subset(d, torch.randperm(len(d))) for d in [dataset] * negative_proportion]
-        y = torch.utils.data.ConcatDataset(y)
-        labels = [1] * len(dataset) + [0] * (len(dataset) * negative_proportion)
-        self.datasets = ZipDatasets([x, y, labels])
+        self.pos_proba = 1 / (negative_proportion + 1)
+        self.negative_proportion = negative_proportion
+        self.dataset = dataset
 
     def __getitem__(self, item):
-        return self.datasets[item]
+        if random.random() <= self.pos_proba:
+            return [self.dataset[item], self.dataset[item], 1]
+        else:
+            return [self.dataset[item], self.dataset[random.randint(0, len(self.dataset) - 1)], 0]
 
     def __len__(self):
-        return len(self.datasets)
+        return len(self.dataset) * (self.negative_proportion + 1)
