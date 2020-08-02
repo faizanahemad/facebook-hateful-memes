@@ -335,6 +335,15 @@ class TextAugment:
             words = words[:idx] + [sw] + words[idx:]
             return " ".join(words)
 
+        punctuation_list = ".,\"'?!@$"
+
+        def punctuation_insert(text):
+            words = text.split()
+            idx = random.randint(0, len(words) - 1)
+            sw = random.sample(punctuation_list, 1)[0]
+            words = words[:idx] + ([sw] * random.randint(1, 3)) + words[idx:]
+            return " ".join(words)
+
         def word_join(text):
             words = text.split()
             if len(words) <= 2:
@@ -357,7 +366,7 @@ class TextAugment:
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
                      "stopword_insert", "word_join", "word_cutout",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
-                     "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select"]
+                     "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select", "punctuation_insert"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
@@ -366,6 +375,8 @@ class TextAugment:
                 continue
             if k == "part_select":
                 self.augments["part_select"] = part_select
+            if k == "punctuation_insert":
+                self.augments["punctuation_insert"] = punctuation_insert
             if k == "gibberish_insert":
                 self.augments["gibberish_insert"] = gibberish_insert
             if k == "stopword_insert":
