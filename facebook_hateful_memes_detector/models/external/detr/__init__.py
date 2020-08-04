@@ -3,7 +3,7 @@ from typing import Optional, List
 
 import torch
 try:
-    from ....utils import PositionalEncoding, TransformerDecoder, TransformerDecoderLayer
+    from ....utils import PositionalEncoding, TransformerDecoder, TransformerDecoderLayer, init_fc, GaussianNoise
 except:
     from facebook_hateful_memes_detector.utils import PositionalEncoding, TransformerDecoder, TransformerDecoderLayer
 from torch import nn
@@ -403,16 +403,19 @@ def get_detr_model(device: torch.device, model_name: str, decoder_layer=-2, im_s
 
 
 class DETRShim(nn.Module):
-    def __init__(self, tokens, n_decoders, dropout, attention_drop_proba, device: torch.device, im_size=480):
+    def __init__(self, tokens, n_decoders, dropout, attention_drop_proba, device: torch.device, im_size=480, out_dims=768):
         super().__init__()
+        assert tokens % 2 == 0
+
         n_dims = 256
         self.n_dims = 256
         self.detr = get_detr_model(device, 'detr_resnet101', -1, im_size)["batch_detr_fn"]
         self.detr_panoptic = get_detr_model(device, 'detr_resnet101_panoptic', -1, im_size)["batch_detr_fn"]
+
         self.global_layer_norm = nn.LayerNorm(n_dims)
         self.pos_encoder = PositionalEncoding(n_dims)
         self.tgt_norm = nn.LayerNorm(n_dims)
-        decoder_query = nn.Parameter(torch.randn((tokens, n_dims)) * (1 / n_dims),
+        decoder_query = nn.Parameter(torch.randn((tokens // 2, n_dims)) * (1 / n_dims),
                                      requires_grad=True)
 
         self.register_parameter("decoder_query", decoder_query)
@@ -420,23 +423,47 @@ class DETRShim(nn.Module):
         decoder = TransformerDecoder(decoder_layer, n_decoders, nn.LayerNorm(n_dims), 0.0, attention_drop_proba)
         self.decoder = decoder
 
-    def forward(self, images: List, ignore_cache: List[bool]=None):
+        self.global_layer_norm_pan = nn.LayerNorm(n_dims)
+        self.tgt_norm_pan = nn.LayerNorm(n_dims)
+        decoder_query_pan = nn.Parameter(torch.randn((tokens // 2, n_dims)) * (1 / n_dims),
+                                     requires_grad=True)
+        self.register_parameter("decoder_query_pan", decoder_query_pan)
+        decoder_layer_pan = TransformerDecoderLayer(n_dims, 8, n_dims * 4, dropout, "relu")
+        decoder_pan = TransformerDecoder(decoder_layer_pan, n_decoders, nn.LayerNorm(n_dims), 0.0, attention_drop_proba)
+        self.decoder_pan = decoder_pan
 
-        detr_out = self.detr(images)
-        detrp_out = self.detr_panoptic(images)
-        x = torch.cat((detr_out, detrp_out), 1)
+        lin = nn.Linear(256, out_dims)
+        init_fc(lin, "linear")
+        self.lin = lin
+
+    def forward(self, images: List, ignore_cache: List[bool] = None):
+
+        detr_out = self.detr(images, ignore_cache)
+        detrp_out = self.detr_panoptic(images, ignore_cache)
+
+        x = detr_out
         x = x.transpose(0, 1) * math.sqrt(self.n_dims)
         x = self.pos_encoder(x)
         x = self.global_layer_norm(x)
-
         batch_size = x.size(1)
-
-        transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size())
-        transformer_tgt = transformer_tgt.transpose(0, 1) * math.sqrt(self.n_dims)
+        transformer_tgt = self.decoder_query.unsqueeze(0).expand(batch_size, *self.decoder_query.size()).transpose(0, 1) * math.sqrt(self.n_dims)
+        transformer_tgt = transformer_tgt
         transformer_tgt = self.pos_encoder(transformer_tgt)
         transformer_tgt = self.tgt_norm(transformer_tgt)
-        out = self.decoder(transformer_tgt, x).transpose(0, 1)
-        return out
+        detr_out = self.decoder(transformer_tgt, x).transpose(0, 1)
+
+        x = detrp_out
+        x = x.transpose(0, 1) * math.sqrt(self.n_dims)
+        x = self.pos_encoder(x)
+        x = self.global_layer_norm_pan(x)
+        transformer_tgt = self.decoder_query_pan.unsqueeze(0).expand(batch_size, *self.decoder_query_pan.size()).transpose(0, 1) * math.sqrt(self.n_dims)
+        transformer_tgt = transformer_tgt
+        transformer_tgt = self.pos_encoder(transformer_tgt)
+        transformer_tgt = self.tgt_norm_pan(transformer_tgt)
+        detrp_out = self.decoder_pan(transformer_tgt, x).transpose(0, 1)
+
+        x = torch.cat((detr_out, detrp_out), 1)
+        return self.lin(x)
 
 
 if __name__ == "__main__":

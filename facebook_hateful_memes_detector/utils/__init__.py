@@ -388,8 +388,8 @@ class ExpandContract(nn.Module):
 
 def get_torchvision_classification_models(net, large_rf=True, finetune=False):
     from torchvision import models
-    sm = 10
-    lg = 20
+    sm = 7
+    lg = 14
     if "resnet18" in net:
         im_model = models.resnet18(pretrained=True)
         shape = (512, sm, sm) if large_rf else (256, lg, lg)
