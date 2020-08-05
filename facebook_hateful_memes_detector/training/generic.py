@@ -329,7 +329,7 @@ def train(model, optimizer, scheduler_init_fn,
     else:
         from tqdm import tqdm as tqdm, trange
 
-    if hasattr(dataset, "labels") and type(dataset.labels) == list and len(dataset.labels) > 0:
+    if hasattr(dataset, "labels") and isinstance(dataset.labels, (list, tuple, torch.Tensor)) and len(dataset.labels) > 0:
         training_fold_labels = torch.tensor(dataset.labels)
 
     assert hasattr(dataset, "labels") or sampling_policy is None
