@@ -21,17 +21,7 @@ import transformers
 import os
 import random
 import math
-
-
-class OutputCombiner(nn.Module):
-    def __init__(self, combine_dim, *args):
-        super().__init__()
-        self.combine_dim = combine_dim
-        self.combine_modules = nn.ModuleList(list(args))
-
-    def forward(self, x):
-        out = [m(x) for m in self.combine_modules]
-        return torch.cat(out, self.combine_dim)
+from ...utils.ImageModelShims import ImageCaptioningShim, ImageModelShim
 
 
 class TransformerImageModel(AlbertClassifer):
@@ -57,77 +47,33 @@ class TransformerImageModel(AlbertClassifer):
         names, im_models, im_shapes, im_procs = [], [], [], []
         for imo in image_models:
             if type(imo) == dict:
-                module_gaussian = imo["gaussian_noise"] if "gaussian_noise" in imo else 0.0
-                module_dropout = imo["dropout"] if "dropout" in imo else 0.0
-                large_rf = imo["large_rf"] if "large_rf" in imo else True
-                imo = imo["model"]
+                module_gaussian = imo.pop("gaussian_noise", 0.0)
+                module_dropout = imo.pop("dropout", 0.0)
+                imod = imo["model"]
+                stored_model = imo.pop("stored_model", None)
             elif type(imo) == str:
                 module_gaussian = 0.0
                 module_dropout = 0.0
-                large_rf = True
+                imod = imo
+                stored_model = None
             else:
                 raise NotImplementedError()
 
-            if "torchvision" in imo:
-                net = "_".join(imo.split("_")[1:])
-                im_model, im_shape = get_torchvision_classification_models(net, large_rf)
-                im_model = LambdaLayer(im_model, module_gaussian, module_dropout)
-                self.torchvision_pool = nn.AdaptiveAvgPool2d(1)
-
-                shape_global = im_shape[1]
-
-                def global_view(x):
-                    xv = self.torchvision_pool(x).expand(-1, -1, shape_global, -1)
-                    return torch.cat([x, xv], 3)
-
-                im_shape = list(im_shape)
-                im_shape[-1] = im_shape[-1] + 1
-
-                lin = nn.Linear(im_shape[0], embedding_dims)
-                init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(nn.Dropout(dropout), lin, nn.LeakyReLU())
-                im_proc1 = nn.Sequential(LambdaLayer(global_view), Transpose(1, 2), Transpose(2, 3), lin,
-                                         LambdaLayer(lambda v: v * math.sqrt(embedding_dims)),
-                                         PositionalEncoding2D(embedding_dims, dropout, channels_first=False), Transpose(0, 1))
-
-                self.max_pool = nn.AdaptiveMaxPool2d(5)
-
-                def global_view_large(x):
-                    x = self.max_pool(x)
-                    xv = self.torchvision_pool(x).expand(-1, -1, 5, -1)
-                    return torch.cat([x, xv], 3)
-
-                lin = nn.Linear(im_shape[0], embedding_dims)
-                init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(nn.Dropout(dropout), lin, nn.LeakyReLU())
-                im_proc2 = nn.Sequential(LambdaLayer(global_view_large), Transpose(1, 2), Transpose(2, 3), lin,
-                                         LambdaLayer(lambda v: v * math.sqrt(embedding_dims)),
-                                         PositionalEncoding2D(embedding_dims, dropout, channels_first=False), Transpose(0, 1))
-
-                im_proc = nn.Sequential(OutputCombiner(1, im_proc1, im_proc2), nn.LayerNorm(embedding_dims))
-                im_shape = (embedding_dims, (im_shape[-1] * im_shape[-2]) + (5*6))
+            if "torchvision" in imod:
+                im_model = ImageModelShim(resnet="_".join(imod.split("_")[1:]), dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model)
+                im_shape = (768, 64)
+                im_proc = nn.Identity()
 
             elif imo == "caption_features":
-                im_model = LambdaLayer(get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"], module_gaussian, module_dropout)
-                im_shape = (512, 100)
-                lin = nn.Linear(im_shape[0], embedding_dims)
-                init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
-                im_proc = lin
+                im_model = ImageCaptioningShim(module_dropout, stored_model=stored_model)
+                im_shape = (768, 100)
+                im_proc = nn.Identity()
+
             elif "detr" in imo:
-                im_shape = (256, 100)
-                im_model = DETRShim(128, 1, module_dropout, attention_drop_proba, device=get_device())
-                lin = nn.Linear(im_shape[0], embedding_dims)
-                init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(GaussianNoise(module_gaussian), lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
-                im_proc = lin
-            elif "vgg_face" in imo:
-                im_shape = (256, 1)
-                im_model = LambdaLayer(get_vgg_face_model(), module_gaussian, module_dropout)
-                lin = nn.Linear(im_shape[0], embedding_dims)
-                init_fc(lin, "leaky_relu")
-                lin = nn.Sequential(lin, nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
-                im_proc = lin
+                im_shape = (256, 128)
+                im_model = DETRShim(128, 1, module_dropout, attention_drop_proba, device=get_device(), out_dims=embedding_dims)
+                im_proc = nn.Identity()
+
             else:
                 raise NotImplementedError(imo)
 

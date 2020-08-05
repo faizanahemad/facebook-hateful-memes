@@ -1355,11 +1355,13 @@ class SimCLR(MLMPretraining):
         x2 = self.final_layer(self.model(self.aug_2(x)).squeeze())
 
         if len(x1.size()) == 3:
+            x1 = x1 / x1.norm(dim=2, keepdim=True).clamp(min=1e-5)
+            x2 = x2 / x2.norm(dim=2, keepdim=True).clamp(min=1e-5)
             x1 = torch.cat((x1[:, :16].flatten(1, 2).squeeze(), x1[:, 16:].mean(1)), 1)
             x2 = torch.cat((x2[:, :16].flatten(1, 2).squeeze(), x2[:, 16:].mean(1)), 1)
-
-        x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
-        x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        else:
+            x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
+            x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
         x2 = x2.transpose(0, 1)
         x = x1.mm(x2)  # batch x batch
         labels = torch.arange(0, len(x), device=x.device, dtype=torch.long)

@@ -82,7 +82,6 @@ def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_m
                                                                                       prediction_iters=prediction_iters,
                                                                                       evaluate_in_train_mode=evaluate_in_train_mode,)
     probas = pd.DataFrame({id_name: ids, "proba": proba_list, "label": predictions_list})
-    sf = probas
     if "submission_format" in datadict and type(datadict["submission_format"]) == pd.DataFrame and len(datadict["submission_format"]) == len(probas):
         submission_format = datadict["submission_format"]
         assert set(submission_format.id) == set(probas.id)
@@ -91,6 +90,8 @@ def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_m
         sf["label"] = sf["l"]
         cols = ["id", "proba", "label"] if give_probas else ["id", "label"]
         sf = sf[cols]
+    else:
+        sf = pd.DataFrame({id_name: ids, "proba": all_probas_list, "label": predictions_list})
     return sf, model
 
 

@@ -72,7 +72,7 @@ class ImageModelShim(nn.Module):
                                            gaussian_noise, dropout, self.attention_drop_proba)
         self.featurizer = featurizer
 
-        if "stored_model" in kwargs:
+        if "stored_model" in kwargs and kwargs["stored_model"] is not None:
             load_stored_params(self, kwargs["stored_model"])
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
@@ -97,10 +97,10 @@ class ImageCaptioningShim(nn.Module):
         init_fc(lin0, "leaky_relu")
         lin = nn.Linear(512, 768)
         init_fc(lin, "linear")
-        self.reshape = nn.Sequential(nn.Dropout(dropout), lin0, nn.LeakyReLU(),nn.Dropout(dropout), lin, nn.LayerNorm(768))
+        self.reshape = nn.Sequential(nn.Dropout(dropout), lin0, nn.LeakyReLU(), nn.Dropout(dropout), lin, nn.LayerNorm(768))
         self.captioner = get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"]
 
-        if "stored_model" in kwargs:
+        if "stored_model" in kwargs and kwargs["stored_model"] is not None:
             load_stored_params(self, kwargs["stored_model"])
 
     def forward(self, images: List, ignore_cache: List[bool] = None):

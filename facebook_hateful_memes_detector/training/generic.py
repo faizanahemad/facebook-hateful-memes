@@ -603,6 +603,7 @@ def generate_predictions(model, batch_size, dataset,
                     labels_list.extend(labels.tolist() if type(labels) == torch.Tensor else labels)
                     logits = logits.cpu().detach()
                     logits_list.extend(logits.tolist())
+            logits_list = torch.softmax(torch.tensor(logits_list), dim=1).tolist()
             logits_all.append(logits_list)
         logits = torch.tensor(logits_all).mean(0)
         top_class = logits.max(dim=1).indices

@@ -24,6 +24,10 @@ from ..external.lxrt import get_lxrt_model
 import GPUtil
 import random
 
+# TODO: From each of Vilbert/visual_bert/LXMERT/MMBT take only 32 first tokens and then 32 tokens after 96 = 64 x 4 = 256 tokens/seq
+# For These 256 Seq Do a Self-attn encoder layers before decoder-ensemble head. Pretrain the self-attn decoder keeping backbones const.
+# Pretrain all backbones before doing combo backbones.
+
 
 def identity(x): return x
 
