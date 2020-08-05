@@ -1351,8 +1351,12 @@ class SimCLR(MLMPretraining):
         self.loss = nn.CrossEntropyLoss()
 
     def forward(self, x):
-        x1 = self.final_layer(self.model(self.aug_1(x)).squeeze())
-        x2 = self.final_layer(self.model(self.aug_2(x)).squeeze())
+        x1 = self.aug_1(x)
+        x2 = self.aug_2(x)
+        x1 = self.model(x1).squeeze()
+        x2 = self.model(x2).squeeze()
+        x1 = self.final_layer(x1)
+        x2 = self.final_layer(x2)
 
         if len(x1.size()) == 3:
             x1 = x1 / x1.norm(dim=2, keepdim=True).clamp(min=1e-5)
