@@ -1,5 +1,5 @@
 import abc
-from typing import List, Tuple, Dict, Set, Union
+from typing import List, Tuple, Dict, Set, Union, Callable
 import numpy as np
 import torch.nn as nn
 import torch
@@ -1255,12 +1255,14 @@ class BertLMPredictionHead(nn.Module):
 
 
 class MLMPretraining(nn.Module):
-    def __init__(self, model, tokenizer, hidden_size, hidden_act, n_tokens_in):
+    def __init__(self, model, tokenizer, hidden_size, hidden_act, n_tokens_in, use_as_super=False):
         super().__init__()
         self.model = model
-        self.mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, hidden_act, n_tokens_in)
-        self.tokenizer = tokenizer
-        self.n_tokens_in = n_tokens_in
+
+        if not use_as_super:
+            self.mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, hidden_act, n_tokens_in)
+            self.tokenizer = tokenizer
+            self.n_tokens_in = n_tokens_in
         self.accuracy_hist = []
         self.loss_hist = []
 
@@ -1332,6 +1334,42 @@ class MLMPretraining(nn.Module):
             print("MLM Accuracy = %.4f" % accuracy)
             clean_memory()
             return accuracy
+
+
+class SimCLR(MLMPretraining):
+    def __init__(self, model, in_dims, hidden_size, dropout, augment_1: Callable, augment_2: Callable):
+        super(SimCLR, self).__init__(model, None, hidden_size, "leaky_relu", 0, True)
+        self.aug_1 = augment_1
+        self.aug_2 = augment_2
+        self.model = model
+
+        lin0 = nn.Linear(in_dims, hidden_size)
+        init_fc(lin0, "leaky_relu")
+        lin = nn.Linear(hidden_size, hidden_size)
+        init_fc(lin, "linear")
+        self.final_layer = nn.Sequential(nn.Dropout(dropout), lin0, nn.LeakyReLU(), lin)
+        self.loss = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+        x1 = self.final_layer(self.model(self.aug_1(x)).squeeze())
+        x2 = self.final_layer(self.model(self.aug_2(x)).squeeze())
+
+        if len(x1.size()) == 3:
+            x1 = torch.cat((x1[:, :16].flatten(1, 2).squeeze(), x1[:, 16:].mean(1)), 1)
+            x2 = torch.cat((x2[:, :16].flatten(1, 2).squeeze(), x2[:, 16:].mean(1)), 1)
+
+        x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        x2 = x2.transpose(0, 1)
+        x = x1.mm(x2)  # batch x batch
+        labels = torch.arange(0, len(x), device=x.device, dtype=torch.long)
+        loss = self.loss(x, labels)
+        x = torch.softmax(x, 1)
+        predictions = x.max(dim=1).indices
+        accuracy = accuracy_score(labels.cpu(), predictions.cpu())
+        return [accuracy, labels, predictions, loss]
+
+
 
 
 
