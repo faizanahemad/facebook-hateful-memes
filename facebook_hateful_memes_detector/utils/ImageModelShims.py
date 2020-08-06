@@ -43,6 +43,7 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 
 class ImageModelShim(nn.Module):
     def __init__(self, resnet="resnet50_ssl", n_tokens=64, out_channels=768, n_encoders=2, dropout=0.0, gaussian_noise=0.0, **kwargs):
+        super().__init__()
         resnet_model, resnet_shape = get_torchvision_classification_models(resnet, True)
         vgg_shape = (256, 1)
         vgg_model = get_vgg_face_model()
@@ -93,6 +94,7 @@ class ImageModelShim(nn.Module):
 
 class ImageCaptioningShim(nn.Module):
     def __init__(self, dropout=0.0, **kwargs):
+        super().__init__()
         lin0 = nn.Linear(512, 512)
         init_fc(lin0, "leaky_relu")
         lin = nn.Linear(512, 768)
