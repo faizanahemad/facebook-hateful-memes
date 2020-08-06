@@ -39,7 +39,10 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
         assert type(vl) == dict or type(vl) == float or type(vl) == int or type(vl) == bool
 
         if type(vl) == dict:
-            assert hasattr(model, kl)
+            try:
+                assert hasattr(model, kl)
+            except AssertionError as e:
+                print("key = ", kl, "\n", "model = ", model)
             cfs, names = group_wise_lr(getattr(model, kl), vl, path=path + kl + ".")
             confs.extend(cfs)
             names = list(map(lambda n: kl + "." + n, names))
@@ -72,7 +75,10 @@ def group_wise_finetune(model, group_finetune_conf: Dict, path=""):
         assert type(vl) == dict or type(vl) == float or type(vl) == int or type(vl) == bool
 
         if type(vl) == dict:
-            assert hasattr(model, kl)
+            try:
+                assert hasattr(model, kl)
+            except AssertionError as e:
+                print("key = ",kl, "\n", "model = ", model)
             names = group_wise_finetune(getattr(model, kl), vl, path=path + kl + ".")
             names = list(map(lambda n: kl + "." + n, names))
             nms.extend(names)
