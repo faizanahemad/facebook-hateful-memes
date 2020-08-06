@@ -777,7 +777,8 @@ class ImageFolderDataset(torch.utils.data.Dataset):
 
         self.image_transform = image_transform
         if cache_images:
-            self.images = {i: Image.open(l).convert('RGB') for i, l in enumerate(self.images)} if cache_images else dict()
+            from tqdm.auto import tqdm as tqdm, trange
+            self.images = {i: Image.open(l).convert('RGB') for i, l in tqdm(list(enumerate(self.images)))} if cache_images else dict()
         self.cache_images = cache_images
 
     def __getitem__(self, item):
