@@ -42,7 +42,7 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 #
 
 class ImageModelShim(nn.Module):
-    def __init__(self, resnet="resnet50_ssl", n_tokens=64, out_channels=768, n_encoders=2, dropout=0.0, gaussian_noise=0.0, **kwargs):
+    def __init__(self, resnet="resnet50_ssl", n_tokens=64, out_channels=768, n_encoders=2, dropout=0.0, gaussian_noise=0.0, attention_drop_proba=0.0, **kwargs):
         super().__init__()
         resnet_model, resnet_shape = get_torchvision_classification_models(resnet, True)
         vgg_shape = (256, 1)
@@ -70,7 +70,7 @@ class ImageModelShim(nn.Module):
         featurizer = TransformerFeaturizer(n_tokens_in, out_channels, n_tokens,
                                            out_channels,
                                            out_channels, n_encoders, 0,
-                                           gaussian_noise, dropout, self.attention_drop_proba)
+                                           gaussian_noise, dropout, attention_drop_proba)
         self.featurizer = featurizer
 
         if "stored_model" in kwargs and kwargs["stored_model"] is not None:
