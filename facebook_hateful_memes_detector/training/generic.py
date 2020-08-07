@@ -517,8 +517,12 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                             clean_memory()
                     else:
                         repr = model(augmented_batch)
+                        if isinstance(repr, (list, tuple)):
+                            repr = repr[-1]
                         with torch.no_grad():
                             orig_repr = orig_model(batch)
+                            if isinstance(orig_repr, (list, tuple)):
+                                orig_repr = orig_repr[-1]
                         loss = ((repr - orig_repr) ** 2).mean()
                         loss = loss / accumulation_steps
                         loss.backward()
