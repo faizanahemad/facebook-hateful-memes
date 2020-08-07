@@ -256,6 +256,8 @@ class GaussianNoise(nn.Module):
 
     def __init__(self, sigma=0.1):
         super().__init__()
+        if type(sigma) == GaussianNoise:
+            sigma = sigma.sigma
         self.sigma = sigma
         self.noise = torch.tensor(0.0, device=get_device())
 
