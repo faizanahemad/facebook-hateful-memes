@@ -85,9 +85,9 @@ class ImageModelShim(nn.Module):
         resnet_global = self.global_pool(resnet_in).squeeze().unsqueeze(1)
         vgg_face_in = self.vgg_reshape(self.vgg_model(images).squeeze().unsqueeze(1))
 
-        resnet_in = resnet_in.flatten(1, 2).transpose(1, 2)  # B,C,H,W -> B,HxW,C
-        resnet_lrf = resnet_lrf.flatten(1, 2).transpose(1, 2)
-        resnet_quadrant = resnet_quadrant.flatten(1, 2).transpose(1, 2)
+        resnet_in = resnet_in.flatten(2, 3).transpose(1, 2)  # B,C,H,W -> B,HxW,C
+        resnet_lrf = resnet_lrf.flatten(2, 3).transpose(1, 2)
+        resnet_quadrant = resnet_quadrant.flatten(2, 3).transpose(1, 2)
 
         resnet_out = self.resnet_reshape(torch.cat([resnet_global, resnet_in, resnet_lrf, resnet_quadrant], 1))
 
