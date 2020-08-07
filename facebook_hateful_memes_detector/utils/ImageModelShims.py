@@ -66,7 +66,9 @@ class ImageModelShim(nn.Module):
         half_dim = 3
         self.half_pool = nn.AdaptiveMaxPool2d(half_dim)
 
-        n_tokens_in = (resnet_shape[1] * resnet_shape[1]) + 1 + (half_dim * half_dim) + 1
+        self.quadrant_pool = nn.AdaptiveAvgPool2d(2)
+
+        n_tokens_in = (resnet_shape[1] * resnet_shape[1]) + 1 + (half_dim * half_dim) + 1 + (2 * 2)
         featurizer = TransformerFeaturizer(n_tokens_in, out_channels, n_tokens,
                                            out_channels,
                                            out_channels, n_encoders, 0,
@@ -79,13 +81,15 @@ class ImageModelShim(nn.Module):
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         resnet_in = self.resnet_model(images)
         resnet_lrf = self.half_pool(resnet_in)
+        resnet_quadrant = self.quadrant_pool(resnet_in)
         resnet_global = self.global_pool(resnet_in).squeeze().unsqueeze(1)
         vgg_face_in = self.vgg_reshape(self.vgg_model(images).squeeze().unsqueeze(1))
 
         resnet_in = resnet_in.flatten(1, 2).transpose(1, 2)  # B,C,H,W -> B,HxW,C
         resnet_lrf = resnet_lrf.flatten(1, 2).transpose(1, 2)
+        resnet_quadrant = resnet_quadrant.flatten(1, 2).transpose(1, 2)
 
-        resnet_out = self.resnet_reshape(torch.cat([resnet_in, resnet_lrf, resnet_global], 1))
+        resnet_out = self.resnet_reshape(torch.cat([resnet_global, resnet_in, resnet_lrf, resnet_quadrant], 1))
 
         seq = torch.cat([resnet_out, vgg_face_in], 1)
         seq = self.featurizer(seq)
