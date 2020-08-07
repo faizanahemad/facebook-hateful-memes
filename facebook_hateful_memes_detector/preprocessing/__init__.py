@@ -289,6 +289,60 @@ class TextAugment:
         import nlpaug.augmenter.word as naw
         from gensim.similarities.index import AnnoyIndexer
 
+        def first_part_select(text, sp=0.7, lp=0.9):
+            splits = text.split()
+            if len(splits) <= 2:
+                return text
+            actual_len = random.randint(int(len(splits) * sp), int(len(splits) * lp))
+            if actual_len == len(splits):
+                return text
+            start = 0
+            return " ".join(splits[start:start + actual_len])
+
+        def change_number(text: str, mod_proba=0.5):
+            try:
+                text = int(text)
+
+            except:
+                try:
+                    t = float(text)
+                    pre, post = text.split(".")
+                    lp = len(post)
+                    if lp == 0:
+                        t = int(pre)
+                    text = t
+                except:
+                    pass
+
+            if isinstance(text, (float, int)):
+                if random.random() <= mod_proba:
+                    rand = random.random()
+                    if rand <= 0.15:
+                        text = str("%.2f" % (random.randint(0, 100) + random.random()))
+                    elif rand <= 0.35:
+                        if isinstance(text, int):
+                            text = text + random.randint(-20, 20)
+                        else:
+                            post = ("%.2f" % random.random()).split(".")[1]
+                            text = pre + "." + post
+                    elif rand <= 0.5:
+                        if isinstance(text, int):
+                            text = text + random.randint(-9, 9)
+                        else:
+                            post = post[:-1] + str(random.randint(0, 9))
+                            text = pre + "." + post
+                    else:
+                        if isinstance(text, int):
+                            text = text + random.sample([-1, 1], 1)[0]
+                        else:
+                            post = post[:-1] + str(random.sample([int(post[-1]) + 1, int(post[-1]) - 1], 1)[0])
+                            text = pre + "." + post
+            return str(text)
+
+        def number_modify(text):
+            splits = list(map(change_number, text.split()))
+            return " ".join(splits)
+
         def gibberish_insert(text):
             words = text.split()
             idx = random.randint(0, len(words) - 1)
@@ -364,7 +418,7 @@ class TextAugment:
 
         self.augs = ["keyboard", "ocr", "char_insert", "char_substitute", "char_swap", "char_delete",
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
-                     "stopword_insert", "word_join", "word_cutout",
+                     "stopword_insert", "word_join", "word_cutout", "first_part_select", "number_modify",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
                      "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select", "punctuation_insert"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
@@ -373,6 +427,10 @@ class TextAugment:
         for k, v in choice_probas.items():
             if v <= 0:
                 continue
+            if k == "number_modify":
+                self.augments["number_modify"] = number_modify
+            if k == "first_part_select":
+                self.augments["first_part_select"] = first_part_select
             if k == "part_select":
                 self.augments["part_select"] = part_select
             if k == "punctuation_insert":
