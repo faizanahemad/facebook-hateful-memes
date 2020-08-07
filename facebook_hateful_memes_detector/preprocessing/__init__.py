@@ -585,7 +585,7 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
                      train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                      train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
                      test_text_transform=None, test_image_transform=None,
-                     cache_images: bool = True, use_images: bool = True, dev: bool = False,
+                     cache_images: bool = True, use_images: bool = True, dev: bool = False, test_dev: bool = True,
                      keep_original_text: bool = False, keep_original_image: bool = False,
                      train_mixup_config=None, test_mixup_config=None,
                      keep_processed_image: bool = False, keep_torchvision_image: bool = False):
@@ -593,8 +593,14 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
     use_dev = dev
     joiner = lambda img: os.path.join(image_dir, img) if img is not None and type(img) == str and img != "nan" else None
     train = pd.read_csv(train_file)
+    train = train.sample(frac=1.0, replace=False)
     test = pd.read_csv(test_file)
-    dev = train.sample(frac=0.1)
+    if test_dev:
+        sp = int(0.1 * len(train))
+        dev = train[:sp]
+        train = train[sp:]
+    else:
+        dev = train.sample(frac=0.1)
 
     dev["img"] = list(map(joiner, dev.img))
     train["img"] = list(map(joiner, train.img))
