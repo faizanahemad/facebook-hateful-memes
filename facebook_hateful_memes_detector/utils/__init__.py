@@ -1,4 +1,5 @@
 import abc
+import operator
 from typing import List, Tuple, Dict, Set, Union, Callable
 import numpy as np
 import torch.nn as nn
@@ -1355,8 +1356,17 @@ class SimCLR(MLMPretraining):
     def forward(self, x):
         x1 = self.aug_1(x)
         x2 = self.aug_2(x)
-        x1 = self.model(x1).squeeze()
-        x2 = self.model(x2).squeeze()
+        x1 = self.model(x1)
+        x2 = self.model(x2)
+
+        if isinstance(x1, (list, tuple)):
+            x1 = [(len(x.size()), x) for x in x1 if isinstance(x, torch.Tensor)]
+            x2 = [(len(x.size()), x) for x in x2 if isinstance(x, torch.Tensor)]
+            x1 = list(sorted(x1, key=operator.itemgetter(0), reverse=True))[0][1]
+            x2 = list(sorted(x2, key=operator.itemgetter(0), reverse=True))[0][1]
+            print("Sizes = ",x1.size(), x2.size())
+        x1 = x1.squeeze()
+        x2 = x2.squeeze()
         x1 = self.final_layer(x1)
         x2 = self.final_layer(x2)
 
