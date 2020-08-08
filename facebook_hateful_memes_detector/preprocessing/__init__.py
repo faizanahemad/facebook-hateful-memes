@@ -23,6 +23,8 @@ from mmf.common.sample import Sample, SampleList
 from mmf.common.batch_collator import BatchCollator
 import torchvision
 import random
+import imgaug.augmenters as iaa
+
 def identity(x): return x
 
 
@@ -239,16 +241,6 @@ class ImageAugment:
             except Exception as e:
                 print("Exception for: ", aug, "|", "|", augs, e)
         return image
-
-
-transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(90), DefinedRotation(15), HalfSwap(), QuadrantCut(),
-                                                       DefinedAffine(0, scale=(0.6, 0.6)), DefinedAffine(0, translate=(0.25, 0.25)),
-                                                       transforms.Compose(
-                                                           [transforms.Resize(480),
-                                                            transforms.CenterCrop(400)]), transforms.Grayscale(num_output_channels=3),
-                                                       transforms.RandomHorizontalFlip(p=1.0), transforms.RandomVerticalFlip(p=1.0), identity,
-                                                       ])
-
 
 
 def clean_text(text):
@@ -588,6 +580,65 @@ def get_image2torchvision_transforms():
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    return preprocess
+
+
+def get_transforms_for_bbox_methods():
+    transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(90), DefinedRotation(15), HalfSwap(), QuadrantCut(),
+                                                           DefinedAffine(0, scale=(0.6, 0.6)), DefinedAffine(0, translate=(0.25, 0.25)),
+                                                           transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
+                                                           transforms.Compose(
+                                                               [transforms.Resize(480),
+                                                                transforms.CenterCrop(400)]), transforms.Grayscale(num_output_channels=3),
+                                                           transforms.RandomHorizontalFlip(p=1.0), transforms.RandomVerticalFlip(p=1.0), identity,
+                                                           ])
+    return transforms_for_bbox_methods
+
+
+def get_image_transforms(mode="easy"):
+    p = 0.1
+    param1 = 0.05
+    rotation = 15
+    cutout_max_count = 2
+    cutout_size = 0.1
+    coarse_drop_max = 0.02
+    element_wise_add = 10
+    if mode == "hard":
+        p = 0.25
+        param1 = 0.1
+        rotation = 30
+        cutout_max_count = 5
+        cutout_size = 0.2
+        coarse_drop_max = 0.1
+        element_wise_add = 40
+
+    preprocess = transforms.Compose([
+        transforms.RandomGrayscale(p=p),
+        transforms.RandomHorizontalFlip(p=p),
+        transforms.RandomPerspective(distortion_scale=0.25, p=p),
+        transforms.ColorJitter(brightness=param1, contrast=param1, saturation=param1, hue=param1),
+        transforms.RandomChoice([
+            iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True),
+            iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5),
+            iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5),
+        ]),
+        transforms.RandomChoice([
+            iaa.GaussianBlur(sigma=(0.25, 1.0)),
+            transforms.RandomRotation(rotation),
+            transforms.RandomVerticalFlip(p=1.0),
+            QuadrantCut(),
+            DefinedRotation(90),
+            transforms.RandomAffine(
+                0,
+                translate=(0.25, 0.25),
+                scale=(0.6, 1.4),
+                shear=None,
+            ),
+            transforms.RandomResizedCrop(480, scale=(0.6, 1.2)),  # Zoom in
+            transforms.RandomResizedCrop(640, scale=(0.8, 1.0)),  # Zoom in
+            transforms.RandomResizedCrop(360, scale=(0.6, 0.8)),
+        ]),
     ])
     return preprocess
 

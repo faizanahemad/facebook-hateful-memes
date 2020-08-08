@@ -1355,6 +1355,7 @@ class SimCLR(MLMPretraining):
         init_fc(lin, "linear")
         self.final_layer = nn.Sequential(nn.Dropout(dropout), lin0, nn.LeakyReLU(), lin)
         self.loss = nn.CrossEntropyLoss()
+        # TODO: Add temperature parameter
 
     def forward(self, x):
         ats = time.time()
