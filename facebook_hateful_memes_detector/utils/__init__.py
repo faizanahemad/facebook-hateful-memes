@@ -1391,8 +1391,67 @@ def merge_sample_lists(*samples):
     return nsl
 
 
+def run_simclr(smclr, dataset, lr_strategy_pre, lr_strategy_post,
+               pre_lr, post_lr, pre_batch_size, post_batch_size,
+               pre_epochs, full_epochs, collate_fn):
+    from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup
+    scheduler_init_fn = get_cosine_schedule_with_warmup()
+    acc_head = np.nan
+    if pre_epochs > 0:
+        epochs = pre_epochs
+        optimizer_class = torch.optim.AdamW
+        optimizer_params = dict(lr=pre_lr,
+                                betas=(0.9, 0.98),
+                                eps=1e-08,
+                                weight_decay=1e-2)
 
+        _ = group_wise_finetune(smclr, lr_strategy_pre)
+        params_conf, _ = group_wise_lr(smclr, lr_strategy_pre)
+        optimizer = optimizer_class(params_conf, **optimizer_params)
+        train_losses, learning_rates = train(smclr,
+                                             optimizer,
+                                             scheduler_init_fn,
+                                             pre_batch_size,
+                                             epochs,
+                                             dataset,
+                                             model_call_back=None,
+                                             accumulation_steps=1,
+                                             plot=True,
+                                             collate_fn=collate_fn,
+                                             sampling_policy=None,
+                                             class_weights=None)
 
+        smclr.plot_loss_acc_hist()
+        acc_head = smclr.test_accuracy(pre_batch_size, dataset, collate_fn=collate_fn)
 
+    ##
+
+    epochs = full_epochs
+    optimizer_class = torch.optim.AdamW
+    optimizer_params = dict(lr=post_lr,
+                            betas=(0.9, 0.98),
+                            eps=1e-08,
+                            weight_decay=1e-3)
+
+    _ = group_wise_finetune(smclr, lr_strategy_post)
+    params_conf, _ = group_wise_lr(smclr, lr_strategy_post)
+    optimizer = optimizer_class(params_conf, **optimizer_params)
+    train_losses, learning_rates = train(smclr,
+                                         optimizer,
+                                         scheduler_init_fn,
+                                         post_batch_size,
+                                         epochs,
+                                         dataset,
+                                         model_call_back=None,
+                                         accumulation_steps=1,
+                                         plot=True,
+                                         collate_fn=collate_fn,
+                                         sampling_policy=None,
+                                         class_weights=None)
+
+    smclr.plot_loss_acc_hist()
+    acc = smclr.test_accuracy(post_batch_size, dataset, collate_fn=collate_fn)
+    print("Head Acc = ", acc_head, "Full Acc = ", acc)
+    return smclr
 
 
