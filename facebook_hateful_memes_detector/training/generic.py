@@ -436,11 +436,11 @@ def train(model, optimizer, scheduler_init_fn,
                     vst, vsv = 0, 0
                     if "train" in validation_strategy:
                         vst, _ = validation_strategy["train"]["method"](*validation_strategy["train"]["args"], **validation_strategy["train"]["kwargs"])
-                        vst = vst[-1]
+                        vst = ["%.2f" % (v*100) for v in vst]
                     if "val" in validation_strategy:
                         vsv, _ = validation_strategy["val"]["method"](*validation_strategy["val"]["args"],  **validation_strategy["val"]["kwargs"])
-                        vsv = vsv[-1]
-                    print("Epoch = ", epoc + 1, "Train = %.6f" % vst, "Val = %.6f" % vsv,)
+                        vsv = ["%.2f" % (v*100) for v in vsv]
+                    print("Epoch = ", epoc + 1, "Train = %s" % vst, "Val = %s" % vsv,)
 
     if plot:
         plot_loss_lr(train_losses, learning_rates)
@@ -634,9 +634,11 @@ def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=F
     try:
         auc = roc_auc_score(labels_list, proba_list, multi_class="ovo", average="macro")
         map = average_precision_score(labels_list, proba_list)
+        show_acc_only = False
     except:
         auc = 0
         map = 0
+        show_acc_only = True
     # p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(labels_list, predictions_list, average="micro")
     prfs = precision_recall_fscore_support(labels_list, predictions_list, average=None, labels=[0, 1])
     acc = accuracy_score(labels_list, predictions_list)
@@ -651,6 +653,9 @@ def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=F
         display(grouped_results)
         show_df = pd.concat((few_preds.head(5).reset_index(), few_preds.sample(5).reset_index(), few_preds.tail(5).reset_index()), 1).drop(columns=["index"])
         display(show_df)
+    if show_acc_only:
+        print("Acc = %.4f" % validation_scores[1])
+    else:
         print("scores = ", dict(zip(["map", "acc", "auc"], ["%.4f" % v for v in validation_scores])))
     return validation_scores, prfs
 
