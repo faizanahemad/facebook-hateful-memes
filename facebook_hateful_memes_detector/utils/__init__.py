@@ -1378,6 +1378,20 @@ class SimCLR(MLMPretraining):
         return [accuracy, labels, predictions, loss]
 
 
+def merge_sample_lists(*samples):
+    nsl = SampleList()
+    fields = samples[0].keys()
+    for field in fields:
+        if isinstance(samples[0][field], torch.Tensor):
+            nsl[field] = torch.cat([s[field] for s in samples], 0)
+        elif isinstance(samples[0][field], SampleList):
+            nsl[field] = merge_sample_lists(*[s[field] for s in samples])
+        else:
+            nsl[field] = [f for s in samples for f in s[field]]
+    return nsl
+
+
+
 
 
 
