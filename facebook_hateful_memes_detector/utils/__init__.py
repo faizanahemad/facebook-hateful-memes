@@ -1,5 +1,6 @@
 import abc
 import operator
+import time
 from typing import List, Tuple, Dict, Set, Union, Callable
 import numpy as np
 import torch.nn as nn
@@ -1345,6 +1346,8 @@ class SimCLR(MLMPretraining):
         self.aug_1 = augment_1
         self.aug_2 = augment_2
         self.model = model
+        self.aug_time = []
+        self.model_time = []
 
         lin0 = nn.Linear(in_dims, hidden_size)
         init_fc(lin0, "leaky_relu")
@@ -1354,17 +1357,20 @@ class SimCLR(MLMPretraining):
         self.loss = nn.CrossEntropyLoss()
 
     def forward(self, x):
+        ats = time.time()
         x1 = self.aug_1(x)
         x2 = self.aug_2(x)
+        mts = time.time()
+        self.aug_time.append(mts - ats)
         x1 = self.model(x1)
         x2 = self.model(x2)
+        self.model_time.append(time.time() - mts)
 
         if isinstance(x1, (list, tuple)):
             x1 = [(len(x.size()), x) for x in x1 if isinstance(x, torch.Tensor)]
             x2 = [(len(x.size()), x) for x in x2 if isinstance(x, torch.Tensor)]
             x1 = list(sorted(x1, key=operator.itemgetter(0), reverse=True))[0][1]
             x2 = list(sorted(x2, key=operator.itemgetter(0), reverse=True))[0][1]
-            print("Sizes = ",x1.size(), x2.size())
         x1 = x1.squeeze()
         x2 = x2.squeeze()
         x1 = self.final_layer(x1)
@@ -1373,8 +1379,12 @@ class SimCLR(MLMPretraining):
         if len(x1.size()) == 3:
             x1 = x1 / x1.norm(dim=2, keepdim=True).clamp(min=1e-5)
             x2 = x2 / x2.norm(dim=2, keepdim=True).clamp(min=1e-5)
-            x1 = torch.cat((x1[:, :16].flatten(1, 2).squeeze(), x1[:, 16:].mean(1)), 1)
-            x2 = torch.cat((x2[:, :16].flatten(1, 2).squeeze(), x2[:, 16:].mean(1)), 1)
+            if x1.size(1) > 16:
+                x1 = torch.cat((x1[:, :16].flatten(1, 2).squeeze(), x1[:, 16:].mean(1)), 1)
+                x2 = torch.cat((x2[:, :16].flatten(1, 2).squeeze(), x2[:, 16:].mean(1)), 1)
+            else:
+                x1 = x1.flatten(1, 2).squeeze()
+                x2 = x2.flatten(1, 2).squeeze()
         else:
             x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
             x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
@@ -1386,6 +1396,27 @@ class SimCLR(MLMPretraining):
         predictions = x.max(dim=1).indices
         accuracy = accuracy_score(labels.cpu(), predictions.cpu())
         return [accuracy, labels, predictions, loss]
+
+    def plot_timing(self):
+        import matplotlib.pyplot as plt
+        t = list(range(1, len(self.aug_time) + 1))
+        fig, ax1 = plt.subplots(figsize=(8, 8))
+
+        color = 'tab:red'
+        ax1.set_xlabel('Augment time per batch Batches')
+        ax1.set_ylabel('Augment Time', color=color)
+        ax1.plot(t, self.aug_time, color=color)
+        ax1.tick_params(axis='y', labelcolor=color)
+
+        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+        color = 'tab:blue'
+        ax2.set_ylabel('Model Runtime per batch', color=color)  # we already handled the x-label with ax1
+        ax2.plot(t, self.model_time, color=color)
+        ax2.tick_params(axis='y', labelcolor=color)
+
+        fig.tight_layout()  # otherwise the right y-label is slightly clipped
+        plt.show()
 
 
 def merge_sample_lists(*samples):
@@ -1401,7 +1432,7 @@ def merge_sample_lists(*samples):
     return nsl
 
 
-def run_simclr(smclr, dataset, lr_strategy_pre, lr_strategy_post,
+def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_post,
                pre_lr, post_lr, pre_batch_size, post_batch_size,
                pre_epochs, full_epochs, collate_fn):
     from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup
@@ -1423,7 +1454,7 @@ def run_simclr(smclr, dataset, lr_strategy_pre, lr_strategy_post,
                                              scheduler_init_fn,
                                              pre_batch_size,
                                              epochs,
-                                             dataset,
+                                             pre_dataset,
                                              model_call_back=None,
                                              accumulation_steps=1,
                                              plot=True,
@@ -1432,7 +1463,7 @@ def run_simclr(smclr, dataset, lr_strategy_pre, lr_strategy_post,
                                              class_weights=None)
 
         smclr.plot_loss_acc_hist()
-        acc_head = smclr.test_accuracy(pre_batch_size, dataset, collate_fn=collate_fn)
+        acc_head = smclr.test_accuracy(pre_batch_size, pre_dataset, collate_fn=collate_fn)
 
     ##
 
@@ -1451,7 +1482,7 @@ def run_simclr(smclr, dataset, lr_strategy_pre, lr_strategy_post,
                                          scheduler_init_fn,
                                          post_batch_size,
                                          epochs,
-                                         dataset,
+                                         post_dataset,
                                          model_call_back=None,
                                          accumulation_steps=1,
                                          plot=True,
@@ -1460,7 +1491,7 @@ def run_simclr(smclr, dataset, lr_strategy_pre, lr_strategy_post,
                                          class_weights=None)
 
     smclr.plot_loss_acc_hist()
-    acc = smclr.test_accuracy(post_batch_size, dataset, collate_fn=collate_fn)
+    acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
     print("Head Acc = ", acc_head, "Full Acc = ", acc)
     return smclr
 

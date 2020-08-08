@@ -97,14 +97,17 @@ class ImageModelShim(nn.Module):
 
 
 class ImageCaptioningShim(nn.Module):
-    def __init__(self, dropout=0.0, **kwargs):
+    def __init__(self, n_tokens=1, n_encoders=2, dropout=0.0, gaussian_noise=0.0, attention_drop_proba=0.0, **kwargs):
         super().__init__()
-        lin0 = nn.Linear(512, 512)
-        init_fc(lin0, "leaky_relu")
         lin = nn.Linear(512, 768)
         init_fc(lin, "linear")
-        self.reshape = nn.Sequential(nn.Dropout(dropout), lin0, nn.LeakyReLU(), nn.Dropout(dropout), lin, nn.LayerNorm(768))
+        self.reshape = nn.Sequential(nn.Dropout(dropout), lin, nn.LayerNorm(768))
         self.captioner = get_image_info_fn(enable_encoder_feats=True)["get_batch_encoder_feats"]
+        featurizer = TransformerFeaturizer(100, 768, n_tokens,
+                                           768,
+                                           768, n_encoders, 0,
+                                           gaussian_noise, dropout, attention_drop_proba)
+        self.featurizer = featurizer
 
         if "stored_model" in kwargs and kwargs["stored_model"] is not None:
             load_stored_params(self, kwargs["stored_model"])
@@ -112,6 +115,7 @@ class ImageCaptioningShim(nn.Module):
     def forward(self, images: List, ignore_cache: List[bool] = None):
         caption_features = self.captioner(images, ignore_cache)
         caption_features = self.reshape(caption_features)
+        caption_features = self.featurizer(caption_features)
         return caption_features
 
 

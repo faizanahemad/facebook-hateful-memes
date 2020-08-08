@@ -23,6 +23,7 @@ from mmf.common.sample import Sample, SampleList
 from mmf.common.batch_collator import BatchCollator
 import torchvision
 import random
+def identity(x): return x
 
 
 class DefinedRotation(torchvision.transforms.RandomRotation):
@@ -238,6 +239,16 @@ class ImageAugment:
             except Exception as e:
                 print("Exception for: ", aug, "|", "|", augs, e)
         return image
+
+
+transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(90), DefinedRotation(15), HalfSwap(), QuadrantCut(),
+                                                       DefinedAffine(0, scale=(0.6, 0.6)), DefinedAffine(0, translate=(0.25, 0.25)),
+                                                       transforms.Compose(
+                                                           [transforms.Resize(480),
+                                                            transforms.CenterCrop(400)]), transforms.Grayscale(num_output_channels=3),
+                                                       transforms.RandomHorizontalFlip(p=1.0), transforms.RandomVerticalFlip(p=1.0), identity,
+                                                       ])
+
 
 
 def clean_text(text):
@@ -699,8 +710,6 @@ def create_collage(width, height, images, filled_position=None):
         y = 0
     return new_im
 
-
-def identity(x): return x
 
 class TextImageDataset(Dataset):
     def __init__(self, identifiers: List, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
