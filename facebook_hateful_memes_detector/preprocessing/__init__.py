@@ -609,7 +609,7 @@ def get_image_transforms(mode="easy"):
         param1 = 0.1
         rotation = 30
         cutout_max_count = 5
-        cutout_size = 0.2
+        cutout_size = 0.25
         coarse_drop_max = 0.1
         element_wise_add = 40
 
@@ -622,6 +622,7 @@ def get_image_transforms(mode="easy"):
             iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True),
             iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5),
             iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5),
+            transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
         ]),
         transforms.RandomChoice([
             iaa.GaussianBlur(sigma=(0.25, 1.0)),
