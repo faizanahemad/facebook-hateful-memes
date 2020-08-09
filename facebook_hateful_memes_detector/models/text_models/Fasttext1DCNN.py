@@ -6,7 +6,6 @@ import torch.nn as nn
 import torch
 import torchnlp
 import torch.nn.functional as F
-import fasttext
 from mmf.common import SampleList
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
@@ -36,6 +35,7 @@ class Fasttext1DCNNModel(nn.Module):
         self.n_tokens_out = n_tokens_out
 
         if not use_as_super:
+            import fasttext
             if fasttext_file is not None:
                 self.text_model = fasttext.load_model(fasttext_file)
             else:
@@ -107,6 +107,7 @@ class Fasttext1DCNNModel(nn.Module):
 
     @classmethod
     def get_one_sentence_vector(cls, tm, sentence):
+        import fasttext
         tokens = fasttext.tokenize(sentence)
         if isinstance(tm, fasttext.FastText._FastText):
             result = torch.tensor([tm[t] for t in tokens])

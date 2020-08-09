@@ -1,5 +1,4 @@
 import abc
-import fasttext
 from abc import ABC
 from typing import List, Tuple, Dict, Set, Union
 import numpy as np
