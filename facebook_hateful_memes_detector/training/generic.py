@@ -10,6 +10,7 @@ from torchvision import transforms, utils
 import re
 import contractions
 import pandas as pd
+from sklearn.metrics import confusion_matrix
 
 from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise, my_collate
 from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset
@@ -624,6 +625,46 @@ def generate_predictions(model, batch_size, dataset,
     return proba_list, all_probas_list, predictions_list, labels_list
 
 
+def confusion_matrix_frame(y_true, y_pred, labels=None, sample_weight=None):
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    if labels is None:
+        labels = np.unique(np.concatenate((y_true, y_pred)))
+    matrix = confusion_matrix(y_true, y_pred, labels, sample_weight)
+    matrix = pd.DataFrame(matrix, index=labels, columns=labels)
+
+    matrix["Actual Counts"] = matrix.sum(axis=1)
+    predicted_counts = pd.DataFrame(matrix.sum(axis=0)).T
+    matrix = pd.concat([matrix, predicted_counts], ignore_index=True)
+
+    new_index = list(labels)
+    new_index.append("Predicted Counts")
+    matrix.index = new_index
+    matrix.index.names = ["Actual"]
+    matrix.columns.names = ["Predicted"]
+
+    actual_counts = matrix["Actual Counts"].values[:-1]
+    predicted_counts = matrix[matrix.index == "Predicted Counts"].values[0][:-1]
+    good_predictions = list()
+    for label in labels:
+        good_predictions.append(matrix[label].values[label])
+
+    recall = 100 * np.array(good_predictions) / actual_counts
+    precision = 100 * np.array(good_predictions) / predicted_counts
+    recall = np.append(recall, [np.nan])
+    matrix["Recall %"] = recall
+    precision = pd.DataFrame(precision).T
+    matrix = pd.concat([matrix, precision], ignore_index=True)
+    new_index.append("Precision %")
+    matrix.index = new_index
+    matrix.index.names = ["Actual"]
+    matrix.columns.names = ["Predicted"]
+    matrix.fillna(-997, inplace=True)
+    matrix = matrix.astype(int)
+    matrix.replace(-997, np.nan, inplace=True)
+    return matrix
+
+
 def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=False, prediction_iters=1, evaluate_in_train_mode=False,):
     from sklearn.metrics import roc_auc_score, average_precision_score, classification_report
     from sklearn.metrics import precision_recall_fscore_support, accuracy_score
@@ -653,6 +694,7 @@ def validate(model, batch_size, dataset, collate_fn=my_collate, display_detail=F
         display(grouped_results)
         show_df = pd.concat((few_preds.head(5).reset_index(), few_preds.sample(5).reset_index(), few_preds.tail(5).reset_index()), 1).drop(columns=["index"])
         display(show_df)
+        display(confusion_matrix_frame(labels_list, predictions_list))
     if show_acc_only:
         print("Acc = %.4f" % validation_scores[1])
     else:

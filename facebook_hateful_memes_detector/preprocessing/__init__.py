@@ -603,7 +603,7 @@ def get_image_transforms(mode="easy"):
     cutout_max_count = 2
     cutout_size = 0.1
     coarse_drop_max = 0.02
-    element_wise_add = 10
+    color_augs = []
     if mode == "hard":
         p = 0.25
         param1 = 0.1
@@ -612,6 +612,15 @@ def get_image_transforms(mode="easy"):
         cutout_size = 0.25
         coarse_drop_max = 0.1
         element_wise_add = 40
+        color_augs = [transforms.RandomChoice([
+            iaa.pillike.Posterize(),
+            iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5),
+            iaa.Solarize(1.0, threshold=(32, 128)),
+            iaa.imgcorruptlike.MotionBlur(severity=1),
+            iaa.AllChannelsCLAHE(),
+            iaa.LogContrast(gain=(0.6, 1.4)),
+            iaa.pillike.Autocontrast((10, 20), per_channel=True)
+        ])]
 
     preprocess = transforms.Compose([
         transforms.RandomGrayscale(p=p),
@@ -621,7 +630,6 @@ def get_image_transforms(mode="easy"):
         transforms.RandomChoice([
             iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True),
             iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5),
-            iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5),
             transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
         ]),
         transforms.RandomChoice([
@@ -640,7 +648,7 @@ def get_image_transforms(mode="easy"):
             transforms.RandomResizedCrop(640, scale=(0.8, 1.0)),  # Zoom in
             transforms.RandomResizedCrop(360, scale=(0.6, 0.8)),
         ]),
-    ])
+    ] + color_augs)
     return preprocess
 
 
