@@ -588,10 +588,9 @@ def get_image2torchvision_transforms():
 def get_transforms_for_bbox_methods():
     transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(90), DefinedRotation(15), HalfSwap(), QuadrantCut(),
                                                            DefinedAffine(0, scale=(0.6, 0.6)), DefinedAffine(0, translate=(0.25, 0.25)),
-                                                           transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
-                                                           transforms.Compose(
-                                                               [transforms.Resize(480),
-                                                                transforms.CenterCrop(400)]), transforms.Grayscale(num_output_channels=3),
+                                                           transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224)]),
+                                                           transforms.Compose([transforms.Resize(480), transforms.CenterCrop(400)]),
+                                                           transforms.Grayscale(num_output_channels=3),
                                                            transforms.RandomHorizontalFlip(p=1.0), transforms.RandomVerticalFlip(p=1.0), identity,
                                                            ])
     return transforms_for_bbox_methods
