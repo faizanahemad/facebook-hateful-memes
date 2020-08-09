@@ -597,6 +597,12 @@ def get_transforms_for_bbox_methods():
 
 
 def get_image_transforms(mode="easy"):
+
+    def get_imgaug(aug):
+        def augment(image):
+            return aug(image=image)
+        return augment
+
     p = 0.1
     param1 = 0.05
     rotation = 15
@@ -616,13 +622,13 @@ def get_image_transforms(mode="easy"):
         coarse_drop_max = 0.1
         element_wise_add = 40
         color_augs = [transforms.RandomChoice([
-            iaa.pillike.Posterize(),
-            iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5),
-            iaa.Solarize(1.0, threshold=(32, 128)),
-            iaa.imgcorruptlike.MotionBlur(severity=1),
-            iaa.AllChannelsCLAHE(),
-            iaa.LogContrast(gain=(0.6, 1.4)),
-            iaa.pillike.Autocontrast((10, 20), per_channel=True)
+            get_imgaug(iaa.pillike.Posterize()),
+            get_imgaug(iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5)),
+            get_imgaug(iaa.Solarize(1.0, threshold=(32, 128))),
+            get_imgaug(iaa.imgcorruptlike.MotionBlur(severity=1)),
+            get_imgaug(iaa.AllChannelsCLAHE()),
+            get_imgaug(iaa.LogContrast(gain=(0.6, 1.4))),
+            get_imgaug(iaa.pillike.Autocontrast((10, 20), per_channel=True))
         ])]
         grid_random_offset = True
         grid_ratio = 0.5
@@ -634,13 +640,13 @@ def get_image_transforms(mode="easy"):
         transforms.RandomPerspective(distortion_scale=distortion_scale, p=p),
         transforms.ColorJitter(brightness=param1, contrast=param1, saturation=param1, hue=param1),
         transforms.RandomChoice([
-            iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True),
-            iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5),
+            get_imgaug(iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True)),
+            get_imgaug(iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5)),
             transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
             alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset),
         ]),
         transforms.RandomChoice([
-            iaa.GaussianBlur(sigma=(0.25, 1.0)),
+            get_imgaug(iaa.GaussianBlur(sigma=(0.25, 1.0))),
             transforms.RandomRotation(rotation),
             transforms.RandomVerticalFlip(p=1.0),
             QuadrantCut(),
