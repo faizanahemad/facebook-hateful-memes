@@ -24,6 +24,7 @@ from mmf.common.batch_collator import BatchCollator
 import torchvision
 import random
 import imgaug.augmenters as iaa
+from albumentations import augmentations as alb
 
 def identity(x): return x
 
@@ -604,6 +605,9 @@ def get_image_transforms(mode="easy"):
     cutout_size = 0.1
     coarse_drop_max = 0.02
     color_augs = []
+    grid_random_offset = False
+    grid_ratio = 0.25
+    distortion_scale = 0.1
     if mode == "hard":
         p = 0.25
         param1 = 0.1
@@ -621,16 +625,20 @@ def get_image_transforms(mode="easy"):
             iaa.LogContrast(gain=(0.6, 1.4)),
             iaa.pillike.Autocontrast((10, 20), per_channel=True)
         ])]
+        grid_random_offset = True
+        grid_ratio = 0.5
+        distortion_scale = 0.25
 
     preprocess = transforms.Compose([
         transforms.RandomGrayscale(p=p),
         transforms.RandomHorizontalFlip(p=p),
-        transforms.RandomPerspective(distortion_scale=0.25, p=p),
+        transforms.RandomPerspective(distortion_scale=distortion_scale, p=p),
         transforms.ColorJitter(brightness=param1, contrast=param1, saturation=param1, hue=param1),
         transforms.RandomChoice([
             iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True),
             iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5),
             transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
+            alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset),
         ]),
         transforms.RandomChoice([
             iaa.GaussianBlur(sigma=(0.25, 1.0)),
