@@ -1386,9 +1386,9 @@ class SimCLR(MLMPretraining):
             else:
                 x1 = x1.flatten(1, 2).squeeze()
                 x2 = x2.flatten(1, 2).squeeze()
-        else:
-            x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
-            x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
+
+        x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
         x2 = x2.transpose(0, 1)
         x = x1.mm(x2)  # batch x batch
         labels = torch.arange(0, len(x), device=x.device, dtype=torch.long)
