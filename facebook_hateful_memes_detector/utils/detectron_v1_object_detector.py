@@ -1,27 +1,18 @@
+import gc
+import os
+import sys
+from collections import defaultdict, Counter
+from random import random
+from time import sleep
 from typing import List, Callable
 
-import numpy as np
-
-import sys
-import os
-
-import yaml
 import cv2
-import torch
-import requests
 import numpy as np
-import gc
-import torch.nn.functional as F
-
-import torchvision.models as models
-import torchvision.transforms as transforms
-
+import requests
+import torch
 from PIL import Image
-from io import BytesIO
-from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, set_global, get_global
-from collections import defaultdict, Counter
-from time import time, sleep
-from random import random
+
+from .globals import get_device, build_cache, set_global, get_global
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
@@ -40,7 +31,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cac
         cache_stats = defaultdict(Counter)
         set_global("cache_stats", cache_stats)
 
-    from diskcache import Cache, Index
+    from diskcache import Cache
     import joblib
     if check_cache_exists:
         assert os.path.exists(cache_dir) and os.path.isdir(cache_dir)
@@ -445,7 +436,6 @@ class ImageCaptionFeatures:
             raise ValueError("Error: enable_image_captions = ", self.enable_image_captions)
 
     def build_model(self, enable_image_captions):
-        import captioning
         import captioning.utils.misc
         import captioning.models
         infos = captioning.utils.misc.pickle_load(open(f'{DIR}/infos_trans12-best.pkl', 'rb'))

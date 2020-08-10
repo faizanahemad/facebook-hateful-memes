@@ -1,32 +1,3 @@
-import abc
-from typing import List, Tuple, Dict, Set, Union
-import numpy as np
-import torch.nn as nn
-import torch
-import torch.nn.functional as F
-from mmf.common import SampleList, Sample
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
-import re
-import contractions
-import pandas as pd
-import jsonlines
-from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
-from spacy import glossary
-from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, get_global
-import os
-import torch
-import gc
-import os
-import random
-from typing import Optional, Any
-from torch import Tensor
-from torch.nn import TransformerDecoder, TransformerDecoderLayer, TransformerEncoder, LayerNorm, TransformerEncoderLayer, CrossEntropyLoss
-from torch.nn.init import xavier_uniform_
-import math
-import copy
-from sklearn.metrics import accuracy_score
-
 from ..models.classifiers import TransformerFeaturizer
 from ..utils import *
 DIR = os.path.dirname(os.path.realpath(__file__))
