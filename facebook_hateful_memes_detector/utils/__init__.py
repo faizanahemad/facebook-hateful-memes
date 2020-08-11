@@ -266,7 +266,7 @@ class GaussianNoise(nn.Module):
         if self.training and self.sigma != 0:
             sigma = self.sigma  # * 1.0/np.sqrt(x.size(-1))
             scale = sigma * x.detach()
-            sampled_noise = self.noise.repeat(*x.size()).normal_() * scale
+            sampled_noise = self.noise.to(x.device).repeat(*x.size()).normal_() * scale
             x = x + sampled_noise
         return x
 
