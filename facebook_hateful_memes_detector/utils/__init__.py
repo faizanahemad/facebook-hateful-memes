@@ -550,6 +550,13 @@ def load_stored_params(model, key):
         model.load_state_dict(torch.load(os.path.join(global_dir, key)))
 
 
+
+def save_params(model, key):
+    key = key if ".pth" in key else key + ".pth"
+    global_dir = get_global("models_dir")
+    torch.save(model.state_dict(), os.path.join(global_dir, key))
+
+
 def loss_calculator(logits, labels, task, loss_fn):
     logits = logits.to(get_device())
     loss = torch.tensor(0.0, device=get_device())

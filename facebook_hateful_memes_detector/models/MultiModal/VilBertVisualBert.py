@@ -426,7 +426,6 @@ class VilBertVisualBertModel(nn.Module):
         output = {}
         output["sequence_output"] = module_output[0]
         output["pooled_output"] = pooled_output
-        logits = None
         logits, loss = self.model_heads["mmbt_region"](pooled_output, labels)
         output["logits"] = logits
         output["loss"] = loss
