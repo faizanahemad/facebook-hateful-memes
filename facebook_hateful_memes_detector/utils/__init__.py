@@ -16,7 +16,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mmf.common import SampleList, Sample
+from .sample import *
 from sklearn.metrics import accuracy_score
 from spacy import glossary
 from torch import Tensor
