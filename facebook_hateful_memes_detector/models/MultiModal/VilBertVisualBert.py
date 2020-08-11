@@ -10,7 +10,7 @@ import torch
 import torchnlp
 import torch.nn.functional as F
 import fasttext
-from mmf.common import SampleList, Sample
+from ...utils.sample import SampleList, Sample
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
@@ -19,7 +19,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvis
     dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask, load_stored_params, LinearHead
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
-from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer, get_mmbt_region
+
 from ..external.lxrt import get_lxrt_model
 import GPUtil
 import random
@@ -42,6 +42,7 @@ class VilBertVisualBertModel(nn.Module):
                  loss,
                  **kwargs):
         super(VilBertVisualBertModel, self).__init__()
+        from ..external.mmf import get_vilbert, get_visual_bert, get_tokenizer, get_mmbt_region
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
         self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
         max_seq_length = n_tokens_in

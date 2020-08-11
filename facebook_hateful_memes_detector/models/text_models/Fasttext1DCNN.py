@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch
 import torchnlp
 import torch.nn.functional as F
-from mmf.common import SampleList
+from ...utils.sample import SampleList, Sample
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 

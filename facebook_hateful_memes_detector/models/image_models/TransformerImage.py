@@ -4,7 +4,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from mmf.common import SampleList
+from ...utils.sample import SampleList, Sample
 
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
 from ..text_models import AlbertClassifer

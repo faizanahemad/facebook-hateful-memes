@@ -19,7 +19,7 @@ import re
 import contractions
 from pycontractions import Contractions
 from torch.utils.data.sampler import WeightedRandomSampler
-from mmf.common.sample import Sample, SampleList
+from ..utils.sample import SampleList, Sample
 from mmf.common.batch_collator import BatchCollator
 import torchvision
 import random

@@ -1,16 +1,7 @@
 import torch
 import os
 from types import SimpleNamespace
-from mmf.common.registry import registry
-from mmf.utils.build import build_config, build_trainer
-from mmf.utils.configuration import Configuration
-from mmf.utils.distributed import distributed_init, infer_init_method
-from mmf.utils.env import set_seed, setup_imports
-from mmf.utils.flags import flags
-# from mmf.utils.logger import Logger
 import argparse
-from transformers.tokenization_auto import AutoTokenizer
-from mmf.datasets.processors.bert_processors import BertTokenizer
 
 
 class Logger:
@@ -31,6 +22,10 @@ class Logger:
 
 
 def get_model(device, opts):
+    from mmf.utils.build import build_config, build_trainer
+    from mmf.common.registry import registry
+    from mmf.utils.configuration import Configuration
+    from mmf.utils.env import set_seed, setup_imports
     args = argparse.Namespace(config_override=None)
     args.opts = opts
     configuration = Configuration(args)
@@ -61,6 +56,7 @@ def get_model(device, opts):
 
 
 def ready_trainer(trainer):
+    from mmf.common.registry import registry
     from mmf.utils.logger import Logger, TensorboardLogger
     trainer.run_type = trainer.config.get("run_type", "train")
     writer = registry.get("writer", no_warning=True)
@@ -91,6 +87,7 @@ def tokenizer_conf(max_seq_length=128):
 
 
 def get_tokenizer(max_seq_length=128):
+    from mmf.datasets.processors.bert_processors import BertTokenizer
     return BertTokenizer(tokenizer_conf(max_seq_length))
 
 
