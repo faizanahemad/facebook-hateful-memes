@@ -1,22 +1,7 @@
-from typing import List, Dict, Union, Callable, Tuple
+from typing import Union, Callable, Tuple
 
-import numpy as np
-import torch.nn as nn
-import torch
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
-import re
-import contractions
-import pandas as pd
-
-from ..utils import in_notebook, CNNHead, DecoderEnsemblingHead, MultiLayerTransformerDecoderHead, my_collate
-from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset
-import gc
-from torch.utils.data.sampler import WeightedRandomSampler
-from torch.utils.data import Subset
-from transformers import optimization
 from .generic import *
+from ..utils import CNNHead, DecoderEnsemblingHead, MultiLayerTransformerDecoderHead
 
 
 def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):

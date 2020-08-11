@@ -1,30 +1,22 @@
-import torch.nn as nn
+import torch
+import re
+from typing import List, Dict, Union, Callable
+
+import contractions
+import imgaug.augmenters as iaa
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
-
-import pandas as pd
-import numpy as np
-import jsonlines
-import abc
-from typing import List, Tuple, Dict, Set, Union, Callable
-from PIL import Image
-from ..utils import read_json_lines_into_df, clean_memory
-
-import torch as th
-import math
-import os
-import re
-import contractions
-from pycontractions import Contractions
-from torch.utils.data.sampler import WeightedRandomSampler
-from ..utils.sample import SampleList, Sample
-from mmf.common.batch_collator import BatchCollator
 import torchvision
-import random
-import imgaug.augmenters as iaa
+from PIL import Image
 from albumentations import augmentations as alb
+from torch.utils.data import Dataset
+from torchvision import transforms
+
+from ..utils import read_json_lines_into_df
+from ..utils.sample import Sample
+
 
 def identity(x): return x
 
@@ -275,7 +267,6 @@ def clean_text(text):
 
 import os
 import random
-import fasttext
 import gensim.downloader as api
 from nltk import sent_tokenize
 from gensim.models.fasttext import load_facebook_model
@@ -673,7 +664,6 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
                      keep_original_text: bool = False, keep_original_image: bool = False,
                      train_mixup_config=None, test_mixup_config=None,
                      keep_processed_image: bool = False, keep_torchvision_image: bool = False):
-    from functools import partial
     use_dev = dev
     joiner = lambda img: os.path.join(image_dir, img) if img is not None and type(img) == str and img != "nan" else None
     train = pd.read_csv(train_file)
@@ -795,7 +785,7 @@ class TextImageDataset(Dataset):
         self.texts = list(texts)
         self.identifiers = list(identifiers)
         self.image_locations = image_locations
-        from tqdm.auto import tqdm as tqdm, trange
+        from tqdm.auto import tqdm as tqdm
         self.images = dict()
         if use_images:
             if cached_images is not None:
@@ -923,7 +913,7 @@ class ImageFolderDataset(torch.utils.data.Dataset):
 
         self.image_transform = image_transform
         if cache_images:
-            from tqdm.auto import tqdm as tqdm, trange
+            from tqdm.auto import tqdm as tqdm
             self.images = {i: Image.open(l).convert('RGB') for i, l in tqdm(list(enumerate(self.images)))} if cache_images else dict()
         self.cache_images = cache_images
 

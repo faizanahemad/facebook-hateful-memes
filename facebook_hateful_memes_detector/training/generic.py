@@ -17,7 +17,7 @@ from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
-from mmf.common.sample import Sample, SampleList
+from ..utils.sample import *
 from transformers import optimization
 from .model_params import group_wise_lr, group_wise_finetune
 from collections import Counter
