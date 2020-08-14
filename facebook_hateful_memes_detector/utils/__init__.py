@@ -592,8 +592,7 @@ class FocalLoss(nn.Module):
             mult = targets != self.sentinel_class
         F_loss = F_loss[mult]
         if self.reduce:
-            F_loss = torch.sum(F_loss.type(torch.float64)).to(get_device())
-            return F_loss / mult.sum()
+            return torch.mean(F_loss)
         else:
             return F_loss
 
@@ -610,7 +609,7 @@ class CELoss(nn.Module):
             mult = targets != self.sentinel_class
         BCE_loss = BCE_loss[mult]
         if self.reduce:
-            return torch.sum(BCE_loss.type(torch.float64)) / mult.sum()
+            return torch.mean(BCE_loss)
         else:
             return BCE_loss
 
