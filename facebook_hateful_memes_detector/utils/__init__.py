@@ -588,8 +588,11 @@ class FocalLoss(nn.Module):
         pt = torch.exp(-BCE_loss)
         F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
         F_loss = (targets != -1).type(torch.int) * F_loss
+
         if self.reduce:
-            return torch.sum(F_loss) / (targets != -1).type(torch.int).sum()
+            F_loss = torch.sum(F_loss.type(torch.float64))
+            non_zero_targets = (targets != -1).type(torch.int).sum()
+            return F_loss / non_zero_targets
         else:
             return F_loss
 
