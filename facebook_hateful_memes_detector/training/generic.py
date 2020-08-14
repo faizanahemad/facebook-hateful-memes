@@ -603,6 +603,9 @@ class ModelWrapperForConsistency:
     def eval(self):
         self.model.eval()
 
+    def to(self, device):
+        self.model.to(device)
+
 
 def plot_loss_lr(train_losses, learning_rates):
     import matplotlib.pyplot as plt
