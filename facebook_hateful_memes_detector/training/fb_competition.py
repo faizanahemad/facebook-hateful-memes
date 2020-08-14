@@ -29,6 +29,8 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
                       model_call_back=None, validation_epochs=None,
                       sampling_policy=None, class_weights=None,
                       prediction_iters=1, evaluate_in_train_mode=False,
+                      consistency_loss_weight=0.0, num_classes=2,
+                      aug_1: Callable=identity, aug_2: Callable=identity,
                       show_model_stats=False, give_probas=True):
     train_df = datadict["train"]
     dev_df = datadict["dev"]
@@ -50,7 +52,13 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
                                                                                                             prediction_iters=prediction_iters,
                                                                                                             evaluate_in_train_mode=evaluate_in_train_mode)))
     validation_strategy = validation_strategy if validation_epochs is not None else None
-    train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, dataset,
+    if consistency_loss_weight > 0:
+        tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
+        train_dataset = LabelConsistencyDatasetWrapper(dataset, dev_dataset, aug_1, aug_2)
+    else:
+        tmodel = model
+        train_dataset = dataset
+    train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset,
                                          model_call_back=model_call_back, validation_strategy=validation_strategy,
                                          accumulation_steps=accumulation_steps, plot=True,
                                          sampling_policy=sampling_policy, class_weights=class_weights)

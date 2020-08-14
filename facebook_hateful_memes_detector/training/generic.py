@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Callable
 
 import numpy as np
 import torch.nn as nn
@@ -448,6 +448,53 @@ def train(model, optimizer, scheduler_init_fn,
     return train_losses, learning_rates
 
 
+class LabelConsistencyDatasetWrapper(torch.utils.data.Dataset):
+    def __init__(self, train: torch.utils.data.Dataset, test: torch.utils.data.Dataset, aug_1: Callable, aug_2: Callable):
+        self.train = train
+        self.test = test
+        self.aug_1 = aug_1
+        self.aug_2 = aug_2
+        self.labels = list(self.train.labels) + [-1] * len(test)
+        self.l1 = len(self.train)
+        self.l2 = len(self.test)
+
+    def __getitem__(self, item):
+        label = self.labels[item]
+        sample = self.train[item] if item < self.l1 else self.test[item]
+        sample.label = label
+        return self.aug_1(sample), self.aug_2(sample)
+
+    def __len__(self):
+        return len(self.labels)
+
+
+class ModelWrapperForConsistency:
+    def __init__(self, model, num_classes, consistency_loss_weight):
+        self.model = model
+        self.num_classes = num_classes
+        self.consistency_loss_weight = consistency_loss_weight
+
+    def __call__(self, batch):
+        s1, s2 = batch
+        res1 = self.model(s1)
+        res2 = self.model(s2)
+        loss1 = res1[-1]
+        loss2 = res2[-1]
+        loss = (loss1 + loss2) / 2
+        logits1 = torch.softmax(res1[0], dim=1)
+        logits2 = torch.softmax(res2[0], dim=1)
+        logits = (logits1 + logits2)/2
+        loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(logits1, logits2)
+        return logits, res1[1], res1[2], loss
+
+
+def label_consistency_collate(batch):
+    s1, s2 = zip(*batch)
+    s1 = SampleList(s1)
+    s2 = SampleList(s2)
+    return s1, s2
+
+
 def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                                  batch_size, epochs, dataset,
                                  augment_method=lambda x: x,
@@ -776,11 +823,8 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, 
             assert len(set(ones_train["id"]).intersection(set(ones_test["id"]))) == 0
             assert len(set(zeros_train["id"]).intersection(set(zeros_test["id"]))) == 0
             assert len(set(train_split["id"]).intersection(set(test_split["id"]))) == 0
-            train_set = convert_dataframe_to_dataset(train_split, metadata, True)
-            train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
-            yield (train_set,
-                   train_test_set,
-                   convert_dataframe_to_dataset(test_split, metadata, False))
+            yield (train_split,
+                   test_split)
 
     else:
         skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
@@ -791,11 +835,11 @@ def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, 
             test_split = train.iloc[test_idx]
             assert len(set(train_split["id"]).intersection(set(test_split["id"]))) == 0
             # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
-            train_set = convert_dataframe_to_dataset(train_split, metadata, True)
-            train_test_set = convert_dataframe_to_dataset(train_split, metadata, False, cached_images=train_set.images)
-            yield (train_set,
-                   train_test_set,
-                   convert_dataframe_to_dataset(test_split, metadata, False))
+            yield (train_split,
+                   test_split)
+
+
+def identity(x): return x
 
 
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
@@ -806,7 +850,8 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           sampling_policy=None,
                           class_weights=None,
                           prediction_iters=1,
-                          evaluate_in_train_mode=False
+                          evaluate_in_train_mode=False, consistency_loss_weight=0.0, num_classes=2,
+                          aug_1: Callable=identity, aug_2: Callable=identity,
                           ):
     from tqdm import tqdm
     getattr(tqdm, '_instances', {}).clear()
@@ -814,6 +859,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     results_list = []
     prfs_list = []
     index = ["map", "accuracy", "auc"]
+    metadata = data["metadata"]
     test_dev = data["metadata"]["test_dev"]
     assert not (test_dev and kfold)
 
@@ -821,14 +867,20 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         trin = data["train"]
         test = data["dev"]
         metadata = data["metadata"]
-        train_set = convert_dataframe_to_dataset(trin, metadata, True)
-        train_test_set = convert_dataframe_to_dataset(trin, metadata, False, cached_images=train_set.images)
-        folds = [(train_set,
-                  train_test_set,
-                  convert_dataframe_to_dataset(test, metadata, False))]
+        folds = [(trin,
+                  test)]
     else:
         folds = random_split_for_augmented_dataset(data, random_state=random_state)
 
+    nfolds = []
+    assert consistency_loss_weight >= 0
+    for d in folds:
+        training_fold_dataset = convert_dataframe_to_dataset(d[0], metadata, consistency_loss_weight == 0)
+        training_test_dataset = convert_dataframe_to_dataset(d[0], metadata, False, cached_images=training_fold_dataset.images)
+        testing_fold_dataset = convert_dataframe_to_dataset(d[1], metadata, False)
+        nfolds.append((training_fold_dataset, training_test_dataset, testing_fold_dataset))
+
+    folds = nfolds
     for training_fold_dataset, training_test_dataset, testing_fold_dataset in folds:
         if callable(model_fn):
             model, optimizer = model_fn()
@@ -845,7 +897,14 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
                                                                                                                          prediction_iters=prediction_iters,
                                                                                                                          evaluate_in_train_mode=evaluate_in_train_mode)))
         validation_strategy = validation_strategy if validation_epochs is not None else None
-        train_losses, learning_rates = train(model, optimizer, scheduler_init_fn, batch_size, epochs, training_fold_dataset, model_call_back, accumulation_steps,
+        if consistency_loss_weight > 0:
+            tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
+            train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, testing_fold_dataset, aug_1, aug_2)
+        else:
+            tmodel = model
+            train_dataset = training_fold_dataset
+
+        train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)

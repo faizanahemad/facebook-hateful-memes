@@ -587,11 +587,25 @@ class FocalLoss(nn.Module):
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
         pt = torch.exp(-BCE_loss)
         F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
-
+        F_loss = (targets != -1).type(torch.int) * F_loss
         if self.reduce:
-            return torch.mean(F_loss)
+            return torch.sum(F_loss) / (targets != -1).type(torch.int).sum()
         else:
             return F_loss
+
+
+class CELoss(nn.Module):
+    def __init__(self, reduce=True):
+        super().__init__()
+        self.reduce = reduce
+
+    def forward(self, inputs, targets):
+        BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
+        BCE_loss = (targets != -1).type(torch.int) * BCE_loss
+        if self.reduce:
+            return torch.sum(BCE_loss) / (targets != -1).type(torch.int).sum()
+        else:
+            return BCE_loss
 
 
 def get_loss_by_task(task):
@@ -599,7 +613,7 @@ def get_loss_by_task(task):
         raise NotImplementedError
         loss = task
     elif task == "classification":
-        loss = nn.CrossEntropyLoss()
+        loss = CELoss()
     elif task == "focal":
         loss = FocalLoss()
     elif task == "regression":
@@ -1502,6 +1516,6 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
     smclr.plot_loss_acc_hist()
     acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
     print("Head Acc = ", acc_head, "Full Acc = ", acc)
-    return smclr
+    return (acc_head, acc)
 
 

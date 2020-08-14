@@ -17,14 +17,13 @@ conda install -y -c anaconda openjdk
 conda install python=3.8
 pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cu101/torch_nightly.html
 pip install fasttext
-pip install transformers==2.11
 # pip install torch torchvision 
 # pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html 
 # pip install torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 # pip install https://download.pytorch.org/whl/nightly/cu101/torch-1.6.0.dev20200625%2Bcu101-cp37-cp37m-linux_x86_64.whl
 
 
-pip install  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git@old' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git'
+pip install transformers==2.11  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git@old' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git' nlp imgaug albumentations
 
 
 
@@ -49,6 +48,8 @@ cd ..
 git clone https://gitlab.com/vedanuj/vqa-maskrcnn-benchmark.git && cd vqa-maskrcnn-benchmark && python setup.py clean && python setup.py build && python setup.py develop
 cd ~
 # MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
+
+git clone git@github.com:faizanahemad/facebook-hateful-memes.git && cd facebook-hateful-memes && pip install --no-dependencies --editable .
 
 
 ```
