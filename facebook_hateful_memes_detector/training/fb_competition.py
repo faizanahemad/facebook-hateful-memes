@@ -55,14 +55,16 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
     if consistency_loss_weight > 0:
         tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
         train_dataset = LabelConsistencyDatasetWrapper(dataset, dev_dataset, num_classes, aug_1, aug_2)
+        collate_fn = label_consistency_collate
     else:
         tmodel = model
         train_dataset = dataset
+        collate_fn = my_collate
     tmodel.to(get_device())
     train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset,
                                          model_call_back=model_call_back, validation_strategy=validation_strategy,
                                          accumulation_steps=accumulation_steps, plot=True,
-                                         sampling_policy=sampling_policy, class_weights=class_weights)
+                                         sampling_policy=sampling_policy, class_weights=class_weights, collate_fn=collate_fn)
     return predict(model, datadict, batch_size, prediction_iters=prediction_iters, evaluate_in_train_mode=evaluate_in_train_mode, give_probas=give_probas)
 
 
