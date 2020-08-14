@@ -468,7 +468,7 @@ class LabelConsistencyDatasetWrapper(torch.utils.data.Dataset):
         return len(self.labels)
 
 
-class ModelWrapperForConsistency:
+class ModelWrapperForConsistency(nn.Module):
     def __init__(self, model, num_classes, consistency_loss_weight):
         self.model = model
         self.num_classes = num_classes
