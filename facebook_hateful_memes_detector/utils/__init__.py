@@ -577,48 +577,56 @@ def loss_calculator(logits, labels, task, loss_fn):
 
 
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduce=True):
+    def __init__(self, alpha=1, gamma=2, reduce=True, sentinel_class=None):
         super(FocalLoss, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduce = reduce
+        self.sentinel_class=sentinel_class
 
     def forward(self, inputs, targets):
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
         pt = torch.exp(-BCE_loss)
         F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
-        F_loss = (targets != -1).type(torch.int) * F_loss
-
+        if self.sentinel_class is not None:
+            mult = (targets != self.sentinel_class).type(torch.int).to(targets.device)
+        else:
+            mult = torch.ones_like(targets, device=targets.device)
+        F_loss = mult * F_loss
         if self.reduce:
             F_loss = torch.sum(F_loss.type(torch.float64)).to(get_device())
-            non_zero_targets = (targets != -1).type(torch.int).sum().to(get_device())
-            return F_loss / non_zero_targets
+            return F_loss / mult.sum()
         else:
             return F_loss
 
 
 class CELoss(nn.Module):
-    def __init__(self, reduce=True):
+    def __init__(self, reduce=True, sentinel_class=None):
         super().__init__()
         self.reduce = reduce
+        self.sentinel_class = sentinel_class
 
     def forward(self, inputs, targets):
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
-        BCE_loss = (targets != -1).type(torch.int) * BCE_loss
+        if self.sentinel_class is not None:
+            mult = (targets != self.sentinel_class).type(torch.int).to(targets.device)
+        else:
+            mult = torch.ones_like(targets, device=targets.device)
+        BCE_loss = mult * BCE_loss
         if self.reduce:
-            return torch.sum(BCE_loss) / (targets != -1).type(torch.int).sum()
+            return torch.sum(BCE_loss.type(torch.float64)) / mult.sum()
         else:
             return BCE_loss
 
 
-def get_loss_by_task(task):
+def get_loss_by_task(task, n_classes):
     if callable(task):
         raise NotImplementedError
         loss = task
     elif task == "classification":
-        loss = CELoss()
+        loss = CELoss(sentinel_class=n_classes)
     elif task == "focal":
-        loss = FocalLoss()
+        loss = FocalLoss(sentinel_class=n_classes)
     elif task == "regression":
         loss = nn.MSELoss()
     elif task == "k-classification":
@@ -1068,7 +1076,7 @@ class CNNHead(nn.Module):
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
         self.task = loss
-        self.loss = get_loss_by_task(loss)
+        self.loss = get_loss_by_task(loss, n_out)
         c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
@@ -1099,7 +1107,7 @@ class DecoderEnsemblingHead(nn.Module):
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
         self.task = loss
-        self.loss = get_loss_by_task(loss)
+        self.loss = get_loss_by_task(loss, n_out)
         n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
         n_classifiers = kwargs["n_classifiers"] if "n_classifiers" in kwargs else 2
         assert n_classifiers <= n_tokens
