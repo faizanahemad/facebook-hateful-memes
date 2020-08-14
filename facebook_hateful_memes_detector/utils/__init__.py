@@ -590,8 +590,8 @@ class FocalLoss(nn.Module):
         F_loss = (targets != -1).type(torch.int) * F_loss
 
         if self.reduce:
-            F_loss = torch.sum(F_loss.type(torch.float64))
-            non_zero_targets = (targets != -1).type(torch.int).sum()
+            F_loss = torch.sum(F_loss.type(torch.float64)).to(get_device())
+            non_zero_targets = (targets != -1).type(torch.int).sum().to(get_device())
             return F_loss / non_zero_targets
         else:
             return F_loss
