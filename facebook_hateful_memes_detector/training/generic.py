@@ -474,28 +474,6 @@ class LabelConsistencyDatasetWrapper(torch.utils.data.Dataset):
         return len(self.labels)
 
 
-class ModelWrapperForConsistency(nn.Module):
-    def __init__(self, model, num_classes, consistency_loss_weight):
-        super(ModelWrapperForConsistency, self).__init__()
-        self.model = model
-        self.num_classes = num_classes
-        self.consistency_loss_weight = consistency_loss_weight
-        self.reg_layers = model.reg_layers if hasattr(model, "reg_layers") else []
-
-    def __call__(self, batch):
-        s1, s2 = batch
-        res1 = self.model(s1)
-        res2 = self.model(s2)
-        loss1 = res1[-1]
-        loss2 = res2[-1]
-        loss = (loss1 + loss2) / 2
-        logits1 = torch.softmax(res1[0], dim=1)
-        logits2 = torch.softmax(res2[0], dim=1)
-        logits = (logits1 + logits2)/2
-        loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(logits1, logits2)
-        return logits, res1[1], res1[2], loss
-
-
 def label_consistency_collate(batch):
     s1, s2 = zip(*batch)
     s1 = SampleList(s1)
@@ -597,6 +575,33 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
     if plot:
         plot_loss_lr(train_losses, learning_rates)
     return train_losses, learning_rates
+
+
+class ModelWrapperForConsistency:
+    def __init__(self, model, num_classes, consistency_loss_weight):
+        self.model = model
+        self.num_classes = num_classes
+        self.consistency_loss_weight = consistency_loss_weight
+        self.reg_layers = model.reg_layers if hasattr(model, "reg_layers") else []
+
+    def __call__(self, batch):
+        s1, s2 = batch
+        res1 = self.model(s1)
+        res2 = self.model(s2)
+        loss1 = res1[-1]
+        loss2 = res2[-1]
+        loss = (loss1 + loss2) / 2
+        logits1 = torch.softmax(res1[0], dim=1).to(get_device())
+        logits2 = torch.softmax(res2[0], dim=1).to(get_device())
+        logits = (logits1 + logits2)/2
+        loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(logits1, logits2)
+        return logits, res1[1], res1[2], loss
+
+    def train(self):
+        self.model.train()
+
+    def eval(self):
+        self.model.eval()
 
 
 def plot_loss_lr(train_losses, learning_rates):
