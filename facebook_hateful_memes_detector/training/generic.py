@@ -272,6 +272,8 @@ def get_regularizer_scheduler(warmup_proportion=0.7):
         total_batches = num_batches * num_epochs
         cur_batch = num_batches * epoch + batch
         warmup_batches = warmup_proportion * total_batches
+        if not hasattr(model, "reg_layers"):
+            return
         for layer, param in model.reg_layers:
             new_param = np.interp(cur_batch,
                                   [0, warmup_batches, total_batches],
