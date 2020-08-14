@@ -461,7 +461,7 @@ class LabelConsistencyDatasetWrapper(torch.utils.data.Dataset):
     def __getitem__(self, item):
         label = self.labels[item]
         try:
-            sample = self.train[item] if item < self.l1 else self.test[item]
+            sample = self.train[item] if item < self.l1 else self.test[item - self.l1]
             sample.label = label
             return self.aug_1(sample), self.aug_2(sample)
         except Exception as e:
