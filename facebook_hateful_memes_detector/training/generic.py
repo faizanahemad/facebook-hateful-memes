@@ -913,7 +913,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
             tmodel = model
             train_dataset = training_fold_dataset
             collate_fn = my_collate
-        tmodel.to(model.device)
+        tmodel.to(get_device())
         train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back, accumulation_steps,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy,
                                              class_weights=class_weights, collate_fn=collate_fn,)
