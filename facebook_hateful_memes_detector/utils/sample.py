@@ -64,6 +64,12 @@ class Sample(OrderedDict):
         """
         return list(self.keys())
 
+    def copy(self):
+        sample = Sample()
+        for k, v in self.items():
+            sample[k] = copy.deepcopy(v)
+        return sample
+
 
 class SampleList(OrderedDict):
     """``SampleList`` is used to collate a list of ``Sample`` into a batch during batch
