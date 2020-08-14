@@ -58,6 +58,7 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
     else:
         tmodel = model
         train_dataset = dataset
+    tmodel.to(model.device)
     train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset,
                                          model_call_back=model_call_back, validation_strategy=validation_strategy,
                                          accumulation_steps=accumulation_steps, plot=True,
