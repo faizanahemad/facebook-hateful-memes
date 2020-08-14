@@ -54,7 +54,7 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
     validation_strategy = validation_strategy if validation_epochs is not None else None
     if consistency_loss_weight > 0:
         tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
-        train_dataset = LabelConsistencyDatasetWrapper(dataset, dev_dataset, aug_1, aug_2)
+        train_dataset = LabelConsistencyDatasetWrapper(dataset, dev_dataset, num_classes, aug_1, aug_2)
     else:
         tmodel = model
         train_dataset = dataset

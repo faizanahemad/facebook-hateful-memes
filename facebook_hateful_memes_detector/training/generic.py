@@ -451,12 +451,14 @@ def train(model, optimizer, scheduler_init_fn,
 
 
 class LabelConsistencyDatasetWrapper(torch.utils.data.Dataset):
-    def __init__(self, train: torch.utils.data.Dataset, test: torch.utils.data.Dataset, aug_1: Callable, aug_2: Callable):
+    def __init__(self, train: torch.utils.data.Dataset, test: torch.utils.data.Dataset,
+                 num_classes: int,
+                 aug_1: Callable, aug_2: Callable):
         self.train = train
         self.test = test
         self.aug_1 = aug_1
         self.aug_2 = aug_2
-        self.labels = list(self.train.labels) + [-1] * len(test)
+        self.labels = list(self.train.labels) + [num_classes] * len(test)
         self.l1 = len(self.train)
         self.l2 = len(self.test)
 
@@ -915,7 +917,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         validation_strategy = validation_strategy if validation_epochs is not None else None
         if consistency_loss_weight > 0:
             tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
-            train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, testing_fold_dataset, aug_1, aug_2)
+            train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, testing_fold_dataset, num_classes, aug_1, aug_2)
             collate_fn = label_consistency_collate
         else:
             tmodel = model
