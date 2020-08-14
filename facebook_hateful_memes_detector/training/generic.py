@@ -912,8 +912,8 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
             collate_fn = my_collate
 
         train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back, accumulation_steps,
-                                             collate_fn=collate_fn,
-                                             validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
+                                             validation_strategy, plot=not kfold, sampling_policy=sampling_policy,
+                                             class_weights=class_weights, collate_fn=collate_fn,)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)
         train_scores, prfs_train = validate(model, batch_size, training_test_dataset, display_detail=False, prediction_iters=prediction_iters,
