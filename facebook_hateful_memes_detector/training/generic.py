@@ -905,11 +905,14 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         if consistency_loss_weight > 0:
             tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
             train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, testing_fold_dataset, aug_1, aug_2)
+            collate_fn = label_consistency_collate
         else:
             tmodel = model
             train_dataset = training_fold_dataset
+            collate_fn = my_collate
 
         train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back, accumulation_steps,
+                                             collate_fn=collate_fn,
                                              validation_strategy, plot=not kfold, sampling_policy=sampling_policy, class_weights=class_weights)
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)
