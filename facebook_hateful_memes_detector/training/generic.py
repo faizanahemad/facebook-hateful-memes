@@ -480,6 +480,7 @@ class ModelWrapperForConsistency(nn.Module):
         self.model = model
         self.num_classes = num_classes
         self.consistency_loss_weight = consistency_loss_weight
+        self.reg_layers = model.reg_layers if hasattr(model, "reg_layers") else []
 
     def __call__(self, batch):
         s1, s2 = batch
