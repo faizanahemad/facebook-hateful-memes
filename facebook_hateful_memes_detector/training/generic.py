@@ -462,10 +462,11 @@ class LabelConsistencyDatasetWrapper(torch.utils.data.Dataset):
         label = self.labels[item]
         try:
             sample = self.train[item] if item < self.l1 else self.test[item]
-        except:
+            sample.label = label
+            return self.aug_1(sample), self.aug_2(sample)
+        except Exception as e:
             print(item, len(self.train), self.__len__())
-        sample.label = label
-        return self.aug_1(sample), self.aug_2(sample)
+            raise e
 
     def __len__(self):
         return len(self.labels)
