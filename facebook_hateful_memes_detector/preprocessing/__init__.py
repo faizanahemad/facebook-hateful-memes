@@ -556,16 +556,19 @@ class TextAugment:
         max_score = max(list(idf_scores.values()))
         max_minus_score = [max_score - s for w, s in idf_scores.items()]
         z = sum(max_minus_score) / len(words)
-        p = 0.6
-        word_scores = [min(p * s / z, 1) for s in max_minus_score]
+        if z == 0:
+            word_scores = [1 / len(words)] * len(words)
+        else:
+            p = 0.6
+            word_scores = [min(p * s / z, 1) for s in max_minus_score]
         return dict(zip(words, word_scores))
 
     def __fasttext_replace__(self, tm, indexer, text):
-        proba = self.idf_proba(text)
         tokens = text.split()
         t_2_i = {w: i for i, w in enumerate(tokens)}
         if len(tokens) <= 3:
             return text
+        proba = self.idf_proba(text)
         sampled = random.choices(list(proba.keys()), list(proba.values()), k=1)[0]
         sampled_idx = t_2_i[sampled]
         # candidates = [w for d, w in self.augments["fasttext"].get_nearest_neighbors(sampled, 10)]
@@ -575,11 +578,11 @@ class TextAugment:
         return " ".join(tokens)
 
     def __w2v_replace__(self, tm, indexer, text):
-        proba = self.idf_proba(text)
         tokens = text.split()
         t_2_i = {w: i for i, w in enumerate(tokens)}
         if len(t_2_i) <= 3:
             return text
+        proba = self.idf_proba(text)
         success = False
         repeat_count = 0
         while not success and repeat_count <= 10:
