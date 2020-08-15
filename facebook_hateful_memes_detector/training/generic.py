@@ -308,6 +308,17 @@ def get_cosine_schedule_with_warmup(warmup_proportion=0.3):
     return init_fn
 
 
+def get_constant_schedule_with_warmup(warmup_proportion=0.3):
+    def init_fn(optimizer, epochs, batch_size, n_samples):
+        n_steps = int(np.ceil(n_samples / batch_size))
+        num_training_steps = n_steps * epochs
+        num_warmup_steps = int(warmup_proportion * num_training_steps)
+        sch = optimization.get_constant_schedule_with_warmup(optimizer, num_warmup_steps)
+        update_in_batch, update_in_epoch = True, False
+        return sch, update_in_batch, update_in_epoch
+    return init_fn
+
+
 def get_cosine_with_hard_restarts_schedule_with_warmup(warmup_proportion=0.2, num_cycles=1.0,):
     def init_fn(optimizer, epochs, batch_size, n_samples):
         n_steps = int(np.ceil(n_samples / batch_size))

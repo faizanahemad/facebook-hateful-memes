@@ -274,7 +274,7 @@ from nltk.corpus import stopwords
 
 
 class TextAugment:
-    def __init__(self, count_proba: List[float], choice_probas: Dict[str, float], fasttext_file: str = None):
+    def __init__(self, count_proba: List[float], choice_probas: Dict[str, float], fasttext_file: str = None, idf_file: str = None):
         self.count_proba = count_proba
         assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
         assert len(count_proba) >= 1
@@ -294,7 +294,7 @@ class TextAugment:
             start = 0
             return " ".join(splits[start:start + actual_len])
 
-        def change_number(text: str, mod_proba=0.5):
+        def change_number(text: str, mod_proba=0.75):
             try:
                 text = int(text)
 
@@ -341,7 +341,7 @@ class TextAugment:
         def gibberish_insert(text):
             words = text.split()
             idx = random.randint(0, len(words) - 1)
-            sw = "".join(random.sample("abcdefghijklmnopqrstuvwxyz.!", random.randint(3, 15)))
+            sw = "".join(random.sample("abcdefghijklmnopqrstuvwxyz.!?\",'", random.randint(3, 15)))
             words = words[:idx] + [sw] + words[idx:]
             return " ".join(words)
 
@@ -384,7 +384,7 @@ class TextAugment:
             words = words[:idx] + [sw] + words[idx:]
             return " ".join(words)
 
-        punctuation_list = ".,\"'?!@$"
+        punctuation_list = ".,\"'?!@$;"
 
         def punctuation_insert(text):
             words = text.split()
@@ -392,6 +392,24 @@ class TextAugment:
             sw = random.sample(punctuation_list, 1)[0]
             words = words[:idx] + ([sw] * random.randint(1, 3)) + words[idx:]
             return " ".join(words)
+
+        def punctuation_replace(text):
+            chars = list(text)
+            for i, c in enumerate(chars):
+                if c in punctuation_list:
+                    if random.random() < 0.5:
+                        chars[i] = random.sample(punctuation_list, 1)[0]
+            return "".join(chars)
+
+        def punctuation_strip(text):
+            chars = list(text)
+            for i, c in enumerate(chars):
+                if c in punctuation_list:
+                    if random.random() < 0.5:
+                        chars[i] = " "
+            text = "".join(chars)
+            text = " ".join([w.strip() for w in text.split()])
+            return text
 
         def word_join(text):
             words = text.split()
@@ -415,10 +433,17 @@ class TextAugment:
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
                      "stopword_insert", "word_join", "word_cutout", "first_part_select", "number_modify",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
-                     "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select", "punctuation_insert"]
+                     "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select",
+                     "punctuation_insert", "punctuation_replace", "punctuation_strip"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
+        if not choice_probas.keys().isdisjoint(["glove_wiki", "glove_twitter", "word2vec", "fasttext"]):
+            assert idf_file is not None
+            tfidf = pd.read_csv(idf_file)
+            self.idfs = dict(zip(tfidf.to_dict()['token'].values(), tfidf.to_dict()['idf'].values()))
+            self.max_idf_score = tfidf.idf.max()
+
         for k, v in choice_probas.items():
             if v <= 0:
                 continue
@@ -430,6 +455,10 @@ class TextAugment:
                 self.augments["part_select"] = part_select
             if k == "punctuation_insert":
                 self.augments["punctuation_insert"] = punctuation_insert
+            if k == "punctuation_replace":
+                self.augments["punctuation_replace"] = punctuation_replace
+            if k == "punctuation_strip":
+                self.augments["punctuation_strip"] = punctuation_strip
             if k == "gibberish_insert":
                 self.augments["gibberish_insert"] = gibberish_insert
             if k == "stopword_insert":
@@ -513,15 +542,28 @@ class TextAugment:
         choices_arr = np.array([choice_probas[c] if c in choice_probas else 0.0 for c in self.augs])
         self.choice_probas = choices_arr / np.linalg.norm(choices_arr, ord=1)
 
+    def idf_proba(self, text):
+        idfs: Dict[str, float] = self.idfs
+        max_score = self.max_idf_score
+        words = text.lower().split()
+        idf_scores = {w: idfs[w] if w in idfs else max_score for w in words}
+        max_score = max(list(idf_scores.values()))
+        max_minus_score = [max_score - s for w, s in idf_scores.items()]
+        z = sum(max_minus_score) / len(words)
+        p = 0.6
+        word_scores = [min(p * s / z, 1) for s in max_minus_score]
+        return dict(zip(words, word_scores))
+
     def __fasttext_replace__(self, tm, indexer, text):
+        proba = self.idf_proba(text)
         tokens = text.split()
-        t_2_i = {w: i for i, w in enumerate(tokens) if len(w) >= 4}
-        if len(t_2_i) <= 2:
+        t_2_i = {w: i for i, w in enumerate(tokens)}
+        if len(tokens) <= 3:
             return text
-        sampled = random.sample(list(t_2_i.keys()), k=1)[0]
+        sampled = random.choices(list(proba.keys()), list(proba.values()), k=1)[0]
         sampled_idx = t_2_i[sampled]
         # candidates = [w for d, w in self.augments["fasttext"].get_nearest_neighbors(sampled, 10)]
-        candidates = [w for w, d in tm.most_similar(sampled, topn=10, indexer=indexer)][1:]
+        candidates = [w for w, d in tm.most_similar(sampled, topn=10, indexer=indexer)][1:5]
         replacement = random.sample(candidates, k=1)[0]
         tokens[sampled_idx] = replacement
         return " ".join(tokens)
