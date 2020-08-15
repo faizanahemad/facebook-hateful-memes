@@ -443,6 +443,12 @@ class TextAugment:
             tfidf = pd.read_csv(idf_file)
             self.idfs = dict(zip(tfidf.to_dict()['token'].values(), tfidf.to_dict()['idf'].values()))
             self.max_idf_score = tfidf.idf.max()
+            tfidf = tfidf[tfidf["idf"] < tfidf["idf"].max()]
+            tfidf["kw"] = np.log1p(tfidf["frequency"] * tfidf["idf"])
+            max_kw = tfidf["kw"].max()
+            zd = (max_kw - tfidf["kw"]).mean()
+            tfidf["kw"] = (max_kw - tfidf["kw"]) / zd
+            self.kw_select_proba = dict(zip(tfidf.to_dict()['token'].values(), tfidf.to_dict()['kw'].values()))
 
         for k, v in choice_probas.items():
             if v <= 0:
@@ -569,15 +575,16 @@ class TextAugment:
         return " ".join(tokens)
 
     def __w2v_replace__(self, tm, indexer, text):
+        proba = self.idf_proba(text)
         tokens = text.split()
-        t_2_i = {w: i for i, w in enumerate(tokens) if len(w) >= 4}
-        if len(t_2_i) <= 2:
+        t_2_i = {w: i for i, w in enumerate(tokens)}
+        if len(t_2_i) <= 3:
             return text
         success = False
         repeat_count = 0
         while not success and repeat_count <= 10:
             repeat_count += 1
-            sampled = random.sample(list(t_2_i.keys()), k=1)[0]
+            sampled = random.choices(list(proba.keys()), list(proba.values()), k=1)[0]
             if sampled in tm:
                 candidates = [w for w, d in tm.most_similar(sampled, topn=10, indexer=indexer)][1:]
                 success = True
