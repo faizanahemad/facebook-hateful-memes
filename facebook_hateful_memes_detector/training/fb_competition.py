@@ -34,9 +34,11 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
                       show_model_stats=False, give_probas=True):
     train_df = datadict["train"]
     dev_df = datadict["dev"]
+    test_df = datadict["test"]
     metadata = datadict["metadata"]
     dataset = convert_dataframe_to_dataset(train_df, metadata, True)
     dev_dataset = convert_dataframe_to_dataset(dev_df, metadata, True)
+    test_dataset = convert_dataframe_to_dataset(test_df, metadata, True)
     if callable(model_fn):
         model, optimizer = model_fn()
     else:
@@ -53,8 +55,9 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
                                                                                                             evaluate_in_train_mode=evaluate_in_train_mode)))
     validation_strategy = validation_strategy if validation_epochs is not None else None
     if consistency_loss_weight > 0:
+        from torch.utils.data import ConcatDataset
         tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
-        train_dataset = LabelConsistencyDatasetWrapper(dataset, dev_dataset, num_classes, aug_1, aug_2)
+        train_dataset = LabelConsistencyDatasetWrapper(dataset, ConcatDataset((dev_dataset, test_dataset)), num_classes, aug_1, aug_2)
         collate_fn = label_consistency_collate
     else:
         tmodel = model

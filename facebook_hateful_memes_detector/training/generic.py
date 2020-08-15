@@ -879,6 +879,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     index = ["map", "accuracy", "auc"]
     metadata = data["metadata"]
     test_dev = data["metadata"]["test_dev"]
+    actual_test = data["test"]
     assert not (test_dev and kfold)
 
     if test_dev:
@@ -917,7 +918,9 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
         validation_strategy = validation_strategy if validation_epochs is not None else None
         if consistency_loss_weight > 0:
             tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
-            train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, testing_fold_dataset, num_classes, aug_1, aug_2)
+            testing_dataset = convert_dataframe_to_dataset(actual_test, metadata, False)
+            from torch.utils.data import ConcatDataset
+            train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, ConcatDataset((testing_fold_dataset, testing_dataset)), num_classes, aug_1, aug_2)
             collate_fn = label_consistency_collate
         else:
             tmodel = model
