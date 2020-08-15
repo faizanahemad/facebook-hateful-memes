@@ -36,9 +36,9 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
     dev_df = datadict["dev"]
     test_df = datadict["test"]
     metadata = datadict["metadata"]
-    dataset = convert_dataframe_to_dataset(train_df, metadata, True)
-    dev_dataset = convert_dataframe_to_dataset(dev_df, metadata, True)
-    test_dataset = convert_dataframe_to_dataset(test_df, metadata, True)
+    dataset = convert_dataframe_to_dataset(train_df, metadata, consistency_loss_weight == 0)
+    dev_dataset = convert_dataframe_to_dataset(dev_df, metadata, False)
+    test_dataset = convert_dataframe_to_dataset(test_df, metadata, False)
     if callable(model_fn):
         model, optimizer = model_fn()
     else:
