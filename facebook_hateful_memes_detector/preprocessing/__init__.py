@@ -599,9 +599,12 @@ class TextAugment:
         return " ".join(tokens)
 
     def __call__(self, text):
+        original_text = text
         count = np.random.choice(list(range(len(self.count_proba))), 1, replace=False, p=self.count_proba)[0]
         augs = np.random.choice(self.augs, count, replace=False, p=self.choice_probas)
         for aug in augs:
+            if len(text.split()) < 2:
+                break
             try:
                 if aug == "fasttext":
                     text = self.__fasttext_replace__(self.augments[aug], self.indexes[aug], text)
@@ -614,7 +617,7 @@ class TextAugment:
                 else:
                     raise ValueError()
             except Exception as e:
-                print("Exception for: ", aug, "|", text, "|", augs, e)
+                print("Exception for: ", aug, "|", "Original Text", original_text, "Final Text", text, "|", augs, e)
         return text
 
 
