@@ -495,10 +495,10 @@ class TextAugment:
                 self.indexes["word2vec"] = AnnoyIndexer(self.augments["word2vec"], 32)
             if k == "glove_twitter":
                 self.augments["glove_twitter"] = api.load("glove-twitter-100")
-                self.indexes["glove_twitter"] = AnnoyIndexer(self.augments["glove_twitter"], 8)
+                self.indexes["glove_twitter"] = AnnoyIndexer(self.augments["glove_twitter"], 32)
             if k == "glove_wiki":
                 self.augments["glove_wiki"] = api.load("glove-wiki-gigaword-100")
-                self.indexes["glove_wiki"] = AnnoyIndexer(self.augments["glove_wiki"], 8)
+                self.indexes["glove_wiki"] = AnnoyIndexer(self.augments["glove_wiki"], 32)
 
             if k == "keyboard":
                 self.augments["keyboard"] = nac.KeyboardAug(aug_char_min=1, aug_char_max=3, aug_word_min=1,
