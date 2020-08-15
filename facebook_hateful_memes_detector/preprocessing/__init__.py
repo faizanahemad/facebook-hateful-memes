@@ -483,10 +483,10 @@ class TextAugment:
             if k == "fasttext":
                 assert fasttext_file is not None
                 self.augments["fasttext"] = load_facebook_model(fasttext_file)
-                self.indexes["fasttext"] = AnnoyIndexer(self.augments["fasttext"], 8)
+                self.indexes["fasttext"] = AnnoyIndexer(self.augments["fasttext"], 32)
             if k == "word2vec":
                 self.augments["word2vec"] = api.load("word2vec-google-news-300")
-                self.indexes["word2vec"] = AnnoyIndexer(self.augments["word2vec"], 8)
+                self.indexes["word2vec"] = AnnoyIndexer(self.augments["word2vec"], 32)
             if k == "glove_twitter":
                 self.augments["glove_twitter"] = api.load("glove-twitter-100")
                 self.indexes["glove_twitter"] = AnnoyIndexer(self.augments["glove_twitter"], 8)
