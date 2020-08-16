@@ -1269,17 +1269,20 @@ class BertLMPredictionHead(nn.Module):
         # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
         self.decoder.bias = self.bias
         self.n_tokens_in = n_tokens_in
-        self.loss_fct = CrossEntropyLoss(reduction='mean')
+        self.loss_fct = CrossEntropyLoss(reduction='none')
 
-    def forward(self, hidden_states, input_ids):
+    def forward(self, hidden_states, input_ids, attention_mask):
         hidden_states = hidden_states[:, :self.n_tokens_in]
         hidden_states = self.transform(hidden_states)
         hidden_states = self.decoder(hidden_states)
         hidden_states = hidden_states.view(-1, self.vocab_size)
         input_ids = input_ids.view(-1)
+        attention_mask = attention_mask.view(-1)
         masked_lm_loss = 0.0
         if self.training:
             masked_lm_loss = self.loss_fct(hidden_states, input_ids)
+            masked_lm_loss = attention_mask * masked_lm_loss
+            masked_lm_loss = masked_lm_loss.mean()
 
         predictions = hidden_states.max(dim=1).indices
         accuracy = accuracy_score(input_ids.cpu(), predictions.cpu())
@@ -1308,8 +1311,8 @@ class MLMPretraining(nn.Module):
     def forward(self, samples: SampleList):
         _, pooled, seq, _ = self.model(samples)
         text = samples["text"]
-        input_ids, _ = self.tokenise(text)
-        loss, accuracy, input_ids, predictions = self.mlm(seq, input_ids)
+        input_ids, attention_mask = self.tokenise(text)
+        loss, accuracy, input_ids, predictions = self.mlm(seq, input_ids, attention_mask)
         self.accuracy_hist.append(accuracy)
         self.loss_hist.append(float(loss.cpu().detach()))
         return [accuracy, input_ids, predictions, loss]
@@ -1466,8 +1469,8 @@ def merge_sample_lists(*samples):
 def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_post,
                pre_lr, post_lr, pre_batch_size, post_batch_size,
                pre_epochs, full_epochs, collate_fn):
-    from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup
-    scheduler_init_fn = get_cosine_schedule_with_warmup()
+    from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
+    scheduler_init_fn = get_constant_schedule_with_warmup(0.4)
     acc_head = np.nan
     if pre_epochs > 0:
         epochs = pre_epochs
