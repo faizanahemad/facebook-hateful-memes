@@ -1018,3 +1018,16 @@ class NegativeSamplingDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.dataset)
+
+
+class TextDataset(torch.utils.data.Dataset):
+    def __init__(self, texts):
+        self.texts = list(texts)
+
+    def __getitem__(self, item):
+        return self.texts[item]
+
+    def __len__(self):
+        return len(self.texts)
+
+
