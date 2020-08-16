@@ -923,7 +923,7 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
             show_model_stats = not show_model_stats
         validation_strategy = dict(validation_epochs=validation_epochs,
                                    train=dict(method=validate, args=[model, batch_size, training_test_dataset], kwargs=dict(display_detail=False)),
-                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset], kwargs=dict(display_detail=True,
+                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset], kwargs=dict(display_detail=False,
                                                                                                                          prediction_iters=prediction_iters,
                                                                                                                          evaluate_in_train_mode=evaluate_in_train_mode)))
         validation_strategy = validation_strategy if validation_epochs is not None else None
