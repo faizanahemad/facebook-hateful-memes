@@ -106,6 +106,8 @@ class ImageGRUModel(AlbertClassifer):
         elif model == "distilgpt2":
             self.word_embeddings = model_class.from_pretrained(model).wte
             self.word_embedding_dims = 768
+            setattr(self.tokenizer, "mask_token_id", self.tokenizer.pad_token_id)
+            setattr(self.tokenizer, "mask_token", self.tokenizer.pad_token)
         elif model == "google/electra-base-generator":
             self.word_embeddings = model_class.from_pretrained(model).embeddings.word_embeddings
             self.word_embedding_dims = 768
