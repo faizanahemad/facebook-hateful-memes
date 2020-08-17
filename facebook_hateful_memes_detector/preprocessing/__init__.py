@@ -711,7 +711,7 @@ def get_image_transforms(mode="easy"):
     return preprocess
 
 
-def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None, train_image_transform=None,
+def get_csv_datasets(train_file, test_file, image_dir, image_extension=".png", train_text_transform=None, train_image_transform=None,
                      train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                      train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
                      test_text_transform=None, test_image_transform=None,
@@ -720,7 +720,14 @@ def get_csv_datasets(train_file, test_file, image_dir, train_text_transform=None
                      train_mixup_config=None, test_mixup_config=None,
                      keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     use_dev = dev
-    joiner = lambda img: os.path.join(image_dir, img) if img is not None and type(img) == str and img != "nan" else None
+    joiner_p = lambda img: (os.path.join(image_dir, img)) if (img is not None and type(img) == str and img != "nan") else None
+    def joiner(img):
+        img = joiner_p(img)
+        if img is None:
+            return img
+        if img.endswith(image_extension):
+            return img
+        return img + image_extension
     train = pd.read_csv(train_file)
     train = train.sample(frac=1.0, replace=False)
     test = pd.read_csv(test_file)
