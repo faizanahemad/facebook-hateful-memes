@@ -384,7 +384,7 @@ class TextAugment:
             words = words[:idx] + [sw] + words[idx:]
             return " ".join(words)
 
-        punctuation_list = ".,\"'?!@$;"
+        punctuation_list = ".,\"'?!@$"
 
         def punctuation_insert(text):
             words = text.split()
@@ -392,6 +392,26 @@ class TextAugment:
             sw = random.sample(punctuation_list, 1)[0]
             words = words[:idx] + ([sw] * random.randint(1, 3)) + words[idx:]
             return " ".join(words)
+
+        def punctuation_continue(text):
+            chars = list(text)
+            new_text = []
+            for c in chars:
+                if c in punctuation_list:
+                    if random.random() < 0.5:
+                        puncts = "".join([random.sample(".,\"'?!", 1)[0]] * random.randint(1, 3))
+                    else:
+                        puncts = "".join([c] * random.randint(1, 3))
+
+                    if random.random() < 0.5:
+                        new_text.append(c)
+                        new_text.append(puncts)
+                    else:
+                        new_text.append(puncts)
+                        new_text.append(c)
+                else:
+                    new_text.append(c)
+            return "".join(new_text)
 
         def punctuation_replace(text):
             chars = list(text)
@@ -434,7 +454,7 @@ class TextAugment:
                      "stopword_insert", "word_join", "word_cutout", "first_part_select", "number_modify",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
                      "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select",
-                     "punctuation_insert", "punctuation_replace", "punctuation_strip"]
+                     "punctuation_insert", "punctuation_replace", "punctuation_strip", "punctuation_continue"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
@@ -461,6 +481,8 @@ class TextAugment:
                 self.augments["part_select"] = part_select
             if k == "punctuation_insert":
                 self.augments["punctuation_insert"] = punctuation_insert
+            if k == "punctuation_continue":
+                self.augments["punctuation_continue"] = punctuation_continue
             if k == "punctuation_replace":
                 self.augments["punctuation_replace"] = punctuation_replace
             if k == "punctuation_strip":

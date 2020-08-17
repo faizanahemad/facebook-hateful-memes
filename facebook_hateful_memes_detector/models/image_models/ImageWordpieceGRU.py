@@ -148,16 +148,19 @@ class ImageGRUModel(AlbertClassifer):
 
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
-        img = sampleList.torchvision_image
-        input_ids, attention_mask = self.tokenise(sampleList.text)
+        input_ids, _ = self.tokenise(sampleList.text)
         word_embeddings = self.word_embeddings(input_ids)
         global_word_view = word_embeddings.mean(1).unsqueeze(1)
-        img = img.to(get_device())
-        im_repr = self.im_model(img)
-        im_repr = self.post_proc(im_repr).to(get_device())
-        image_vectors = im_repr[:, :10]
-        clean_memory()
-        image_vectors = image_vectors.to(get_device())
+        if hasattr(sampleList, "torchvision_image"):
+            img = sampleList.torchvision_image
+            img = img.to(get_device())
+            im_repr = self.im_model(img)
+            im_repr = self.post_proc(im_repr).to(get_device())
+            image_vectors = im_repr[:, :10]
+            clean_memory()
+            image_vectors = image_vectors.to(get_device())
+        else:
+            image_vectors = torch.zeros(word_embeddings.size(0), 10, word_embeddings.size(2), dtype=torch.float, device=get_device())
         embeddings = torch.cat([global_word_view, image_vectors, word_embeddings, image_vectors, global_word_view], 1)
         
         hidden_state = self.gru.forward(embeddings, filter_indices=not self.do_mlm)
