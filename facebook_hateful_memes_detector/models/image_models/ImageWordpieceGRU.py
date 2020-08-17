@@ -84,13 +84,15 @@ class ImageGRUModel(AlbertClassifer):
         model = kwargs["model"]
 
         model_class = AutoModel
-        tokenizer_class = AutoTokenizer
 
         global_dir = get_global("models_dir")
         model = os.path.join(global_dir, model) if model in os.listdir(global_dir) else model
 
-        self.tokenizer = tokenizer_class.from_pretrained(model)
-        #
+        tokenizer = AutoTokenizer.from_pretrained(model)
+        if model in ["t5-small", "distilgpt2"]:
+            setattr(tokenizer, "mask_token_id", tokenizer.pad_token_id)
+            setattr(tokenizer, "mask_token", tokenizer.pad_token)
+        self.tokenizer = tokenizer
         if model == "allenai/scibert_scivocab_uncased":
             self.word_embeddings = model_class.from_pretrained(model).embeddings.word_embeddings
             self.word_embedding_dims = 768
@@ -106,8 +108,6 @@ class ImageGRUModel(AlbertClassifer):
         elif model == "distilgpt2":
             self.word_embeddings = model_class.from_pretrained(model).wte
             self.word_embedding_dims = 768
-            setattr(self.tokenizer, "mask_token_id", self.tokenizer.pad_token_id)
-            setattr(self.tokenizer, "mask_token", self.tokenizer.pad_token)
         elif model == "google/electra-base-generator":
             self.word_embeddings = model_class.from_pretrained(model).embeddings.word_embeddings
             self.word_embedding_dims = 768
@@ -117,8 +117,6 @@ class ImageGRUModel(AlbertClassifer):
         elif model == "t5-small":
             self.word_embeddings = model_class.from_pretrained(model).shared
             self.word_embedding_dims = 512
-            setattr(self.tokenizer, "mask_token_id", self.tokenizer.pad_token_id)
-            setattr(self.tokenizer, "mask_token", self.tokenizer.pad_token)
         else:
             raise NotImplementedError()
 
