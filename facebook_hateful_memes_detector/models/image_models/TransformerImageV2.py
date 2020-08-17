@@ -23,6 +23,15 @@ import random
 import math
 from ...utils.ImageModelShims import ImageCaptioningShim, ImageModelShim, ImageModelShimSimple
 
+# t5-small albert-base-v2 ctrl distilgpt2 google/electra-base-generator microsoft/DialoGPT-small allenai/scibert_scivocab_uncased activebus/BERT_Review allenai/reviews_roberta_base
+# Hate-speech-CNERG/dehatebert-mono-english nlptown/bert-base-multilingual-uncased-sentiment
+
+#
+
+# allenai/scibert_scivocab_uncased allenai/biomed_roberta_base distilgpt2 google/electra-base-generator ctrl t5-small
+# mrm8488/t5-base-finetuned-math-qa-test malteos/arqmath-bert-base-cased
+
+# Keep per head loss stats, make GRU heads separate
 
 class TransformerImageV2Model(AlbertClassifer):
     def __init__(self, image_model, classifier_dims, num_classes,
@@ -48,12 +57,12 @@ class TransformerImageV2Model(AlbertClassifer):
             module_gaussian = image_model.pop("gaussian_noise", 0.0)
             module_dropout = image_model.pop("dropout", 0.0)
             stored_model = image_model.pop("stored_model", None)
-            im_model = ImageModelShimSimple(resnet="resnet50", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model)
+            im_model = ImageModelShimSimple(resnet="resnet18_swsl", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model)
         elif type(image_model) == str:
             module_gaussian = 0.0
             module_dropout = 0.0
             stored_model = image_model
-            im_model = ImageModelShimSimple(resnet="resnet50", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model)
+            im_model = ImageModelShimSimple(resnet="resnet18_swsl", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model)
         elif type(image_model) == ImageModelShimSimple:
             im_model = image_model
         else:
@@ -68,7 +77,7 @@ class TransformerImageV2Model(AlbertClassifer):
         self.total_tokens = n_tokens_in + 1
         self.text_tokens = n_tokens_in
 
-        model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
+        model = kwargs["model"]
         model_class = AutoModel
         tokenizer_class = AutoTokenizer
 

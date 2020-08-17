@@ -846,7 +846,7 @@ class TextImageDataset(Dataset):
             if cached_images is not None:
                 self.images = cached_images
             elif cache_images:
-                self.images = {l: Image.open(l).convert('RGB') for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")}
+                self.images = {l: Image.open(l).convert('RGB') if l is not None else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8)) for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")}
         self.labels = labels if labels is not None else ([0] * len(texts))
         self.text_transform = text_transform if text_transform is not None else identity
         self.image_transform = image_transform if image_transform is not None else identity
@@ -948,7 +948,6 @@ class TextImageDataset(Dataset):
         print("Example Mixup", "\n", text, "|", "Label = ", label)
         image.show()
         return image
-
 
 
 class ImageFolderDataset(torch.utils.data.Dataset):

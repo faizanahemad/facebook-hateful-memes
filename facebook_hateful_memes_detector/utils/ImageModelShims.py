@@ -91,7 +91,7 @@ class ImageCaptioningShim(nn.Module):
 
 
 class ImageModelShimSimple(nn.Module):
-    def __init__(self, resnet="resnet50", n_tokens=64, out_channels=768, n_encoders=2, dropout=0.0, gaussian_noise=0.0, attention_drop_proba=0.0, **kwargs):
+    def __init__(self, resnet="resnet18_swsl", n_tokens=64, out_channels=768, n_encoders=2, dropout=0.0, gaussian_noise=0.0, attention_drop_proba=0.0, **kwargs):
         super().__init__()
         import timm
         # model_names = timm.list_models('*resne*t*')
