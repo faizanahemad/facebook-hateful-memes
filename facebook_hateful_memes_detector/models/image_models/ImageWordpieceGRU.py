@@ -38,18 +38,16 @@ from ...utils.ImageModelShims import ImageCaptioningShim, ImageModelShim, ImageM
 class ImageGRUModel(AlbertClassifer):
     def __init__(self, image_model, classifier_dims, num_classes,
                  gaussian_noise, dropout,
-                 internal_dims, n_layers,
-                 featurizer, final_layer_builder,
+                 internal_dims, n_layers,final_layer_builder,
                  n_tokens_in=640, n_tokens_out=16,
                  use_as_super=False, **kwargs):
         embedding_dims = 768
         super(ImageGRUModel, self).__init__(classifier_dims, num_classes, gaussian_noise, dropout,
                                             internal_dims, n_layers,
-                                            featurizer, final_layer_builder,
+                                            "transformer", final_layer_builder,
                                             n_tokens_in, n_tokens_out, True, **kwargs)
         assert n_tokens_in % n_tokens_out == 0
         #
-        assert self.head_masks <= 12
         attention_drop_proba = kwargs.pop("attention_drop_proba", 0.0)
         self.attention_drop_proba = attention_drop_proba
 
