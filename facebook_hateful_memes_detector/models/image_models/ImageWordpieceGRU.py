@@ -122,7 +122,7 @@ class ImageGRUModel(AlbertClassifer):
         init_fc(fc0, "leaky_relu")
         self.gru_lin = nn.Sequential(fc0, nn.Dropout(dropout), nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
         self.gru = GRUFeaturizer(self.total_tokens, embedding_dims, n_tokens_out,
-                                 classifier_dims, n_layers, gaussian_noise, dropout)
+                                 classifier_dims, classifier_dims, n_layers, gaussian_noise, dropout)
         #
         print("Pick stored Model", model, "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
         self.do_mlm = kwargs.pop("do_mlm", False)

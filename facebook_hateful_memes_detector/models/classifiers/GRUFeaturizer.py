@@ -22,7 +22,7 @@ class GRUFeaturizer(BaseFeaturizer):
         # init_fc(conv, "linear")
         # pool = nn.AvgPool1d(self.num_pooling)
         # self.projection = nn.Sequential(Transpose(), conv, pool, Transpose())
-        if n_internal_dims != n_tokens_out:
+        if n_internal_dims != n_channels_out:
             projection = nn.Linear(n_internal_dims, n_channels_out)
             init_fc(projection, "leaky_relu")
             self.projection = nn.Sequential(GaussianNoise(gaussian_noise), projection, nn.LeakyReLU())
