@@ -33,9 +33,10 @@ class GRUFeaturizer(BaseFeaturizer):
         x, _ = self.featurizer(x)
         if filter_indices:
             x = x[:, self.indices]
+            assert x.size(1) == self.n_tokens_out
         if hasattr(self, "projection"):
             x = self.projection(x)
-        assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
+        x.size(2) == self.n_channels_out
         return x
 
 

@@ -115,6 +115,8 @@ class ImageGRUModel(AlbertClassifer):
         elif model == "t5-small":
             self.word_embeddings = model_class.from_pretrained(model).shared
             self.word_embedding_dims = 512
+        else:
+            raise NotImplementedError()
 
         fc0 = nn.Linear(self.word_embedding_dims, embedding_dims)
         init_fc(fc0, "leaky_relu")
@@ -154,7 +156,6 @@ class ImageGRUModel(AlbertClassifer):
         im_repr = self.post_proc(im_repr).to(get_device())
         image_vectors = im_repr[:, :10]
         clean_memory()
-        seq_length = word_embeddings.size(1)
         image_vectors = image_vectors.to(get_device())
         embeddings = torch.cat([global_word_view, image_vectors, word_embeddings, image_vectors, global_word_view], 1)
 
