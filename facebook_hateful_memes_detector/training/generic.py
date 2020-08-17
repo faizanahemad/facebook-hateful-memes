@@ -395,6 +395,7 @@ def train(model, optimizer, scheduler_init_fn,
 
     train_losses = []
     learning_rates = []
+    validation_stats = dict()
     epochs = int(epochs * divisor)
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, examples) if scheduler_init_fn is not None else (None, False, False)
     print("Autocast = ", use_autocast, "Epochs = ", epochs, "Divisor =", divisor, "Examples =", examples, "Batch Size = ", batch_size,)
@@ -447,18 +448,22 @@ def train(model, optimizer, scheduler_init_fn,
             print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
             if validation_strategy is not None:
                 if (epoc + 1) in validation_strategy["validation_epochs"]:
+                    vs_stats = dict()
                     vst, vsv = 0, 0
                     if "train" in validation_strategy:
                         vst, _ = validation_strategy["train"]["method"](*validation_strategy["train"]["args"], **validation_strategy["train"]["kwargs"])
                         vst = ["%.2f" % (v*100) for v in vst]
+                        vs_stats["train"] = vst
                     if "val" in validation_strategy:
                         vsv, _ = validation_strategy["val"]["method"](*validation_strategy["val"]["args"],  **validation_strategy["val"]["kwargs"])
                         vsv = ["%.2f" % (v*100) for v in vsv]
+                        vs_stats["val"] = vsv
+                    validation_stats[epoc + 1] = vs_stats
                     print("Epoch = ", epoc + 1, "Train = %s" % vst, "Val = %s" % vsv,)
 
     if plot:
         plot_loss_lr(train_losses, learning_rates)
-    return train_losses, learning_rates
+    return train_losses, learning_rates, validation_stats
 
 
 class LabelConsistencyDatasetWrapper(torch.utils.data.Dataset):
@@ -938,9 +943,10 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
             train_dataset = training_fold_dataset
             collate_fn = my_collate
         tmodel.to(get_device())
-        train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back, accumulation_steps,
-                                             validation_strategy, plot=not kfold, sampling_policy=sampling_policy,
-                                             class_weights=class_weights, collate_fn=collate_fn,)
+        train_losses, learning_rates, validation_stats = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back,
+                                                               accumulation_steps,
+                                                               validation_strategy, plot=not kfold, sampling_policy=sampling_policy,
+                                                               class_weights=class_weights, collate_fn=collate_fn, )
 
         validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)
         train_scores, prfs_train = validate(model, batch_size, training_test_dataset, display_detail=False, prediction_iters=prediction_iters,
@@ -967,5 +973,5 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     results.columns = ["train", "val"]
     prfs_idx = pd.MultiIndex.from_product([["train", "val"], ["precision", "recall", "f1", "supoort"]])
     prfs = pd.DataFrame(np.array(prfs_list).mean(0), columns=["neg", "pos"], index=prfs_idx).T
-    return results, prfs
+    return results, prfs, validation_stats
 

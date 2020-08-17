@@ -64,11 +64,11 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
         train_dataset = dataset
         collate_fn = my_collate
     tmodel.to(get_device())
-    train_losses, learning_rates = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset,
-                                         model_call_back=model_call_back, validation_strategy=validation_strategy,
-                                         accumulation_steps=accumulation_steps, plot=True,
-                                         sampling_policy=sampling_policy, class_weights=class_weights, collate_fn=collate_fn)
-    return predict(model, datadict, batch_size, prediction_iters=prediction_iters, evaluate_in_train_mode=evaluate_in_train_mode, give_probas=give_probas)
+    train_losses, learning_rates, validation_stats = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset,
+                                                           model_call_back=model_call_back, validation_strategy=validation_strategy,
+                                                           accumulation_steps=accumulation_steps, plot=True,
+                                                           sampling_policy=sampling_policy, class_weights=class_weights, collate_fn=collate_fn)
+    return predict(model, datadict, batch_size, prediction_iters=prediction_iters, evaluate_in_train_mode=evaluate_in_train_mode, give_probas=give_probas), model, validation_stats
 
 
 def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_mode=False, give_probas=True):
@@ -91,7 +91,7 @@ def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_m
         sf = sf[cols]
     else:
         sf = pd.DataFrame({id_name: ids, "proba": all_probas_list, "label": predictions_list})
-    return sf, model
+    return sf
 
 
 
