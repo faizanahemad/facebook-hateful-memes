@@ -159,8 +159,8 @@ class ImageGRUModel(AlbertClassifer):
         clean_memory()
         image_vectors = image_vectors.to(get_device())
         embeddings = torch.cat([global_word_view, image_vectors, word_embeddings, image_vectors, global_word_view], 1)
-
-        hidden_state = self.gru(embeddings, not self.do_mlm)
+        
+        hidden_state = self.gru.forward(embeddings, filter_indices=not self.do_mlm)
         if self.do_mlm:
             hidden_state = hidden_state[:, 11:11+self.text_tokens]
         return (hidden_state,)

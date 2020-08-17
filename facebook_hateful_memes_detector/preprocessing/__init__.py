@@ -881,7 +881,7 @@ class TextImageDataset(Dataset):
             l = self.image_locations[item]
             image = self.images.get(l)
             if image is None:
-                image = Image.open(l).convert('RGB')
+                image = Image.open(l).convert('RGB') if l is not None else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
             s.image = image
 
         return s
