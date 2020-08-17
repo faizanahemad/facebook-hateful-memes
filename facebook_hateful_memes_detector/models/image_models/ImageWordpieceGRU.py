@@ -115,6 +115,8 @@ class ImageGRUModel(AlbertClassifer):
         elif model == "t5-small":
             self.word_embeddings = model_class.from_pretrained(model).shared
             self.word_embedding_dims = 512
+            self.tokenizer.mask_token_id = self.tokenizer.pad_token_id
+            self.tokenizer.mask_token = self.tokenizer.pad_token
         else:
             raise NotImplementedError()
 
