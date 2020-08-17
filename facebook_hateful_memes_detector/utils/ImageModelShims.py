@@ -93,16 +93,14 @@ class ImageCaptioningShim(nn.Module):
 class ImageModelShimSimple(nn.Module):
     def __init__(self, resnet="resnet18_swsl", n_tokens=64, out_channels=768, n_encoders=2, dropout=0.0, gaussian_noise=0.0, attention_drop_proba=0.0, **kwargs):
         super().__init__()
-        import timm
-        # model_names = timm.list_models('*resne*t*')
-        # model = timm.create_model(resnet, pretrained=True)  # 'resnest50d'
         resnet_model, resnet_shape = get_torchvision_classification_models(resnet, True)
         self.resnet_model = resnet_model
         self.resnet = resnet
 
         gaussian_noise = GaussianNoise(gaussian_noise)
 
-        lin = nn.Linear(resnet_shape[0], out_channels)
+        internal_dims = max(128, out_channels//4)
+        lin = nn.Linear(resnet_shape[0], internal_dims)
         init_fc(lin, "linear")
         self.resnet_reshape = nn.Sequential(nn.Dropout(dropout), lin, gaussian_noise)
 
@@ -112,9 +110,9 @@ class ImageModelShimSimple(nn.Module):
 
         self.quadrant_pool = nn.AdaptiveAvgPool2d(2)
 
-        featurizer = TransformerFeaturizer(n_tokens, out_channels, n_tokens,
+        featurizer = TransformerFeaturizer(n_tokens, internal_dims, n_tokens,
                                            out_channels,
-                                           out_channels, n_encoders, 0,
+                                           internal_dims, n_encoders, 0,
                                            gaussian_noise, dropout, attention_drop_proba)
         self.featurizer = featurizer
 
