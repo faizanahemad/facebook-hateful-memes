@@ -668,7 +668,12 @@ def get_image_transforms(mode="easy"):
 
     def get_imgaug(aug):
         def augment(image):
-            return aug(image=image)
+            return Image.fromarray(aug(image=np.array(image)))
+        return augment
+
+    def get_alb(aug):
+        def augment(image):
+            return Image.fromarray(aug(image=np.array(image))['image'])
         return augment
 
     p = 0.1
@@ -711,7 +716,7 @@ def get_image_transforms(mode="easy"):
             get_imgaug(iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True)),
             get_imgaug(iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5)),
             transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
-            get_imgaug(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
+            get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
         ]),
         transforms.RandomChoice([
             get_imgaug(iaa.GaussianBlur(sigma=(0.25, 1.0))),
