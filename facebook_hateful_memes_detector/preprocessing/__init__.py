@@ -668,12 +668,12 @@ def get_image_transforms(mode="easy"):
 
     def get_imgaug(aug):
         def augment(image):
-            return Image.fromarray(aug(image=np.array(image)))
+            return Image.fromarray(aug(image=np.array(image.copy())))
         return augment
 
     def get_alb(aug):
         def augment(image):
-            return Image.fromarray(aug(image=np.array(image))['image'])
+            return Image.fromarray(aug(image=np.array(image.copy()))['image'])
         return augment
 
     p = 0.1
