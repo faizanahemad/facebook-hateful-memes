@@ -391,7 +391,7 @@ def train(model, optimizer, scheduler_init_fn,
         examples = len(dataset)
         divisor = 1
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
-                              shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=sampler)
+                              shuffle=shuffle, num_workers=get_global("dataloader_workers"), pin_memory=False, sampler=sampler)
 
     train_losses = []
     learning_rates = []
@@ -519,7 +519,7 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
         pass
     use_autocast = use_autocast and get_global("use_autocast")
     train_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
-                              shuffle=True, num_workers=get_global("dataloader_workers"), pin_memory=True, sampler=None)
+                              shuffle=True, num_workers=get_global("dataloader_workers"), pin_memory=False, sampler=None)
 
     examples = len(dataset)
     train_losses = []
@@ -661,7 +661,7 @@ def generate_predictions(model, batch_size, dataset,
     clean_memory()
     from tqdm.auto import tqdm as tqdm, trange
     test_loader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn,
-                             shuffle=False, num_workers=get_global("dataloader_workers"), pin_memory=True)
+                             shuffle=False, num_workers=get_global("dataloader_workers"), pin_memory=False)
 
     use_autocast = False
     try:
