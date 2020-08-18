@@ -29,8 +29,8 @@ from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, m
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 
-
 RE_D = re.compile('\d')
+
 
 def my_collate(batch):
     # Create and return sample list with proper name and type set
@@ -522,33 +522,32 @@ def get_vgg_face_model(model='resnet'):
     for p in list(model.children())[-1].parameters():
         p.requires_grad = True
 
-    model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2).transpose(1, 2)),)
-    if mname+".pth" in os.listdir("."):
-        print("Loading saved model: ", mname+".pth")
-        model.load_state_dict(torch.load(mname+".pth"))
+    model = nn.Sequential(model, LambdaLayer(lambd=lambda x: x[1].squeeze(2).transpose(1, 2)), )
+    if mname + ".pth" in os.listdir("."):
+        print("Loading saved model: ", mname + ".pth")
+        model.load_state_dict(torch.load(mname + ".pth"))
 
     load_stored_params(model, mname)
     return model
 
 
 def load_stored_params(model, key):
-    if key+".pth" in os.listdir("."):
-        print("Loading saved model: ", key+".pth")
-        model.load_state_dict(torch.load(key+".pth"))
+    if key + ".pth" in os.listdir("."):
+        print("Loading saved model: ", key + ".pth")
+        model.load_state_dict(torch.load(key + ".pth"))
 
     if key in os.listdir("."):
         print("Loading saved model: ", key)
         model.load_state_dict(torch.load(key))
 
     global_dir = get_global("models_dir")
-    if key+".pth" in os.listdir(global_dir):
-        print("Loading saved model: ", key+".pth")
-        model.load_state_dict(torch.load(os.path.join(global_dir, key+".pth")))
+    if key + ".pth" in os.listdir(global_dir):
+        print("Loading saved model: ", key + ".pth")
+        model.load_state_dict(torch.load(os.path.join(global_dir, key + ".pth")))
 
     if key in os.listdir(global_dir):
         print("Loading saved model: ", key)
         model.load_state_dict(torch.load(os.path.join(global_dir, key)))
-
 
 
 def save_params(model, key):
@@ -582,7 +581,7 @@ class FocalLoss(nn.Module):
         self.alpha = alpha
         self.gamma = gamma
         self.reduce = reduce
-        self.sentinel_class=sentinel_class
+        self.sentinel_class = sentinel_class
 
     def forward(self, inputs, targets):
         if self.sentinel_class is not None:
@@ -591,7 +590,7 @@ class FocalLoss(nn.Module):
         targets = targets[mult]
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
         pt = torch.exp(-BCE_loss)
-        F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+        F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
         if self.reduce:
             return torch.mean(F_loss)
         else:
@@ -724,14 +723,14 @@ class PositionalEncoding2D(nn.Module):
             x = x.transpose(1, 2).transpose(2, 3)
         assert x.size(-1) == self.d_model
         x = x.transpose(0, 1).transpose(1, 2)  # H, W, B, C
-        pe = self.pe[:x.size(0), :] # H, C
+        pe = self.pe[:x.size(0), :]  # H, C
         pe_abs = self.pe[:x.size(0) * x.size(1), :]
         pe2 = self.pe[:x.size(1), :]  # W, C
         pe1 = pe.unsqueeze(1)
         pe2 = pe2.unsqueeze(0)
         x = x + 0.3 * pe1
         x = x + 0.3 * pe2
-        x = x.flatten(0, 1) + pe_abs/3
+        x = x.flatten(0, 1) + pe_abs / 3
         return self.dropout(x)
 
 
@@ -1003,7 +1002,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
         decoder_queries = nn.ParameterList()
         tgt_norms = nn.ModuleList()
 
-        decoder_layer = TransformerDecoderLayer(n_dims, 16, n_dims*4, dropout, "relu")
+        decoder_layer = TransformerDecoderLayer(n_dims, 16, n_dims * 4, dropout, "relu")
         for i in range(n_decoders):
             decoder_norm = LayerNorm(n_dims)
             decoder = TransformerDecoder(decoder_layer, n_layers, decoder_norm, gaussian_noise, attention_drop_proba)
@@ -1483,18 +1482,18 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
         _ = group_wise_finetune(smclr, lr_strategy_pre)
         params_conf, _ = group_wise_lr(smclr, lr_strategy_pre)
         optimizer = optimizer_class(params_conf, **optimizer_params)
-        train_losses, learning_rates = train(smclr,
-                                             optimizer,
-                                             scheduler_init_fn,
-                                             pre_batch_size,
-                                             epochs,
-                                             pre_dataset,
-                                             model_call_back=None,
-                                             accumulation_steps=256 // pre_batch_size + 1,
-                                             plot=True,
-                                             collate_fn=collate_fn,
-                                             sampling_policy=None,
-                                             class_weights=None)
+        train_losses, learning_rates, _ = train(smclr,
+                                                optimizer,
+                                                scheduler_init_fn,
+                                                pre_batch_size,
+                                                epochs,
+                                                pre_dataset,
+                                                model_call_back=None,
+                                                accumulation_steps=256 // pre_batch_size + 1,
+                                                plot=True,
+                                                collate_fn=collate_fn,
+                                                sampling_policy=None,
+                                                class_weights=None)
 
         smclr.plot_loss_acc_hist()
         acc_head = smclr.test_accuracy(pre_batch_size, pre_dataset, collate_fn=collate_fn)
@@ -1511,22 +1510,20 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
     _ = group_wise_finetune(smclr, lr_strategy_post)
     params_conf, _ = group_wise_lr(smclr, lr_strategy_post)
     optimizer = optimizer_class(params_conf, **optimizer_params)
-    train_losses, learning_rates = train(smclr,
-                                         optimizer,
-                                         scheduler_init_fn,
-                                         post_batch_size,
-                                         epochs,
-                                         post_dataset,
-                                         model_call_back=None,
-                                         accumulation_steps=256 // post_batch_size + 1,
-                                         plot=True,
-                                         collate_fn=collate_fn,
-                                         sampling_policy=None,
-                                         class_weights=None)
+    train_losses, learning_rates, _ = train(smclr,
+                                            optimizer,
+                                            scheduler_init_fn,
+                                            post_batch_size,
+                                            epochs,
+                                            post_dataset,
+                                            model_call_back=None,
+                                            accumulation_steps=256 // post_batch_size + 1,
+                                            plot=True,
+                                            collate_fn=collate_fn,
+                                            sampling_policy=None,
+                                            class_weights=None)
 
     smclr.plot_loss_acc_hist()
     acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
     print("Head Acc = ", acc_head, "Full Acc = ", acc)
     return (acc_head, acc)
-
-
