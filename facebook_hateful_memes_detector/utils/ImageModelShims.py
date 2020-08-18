@@ -115,12 +115,20 @@ class ImageModelShimSimple(nn.Module):
                                            internal_dims, n_encoders, 0,
                                            gaussian_noise, dropout, attention_drop_proba)
         self.featurizer = featurizer
+        use_autocast = False
+        try:
+            from torch.cuda.amp import GradScaler, autocast
+            use_autocast = "cuda" in str(get_device())
+        except:
+            pass
+        self.use_autocast = use_autocast and get_global("use_autocast")
 
         if "stored_model" in kwargs and kwargs["stored_model"] is not None:
             load_stored_params(self, kwargs["stored_model"])
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        images = images.type(list(filter(lambda p: p.requires_grad, self.resnet_reshape.parameters()))[0].dtype)
+        if self.use_autocast:
+            images = images.type(torch.cuda.HalfTensor)
         resnet_in = self.resnet_model(images)
         resnet_lrf = self.half_pool(resnet_in)
         resnet_quadrant = self.quadrant_pool(resnet_in)
