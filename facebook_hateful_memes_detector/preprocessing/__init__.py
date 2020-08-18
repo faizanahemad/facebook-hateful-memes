@@ -757,7 +757,9 @@ def get_image_transforms_pytorch(mode="easy"):
     cutout_size = 0.1
     grid_random_offset = False
     distortion_scale = 0.1
+    grid_ratio = 0.25
     if mode == "hard":
+        grid_ratio = 0.5
         p = 0.25
         param1 = 0.1
         rotation = 30
@@ -778,6 +780,7 @@ def get_image_transforms_pytorch(mode="easy"):
         ]),
         transforms.RandomChoice([
             transforms.RandomRotation(rotation),
+            get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
             transforms.RandomVerticalFlip(p=1.0),
             QuadrantCut(),
             DefinedRotation(90),
