@@ -116,14 +116,17 @@ class TransformerImageV2Model(AlbertClassifer):
 
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
-        img = sampleList.torchvision_image
         input_ids, attention_mask = self.tokenise(sampleList.text)
         word_embeddings = self.model.embeddings(input_ids)  # B, S, C
-        img = img.to(get_device())
-        im_repr = self.im_model(img)
-        im_repr = self.post_proc(im_repr).to(get_device())
-        image_vectors = im_repr[:, 0].unsqueeze(1)
-        clean_memory()
+        if hasattr(sampleList, "torchvision_image"):
+            img = sampleList.torchvision_image
+            img = img.to(get_device())
+            im_repr = self.im_model(img)
+            im_repr = self.post_proc(im_repr).to(get_device())
+            image_vectors = im_repr[:, 0].unsqueeze(1)
+            clean_memory()
+        else:
+            image_vectors = torch.zeros(word_embeddings.size(0), 1, word_embeddings.size(2), dtype=torch.float, device=get_device())
         seq_length = word_embeddings.size(1)
         position_ids = torch.arange(seq_length, seq_length + image_vectors.size(1), dtype=torch.long, device=input_ids.device)  # (max_seq_length)
         position_ids = position_ids.unsqueeze(0).expand(image_vectors.size()[:2])  # (bs, max_seq_length)

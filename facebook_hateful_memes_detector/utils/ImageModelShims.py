@@ -99,7 +99,7 @@ class ImageModelShimSimple(nn.Module):
 
         gaussian_noise = GaussianNoise(gaussian_noise)
 
-        internal_dims = max(128, out_channels//4)
+        internal_dims = 128
         lin = nn.Linear(resnet_shape[0], internal_dims)
         init_fc(lin, "linear")
         self.resnet_reshape = nn.Sequential(nn.Dropout(dropout), lin, gaussian_noise)
