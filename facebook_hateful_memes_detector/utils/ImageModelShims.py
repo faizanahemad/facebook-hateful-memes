@@ -120,6 +120,7 @@ class ImageModelShimSimple(nn.Module):
             load_stored_params(self, kwargs["stored_model"])
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
+        images = images.type(list(filter(lambda p: p.requires_grad, self.resnet_model.parameters()))[0].dtype)
         resnet_in = self.resnet_model(images)
         resnet_lrf = self.half_pool(resnet_in)
         resnet_quadrant = self.quadrant_pool(resnet_in)
