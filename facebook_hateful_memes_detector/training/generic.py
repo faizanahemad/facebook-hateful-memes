@@ -357,6 +357,11 @@ def train(model, optimizer, scheduler_init_fn,
     except:
         pass
     use_autocast = use_autocast and get_global("use_autocast")
+    gradient_clipping = False
+    try:
+        gradient_clipping = get_global("gradient_clipping")
+    except:
+        pass
     assert sampling_policy is None or sampling_policy in ["with_replacement", "without_replacement", "without_replacement_v2", "without_replacement_v3"]
     if sampling_policy == "with_replacement":
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
@@ -424,6 +429,9 @@ def train(model, optimizer, scheduler_init_fn,
                             loss_monitor += loss.cpu().detach().item()
                         scaler.scale(loss).backward()
                         if (batch_idx + 1) % accumulation_steps == 0:
+                            if gradient_clipping:
+                                scaler.unscale_(optimizer)
+                                torch.nn.utils.clip_grad_norm_(list(filter(lambda p: p.requires_grad, model.parameters())), gradient_clipping)
                             scaler.step(optimizer)
                             scaler.update()
 
@@ -434,6 +442,8 @@ def train(model, optimizer, scheduler_init_fn,
                         loss_monitor += loss.cpu().detach().item()
                         loss.backward()
                         if (batch_idx + 1) % accumulation_steps == 0:
+                            if gradient_clipping:
+                                torch.nn.utils.clip_grad_norm_(list(filter(lambda p: p.requires_grad, model.parameters())), gradient_clipping)
                             optimizer.step()
 
                     if (batch_idx + 1) % accumulation_steps == 0:
@@ -528,7 +538,11 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
     print("Autocast = ", use_autocast, "Epochs = ", epochs, "Examples =", examples, "Batch Size = ", batch_size,)
     print("Training Samples = ", len(dataset), "Weighted Sampling = ", False,
           "Num Batches = ", len(train_loader), "Accumulation steps = ", accumulation_steps)
-
+    gradient_clipping = False
+    try:
+        gradient_clipping = get_global("gradient_clipping")
+    except:
+        pass
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
     with trange(epochs) as epo:
@@ -563,6 +577,9 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
 
                         scaler.scale(loss).backward()
                         if (batch_idx + 1) % accumulation_steps == 0:
+                            if gradient_clipping:
+                                scaler.unscale_(optimizer)
+                                torch.nn.utils.clip_grad_norm_(list(filter(lambda p: p.requires_grad, model.parameters())), gradient_clipping)
                             scaler.step(optimizer)
                             scaler.update()
                             optimizer.zero_grad()
@@ -579,6 +596,8 @@ def train_for_augment_similarity(model, optimizer, scheduler_init_fn,
                         loss = loss / accumulation_steps
                         loss.backward()
                         if (batch_idx + 1) % accumulation_steps == 0:
+                            if gradient_clipping:
+                                torch.nn.utils.clip_grad_norm_(list(filter(lambda p: p.requires_grad, model.parameters())), gradient_clipping)
                             optimizer.step()
                             optimizer.zero_grad()
                             clean_memory()

@@ -773,16 +773,17 @@ def get_image_transforms_pytorch(mode="easy"):
         transforms.RandomHorizontalFlip(p=p),
         transforms.RandomPerspective(distortion_scale=distortion_scale, p=p),
         transforms.ColorJitter(brightness=param1, contrast=param1, saturation=param1, hue=param1),
-        transforms.Compose([
-            transforms.ToTensor(),
-            transforms.RandomErasing(p=0.5, scale=(0.05, cutout_size), ratio=(0.3, 3.3), value='random', inplace=False),
-            transforms.ToPILImage(),
+        transforms.RandomChoice([
+            transforms.Compose([
+                transforms.ToTensor(),
+                transforms.RandomErasing(p=0.5, scale=(0.05, cutout_size), ratio=(0.3, 3.3), value='random', inplace=False),
+                transforms.ToPILImage(),
+            ]),
+            get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
         ]),
         transforms.RandomChoice([
             transforms.RandomRotation(rotation),
-            get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
             transforms.RandomVerticalFlip(p=1.0),
-            QuadrantCut(),
             DefinedRotation(90),
             transforms.RandomAffine(
                 0,
@@ -790,7 +791,7 @@ def get_image_transforms_pytorch(mode="easy"):
                 scale=(0.6, 1.4),
                 shear=None,
             ),
-            transforms.RandomResizedCrop(480, scale=(0.6, 1.2)),  # Zoom in
+            transforms.RandomResizedCrop(480, scale=(1.0, 1.2)),  # Zoom in
             transforms.RandomResizedCrop(640, scale=(0.8, 1.0)),  # Zoom in
             transforms.RandomResizedCrop(360, scale=(0.6, 0.8)),
         ]),
