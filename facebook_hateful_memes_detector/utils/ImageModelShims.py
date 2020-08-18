@@ -122,6 +122,7 @@ class ImageModelShimSimple(nn.Module):
         except:
             pass
         self.use_autocast = use_autocast and get_global("use_autocast")
+        self.out_ln = nn.LayerNorm(out_channels, eps=1e-12)
 
         if "stored_model" in kwargs and kwargs["stored_model"] is not None:
             load_stored_params(self, kwargs["stored_model"])
@@ -140,6 +141,7 @@ class ImageModelShimSimple(nn.Module):
 
         resnet_out = self.resnet_reshape(torch.cat([resnet_global, resnet_lrf, resnet_in, resnet_quadrant, resnet_global], 1))
         seq = self.featurizer(resnet_out)
+        seq = self.out_ln(seq)
         return seq
 
 
