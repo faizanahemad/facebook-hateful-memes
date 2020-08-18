@@ -69,7 +69,13 @@ class TransformerImageV2Model(AlbertClassifer):
             raise NotImplementedError()
 
         im_shape = (768, 64)
-        im_proc = nn.Identity()
+        if embedding_dims != 768:
+            im_proc = nn.Linear(768, embedding_dims)
+            init_fc(im_proc, "linear")
+            im_proc = [im_proc, nn.Dropout(dropout)]
+        else:
+            im_proc = []
+        im_proc = nn.Sequential(*im_proc, nn.LayerNorm(embedding_dims))
         self.im_model = im_model
         self.post_proc = im_proc
         self.im_shape = im_shape
