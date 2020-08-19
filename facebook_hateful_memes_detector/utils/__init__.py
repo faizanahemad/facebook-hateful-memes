@@ -1467,7 +1467,7 @@ def merge_sample_lists(*samples):
 
 def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_post,
                pre_lr, post_lr, pre_batch_size, post_batch_size,
-               pre_epochs, full_epochs, collate_fn, scheduler_init_fn=None):
+               pre_epochs, full_epochs, collate_fn, scheduler_init_fn=None, test_acc=False):
     from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
     acc_head = np.nan
     if pre_epochs > 0:
@@ -1495,7 +1495,8 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
                                                 class_weights=None)
 
         smclr.plot_loss_acc_hist()
-        acc_head = smclr.test_accuracy(pre_batch_size, pre_dataset, collate_fn=collate_fn)
+        if test_acc:
+            acc_head = smclr.test_accuracy(pre_batch_size, pre_dataset, collate_fn=collate_fn)
 
     ##
 
@@ -1523,6 +1524,8 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
                                             class_weights=None)
 
     smclr.plot_loss_acc_hist()
-    acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
-    print("Head Acc = ", acc_head, "Full Acc = ", acc)
+    acc = np.nan
+    if test_acc
+        acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
+        print("Head Acc = ", acc_head, "Full Acc = ", acc)
     return (acc_head, acc)
