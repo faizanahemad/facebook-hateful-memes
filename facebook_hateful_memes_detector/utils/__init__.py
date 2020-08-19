@@ -1525,7 +1525,7 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
 
     smclr.plot_loss_acc_hist()
     acc = np.nan
-    if test_acc
+    if test_acc:
         acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
         print("Head Acc = ", acc_head, "Full Acc = ", acc)
     return (acc_head, acc)
