@@ -1467,9 +1467,8 @@ def merge_sample_lists(*samples):
 
 def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_post,
                pre_lr, post_lr, pre_batch_size, post_batch_size,
-               pre_epochs, full_epochs, collate_fn):
+               pre_epochs, full_epochs, collate_fn, scheduler_init_fn=None):
     from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
-    scheduler_init_fn = get_constant_schedule_with_warmup(0.4)
     acc_head = np.nan
     if pre_epochs > 0:
         epochs = pre_epochs
