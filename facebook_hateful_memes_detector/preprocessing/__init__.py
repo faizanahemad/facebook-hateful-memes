@@ -294,7 +294,7 @@ class TextAugment:
             start = 0
             return " ".join(splits[start:start + actual_len])
 
-        def change_number(text: str, mod_proba=0.75):
+        def change_number(text: str, mod_proba=0.9):
             try:
                 text = int(text)
 
@@ -302,6 +302,7 @@ class TextAugment:
                 try:
                     t = float(text)
                     pre, post = text.split(".")
+                    pre = int(pre)
                     lp = len(post)
                     if lp == 0:
                         t = int(pre)
@@ -313,25 +314,44 @@ class TextAugment:
                 if random.random() <= mod_proba:
                     rand = random.random()
                     if rand <= 0.15:
+                        # Entirely Random
                         text = str("%.2f" % (random.randint(0, 100) + random.random()))
-                    elif rand <= 0.35:
+                    elif rand <= 0.4:
+                        # Wild change
                         if isinstance(text, int):
-                            text = text + random.randint(-20, 20)
+                            change_range = max(1, int(0.25 * text))
+                            text = text + random.randint(-change_range, change_range)
                         else:
+                            change_range = max(1, int(0.25 * pre))
+                            pre = pre + random.randint(-change_range, change_range)
                             post = ("%.2f" % random.random()).split(".")[1]
-                            text = pre + "." + post
-                    elif rand <= 0.5:
+                            text = str(pre) + "." + post
+                    elif rand <= 0.7:
+                        # Small change
                         if isinstance(text, int):
-                            text = text + random.randint(-9, 9)
+                            change_range = max(1, int(0.1 * text))
+                            text = min(0, text + random.randint(-change_range, change_range))
                         else:
-                            post = post[:-1] + str(random.randint(0, 9))
-                            text = pre + "." + post
+                            change_range = max(1, int(0.1 * pre))
+                            pre = min(0, pre + random.randint(-change_range, change_range))
+                            post = ("%.2f" % random.random()).split(".")[1]
+                            text = str(pre) + "." + post
+                    elif rand <= 0.9:
+                        # Small change
+                        if isinstance(text, int):
+                            change_range = max(1, int(0.05 * text))
+                            text = min(0, text + random.randint(-change_range, change_range))
+                        else:
+                            change_range = max(1, int(0.05 * pre))
+                            pre = min(0, pre + random.randint(-change_range, change_range))
+                            post = post[:-1] + str(random.sample([int(post[-1]) + 1, int(post[-1]) - 1], 1)[0])
+                            text = str(pre) + "." + post
                     else:
                         if isinstance(text, int):
                             text = text + random.sample([-1, 1], 1)[0]
                         else:
                             post = post[:-1] + str(random.sample([int(post[-1]) + 1, int(post[-1]) - 1], 1)[0])
-                            text = pre + "." + post
+                            text = str(pre) + "." + post
             return str(text)
 
         def number_modify(text):
@@ -396,8 +416,11 @@ class TextAugment:
         def punctuation_continue(text):
             chars = list(text)
             new_text = []
-            for c in chars:
-                if c in punctuation_list:
+            for i, c in enumerate(chars):
+                if i == 0 or i == len(chars) - 1:
+                    new_text.append(c)
+                    continue
+                if c in punctuation_list and not chars[i-1].isnumeric() and not chars[i+1].isnumeric():
                     if random.random() < 0.5:
                         puncts = "".join([random.sample(".,\"'?!", 1)[0]] * random.randint(1, 3))
                     else:
@@ -416,36 +439,54 @@ class TextAugment:
         def punctuation_replace(text):
             chars = list(text)
             for i, c in enumerate(chars):
-                if c in punctuation_list:
-                    if random.random() < 0.5:
-                        chars[i] = random.sample(punctuation_list, 1)[0]
+                if i == 0 or i == len(chars) - 1:
+                    continue
+                if c in punctuation_list and not chars[i-1].isnumeric() and not chars[i+1].isnumeric():
+                    chars[i] = random.sample(punctuation_list, 1)[0]
             return "".join(chars)
 
         def punctuation_strip(text):
             chars = list(text)
             for i, c in enumerate(chars):
-                if c in punctuation_list:
+                if i == 0 or i == len(chars) - 1:
+                    continue
+                if c in punctuation_list and not chars[i-1].isnumeric() and not chars[i+1].isnumeric():
                     if random.random() < 0.5:
                         chars[i] = " "
             text = "".join(chars)
             text = " ".join([w.strip() for w in text.split()])
             return text
 
+        def isnumber(text):
+            try:
+                text = int(text)
+                return True
+            except:
+                try:
+                    t = float(text)
+                    return True
+                except:
+                    pass
+            return False
+
+
         def word_join(text):
             words = text.split()
+            probas = [1 / (np.sqrt(len(w)) + np.sqrt(len(words[i+1]))) if not isnumber(w) and not isnumber(words[i+1]) else 0.0 for i, w in enumerate(words[:-1])]
             if len(words) <= 2:
                 return text
-            idx = random.randint(0, len(words) - 2)
+            idx = random.choices(range(len(words) - 1), probas)[0]
             w1 = words[idx] + words[idx + 1]
-            words = words[:idx] + [w1] + words[idx + 1:]
+            words = words[:idx] + [w1] + words[idx + 2:]
             return " ".join(words)
 
         def word_cutout(text):
             words = text.split()
-            lwi = [i for i, w in enumerate(words) if len(w) >= 4]
-            if len(lwi) <= 2:
+            probas = [1/np.sqrt(len(w)) for w in words]
+            if len(words) <= 3:
                 return text
-            cut_idx = random.sample(lwi, 1)[0]
+
+            cut_idx = random.choices(range(len(words)), probas)[0]
             words = words[:cut_idx] + words[cut_idx + 1:]
             return " ".join(words)
 
