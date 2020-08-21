@@ -837,7 +837,7 @@ def get_image_transforms_pytorch(mode="easy"):
             get_alb(alb.transforms.CoarseDropout(max_holes=8, max_height=64, max_width=64, min_holes=4, min_height=16, min_width=16, fill_value=0))
         ]),
         transforms.RandomChoice([
-            get_alb(alb.transforms.GaussianBlur(blur_limit=(3, 7), sigma_limit=0, always_apply=False, p=alb_proba)),
+            get_alb(alb.transforms.GaussianBlur(blur_limit=(3, 7), always_apply=False, p=alb_proba)),
             get_alb(alb.transforms.Posterize(num_bits=4, always_apply=False, p=alb_proba)),
             get_alb(alb.transforms.Solarize(threshold=128, always_apply=False, p=alb_proba)),
             get_alb(alb.transforms.GaussNoise(var_limit=(10.0, 50.0), mean=0, always_apply=False, p=alb_proba)),
