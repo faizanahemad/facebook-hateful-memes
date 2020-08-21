@@ -9,6 +9,8 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import torchvision
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 from PIL import Image
 from albumentations import augmentations as alb
 from torch.utils.data import Dataset
@@ -781,11 +783,6 @@ def get_image_transforms(mode="easy"):
 
 def get_image_transforms_pytorch(mode="easy"):
 
-    def get_imgaug(aug):
-        def augment(image):
-            return Image.fromarray(aug(image=np.array(image.copy())))
-        return augment
-
     def get_alb(aug):
         def augment(image):
             return Image.fromarray(aug(image=np.array(image.copy()))['image'])
@@ -794,20 +791,40 @@ def get_image_transforms_pytorch(mode="easy"):
     p = 0.1
     param1 = 0.05
     rotation = 15
-    cutout_max_count = 2
+    cutout_max_count = 1
     cutout_size = 0.1
     grid_random_offset = False
     distortion_scale = 0.1
     grid_ratio = 0.25
+    cutout_proba = 0.5
+    alb_proba = 0.2
     if mode == "hard":
         grid_ratio = 0.5
         p = 0.25
-        param1 = 0.1
+        param1 = 0.15
         rotation = 30
-        cutout_max_count = 5
+        cutout_max_count = 3
         cutout_size = 0.25
         grid_random_offset = True
         distortion_scale = 0.25
+        cutout_proba = 1.0
+        alb_proba = 0.5
+
+    def get_cutout():
+        cut = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.RandomErasing(p=cutout_proba, scale=(0.05, cutout_size), ratio=(0.3, 3.3), value='random', inplace=False),
+            transforms.ToPILImage(),
+        ])
+        return cut
+    cut = get_cutout()
+
+    def cutout(img):
+        for _ in range(random.randint(1, cutout_max_count)):
+            img = cut(img)
+        return img
+
+
 
     preprocess = transforms.Compose([
         transforms.RandomGrayscale(p=p),
@@ -815,12 +832,16 @@ def get_image_transforms_pytorch(mode="easy"):
         transforms.RandomPerspective(distortion_scale=distortion_scale, p=p),
         transforms.ColorJitter(brightness=param1, contrast=param1, saturation=param1, hue=param1),
         transforms.RandomChoice([
-            transforms.Compose([
-                transforms.ToTensor(),
-                transforms.RandomErasing(p=0.5, scale=(0.05, cutout_size), ratio=(0.3, 3.3), value='random', inplace=False),
-                transforms.ToPILImage(),
-            ]),
+            cutout,
             get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
+            get_alb(alb.transforms.CoarseDropout(max_holes=8, max_height=64, max_width=64, min_holes=4, min_height=16, min_width=16, fill_value=0))
+        ]),
+        transforms.RandomChoice([
+            get_alb(alb.transforms.GaussianBlur(blur_limit=(3, 7), sigma_limit=0, always_apply=False, p=alb_proba)),
+            get_alb(alb.transforms.Posterize(num_bits=4, always_apply=False, p=alb_proba)),
+            get_alb(alb.transforms.Solarize(threshold=128, always_apply=False, p=alb_proba)),
+            get_alb(alb.transforms.GaussNoise(var_limit=(10.0, 50.0), mean=0, always_apply=False, p=alb_proba)),
+            get_alb(alb.transforms.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.2, rotate_limit=45, p=alb_proba)),
         ]),
         transforms.RandomChoice([
             transforms.RandomRotation(rotation),
@@ -830,11 +851,10 @@ def get_image_transforms_pytorch(mode="easy"):
                 0,
                 translate=(0.25, 0.25),
                 scale=(0.6, 1.4),
-                shear=None,
+                shear=25,
             ),
-            transforms.RandomResizedCrop(480, scale=(1.0, 1.2)),  # Zoom in
-            transforms.RandomResizedCrop(640, scale=(0.8, 1.0)),  # Zoom in
-            transforms.RandomResizedCrop(360, scale=(0.6, 0.8)),
+            transforms.RandomResizedCrop(640, scale=(0.6, 0.8)),  # Zoom in
+            transforms.RandomResizedCrop(360, scale=(0.4, 0.8)),
         ]),
     ])
     return preprocess
