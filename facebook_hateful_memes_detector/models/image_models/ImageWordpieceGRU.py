@@ -38,10 +38,10 @@ from ...utils.ImageModelShims import ImageCaptioningShim, ImageModelShim, ImageM
 class ImageGRUModel(AlbertClassifer):
     def __init__(self, image_model, classifier_dims, num_classes,
                  gaussian_noise, dropout,
-                 internal_dims, n_layers,final_layer_builder,
+                 internal_dims, n_layers, final_layer_builder,
                  n_tokens_in=640, n_tokens_out=16,
                  use_as_super=False, **kwargs):
-        embedding_dims = 768
+        embedding_dims = internal_dims
         super(ImageGRUModel, self).__init__(classifier_dims, num_classes, gaussian_noise, dropout,
                                             internal_dims, n_layers,
                                             "transformer", final_layer_builder,
