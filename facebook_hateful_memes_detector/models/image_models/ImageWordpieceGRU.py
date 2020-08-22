@@ -130,6 +130,12 @@ class ImageGRUModel(AlbertClassifer):
                                  classifier_dims, classifier_dims, n_layers, gaussian_noise, dropout)
 
         self.do_mlm = kwargs.pop("do_mlm", False)
+        if self.do_mlm and self.word_embedding_dims != embedding_dims:
+            fc0 = nn.Linear(embedding_dims, self.word_embedding_dims)
+            init_fc(fc0, "leaky_relu")
+            self.gru_out = nn.Sequential(fc0, nn.LayerNorm(self.word_embedding_dims))
+        else:
+            self.gru_out = nn.LayerNorm(embedding_dims)
 
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
 
