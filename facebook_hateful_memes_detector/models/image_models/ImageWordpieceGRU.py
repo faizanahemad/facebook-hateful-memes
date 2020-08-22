@@ -120,9 +120,12 @@ class ImageGRUModel(AlbertClassifer):
         else:
             raise NotImplementedError()
 
-        fc0 = nn.Linear(self.word_embedding_dims, embedding_dims)
-        init_fc(fc0, "leaky_relu")
-        self.gru_lin = nn.Sequential(fc0, nn.Dropout(dropout), nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
+        if self.word_embedding_dims != embedding_dims:
+            fc0 = nn.Linear(self.word_embedding_dims, embedding_dims)
+            init_fc(fc0, "leaky_relu")
+            self.gru_lin = nn.Sequential(fc0, nn.Dropout(dropout), nn.LeakyReLU(), nn.LayerNorm(embedding_dims))
+        else:
+            self.gru_lin = nn.LayerNorm(embedding_dims)
         self.gru = GRUFeaturizer(self.total_tokens, embedding_dims, n_tokens_out,
                                  classifier_dims, classifier_dims, n_layers, gaussian_noise, dropout)
 
@@ -149,7 +152,7 @@ class ImageGRUModel(AlbertClassifer):
     def get_vectors(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         input_ids, _ = self.tokenise(sampleList.text)
-        word_embeddings = self.word_embeddings(input_ids)
+        word_embeddings = self.gru_lin(self.word_embeddings(input_ids))
         global_word_view = word_embeddings.mean(1).unsqueeze(1)
         if hasattr(sampleList, "torchvision_image"):
             img = sampleList.torchvision_image
