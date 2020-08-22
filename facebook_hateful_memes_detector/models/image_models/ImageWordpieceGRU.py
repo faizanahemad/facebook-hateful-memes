@@ -174,7 +174,7 @@ class ImageGRUModel(AlbertClassifer):
         
         hidden_state = self.gru.forward(embeddings, filter_indices=not self.do_mlm)
         if self.do_mlm:
-            hidden_state = hidden_state[:, 11:11+self.text_tokens]
+            hidden_state = self.gru_out(hidden_state[:, 11:11+self.text_tokens])
         return (hidden_state,)
 
     def forward(self, sampleList: SampleList):
@@ -182,7 +182,9 @@ class ImageGRUModel(AlbertClassifer):
         labels = torch.tensor(sampleList.label).to(get_device())
         # sample_weights = torch.tensor(sampleList.sample_weight, dtype=float).to(get_device())
         vectors = self.get_vectors(sampleList)[-1]
-        logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
+        logits, loss = None, None
+        if not self.do_mlm:
+            logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
 
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
