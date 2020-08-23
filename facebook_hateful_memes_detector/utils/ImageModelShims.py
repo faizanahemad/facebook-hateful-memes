@@ -123,6 +123,7 @@ class ImageModelShimSimple(nn.Module):
             pass
         self.use_autocast = use_autocast and get_global("use_autocast")
         self.out_ln = nn.LayerNorm(out_channels, eps=1e-12)
+        self.out_channels = out_channels
 
         if "stored_model" in kwargs and kwargs["stored_model"] is not None:
             load_stored_params(self, kwargs["stored_model"])

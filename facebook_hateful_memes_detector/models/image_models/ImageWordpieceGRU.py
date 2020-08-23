@@ -66,9 +66,9 @@ class ImageGRUModel(AlbertClassifer):
         else:
             raise NotImplementedError()
 
-        im_shape = (768, 64)
-        if embedding_dims != 768:
-            im_proc = nn.Linear(768, embedding_dims)
+        im_shape = (im_model.out_channels, 64)
+        if embedding_dims != im_model.out_channels:
+            im_proc = nn.Linear(im_model.out_channels, embedding_dims)
             init_fc(im_proc, "linear")
             im_proc = [im_proc, nn.Dropout(dropout)]
         else:
