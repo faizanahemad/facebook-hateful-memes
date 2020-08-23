@@ -55,7 +55,7 @@ class ImageGRUModel(AlbertClassifer):
             module_gaussian = image_model.pop("gaussian_noise", 0.0)
             module_dropout = image_model.pop("dropout", 0.0)
             stored_model = image_model.pop("stored_model", None)
-            im_model = ImageModelShimSimple(resnet="resnet18_swsl", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model)
+            im_model = ImageModelShimSimple(resnet="resnet18_swsl", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model, **image_model)
         elif type(image_model) == str:
             module_gaussian = 0.0
             module_dropout = 0.0
