@@ -798,7 +798,7 @@ def get_image_transforms_pytorch(mode="easy"):
     distortion_scale = 0.1
     grid_ratio = 0.25
     cutout_proba = 0.5
-    alb_proba = 0.2
+    alb_proba = 0.1
     if mode == "hard":
         grid_ratio = 0.5
         p = 0.25
@@ -809,7 +809,7 @@ def get_image_transforms_pytorch(mode="easy"):
         grid_random_offset = True
         distortion_scale = 0.25
         cutout_proba = 1.0
-        alb_proba = 0.5
+        alb_proba = 0.4
 
     def get_cutout():
         cut = transforms.Compose([
@@ -837,12 +837,16 @@ def get_image_transforms_pytorch(mode="easy"):
             get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
             get_alb(alb.transforms.CoarseDropout(max_holes=8, max_height=64, max_width=64, min_holes=4, min_height=16, min_width=16, fill_value=0))
         ]),
-        transforms.RandomChoice([
-            get_alb(alb.transforms.GaussianBlur(blur_limit=(3, 7), always_apply=False, p=alb_proba)),
-            get_alb(alb.transforms.Posterize(num_bits=4, always_apply=False, p=alb_proba)),
-            get_alb(alb.transforms.Solarize(threshold=128, always_apply=False, p=alb_proba)),
-            get_alb(alb.transforms.GaussNoise(var_limit=(10.0, 50.0), mean=0, always_apply=False, p=alb_proba)),
-            get_alb(alb.transforms.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.2, rotate_limit=45, p=alb_proba)),
+        transforms.RandomOrder([
+             get_alb(alb.transforms.MedianBlur(p=alb_proba)),
+             get_alb(alb.transforms.RandomGamma(p=alb_proba)),
+             get_alb(alb.transforms.RGBShift(p=alb_proba)),
+             get_alb(alb.transforms.MotionBlur(p=alb_proba)),
+             get_alb(alb.transforms.ImageCompression(95,p=alb_proba)),
+             get_alb(alb.transforms.Equalize(p=alb_proba)),
+             get_alb(alb.transforms.Posterize(num_bits=4, always_apply=False, p=alb_proba)),
+             get_alb(alb.transforms.Solarize(threshold=128, always_apply=False, p=alb_proba)),
+             get_alb(alb.transforms.GaussNoise(var_limit=(10.0, 50.0), mean=0, always_apply=False, p=alb_proba)),
         ]),
         transforms.RandomChoice([
             transforms.RandomRotation(rotation),
