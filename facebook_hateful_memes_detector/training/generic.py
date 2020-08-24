@@ -1,3 +1,4 @@
+import os
 from typing import List, Dict, Callable
 
 import numpy as np
@@ -337,7 +338,9 @@ def train(model, optimizer, scheduler_init_fn,
           plot=False,
           sampling_policy=None,
           collate_fn=my_collate,
-          class_weights={0: 1, 1: 1.8}):
+          class_weights={0: 1, 1: 1.8},
+          model_save_key=None, save_every=None,
+          resume_most_recent_checkpoint=False):
     if in_notebook():
         from tqdm.notebook import tqdm, trange
     else:
@@ -346,6 +349,15 @@ def train(model, optimizer, scheduler_init_fn,
         training_fold_labels = torch.tensor(dataset.labels)
 
     assert hasattr(dataset, "labels") or sampling_policy is None
+
+    if resume_most_recent_checkpoint and model_save_key is not None:
+        import glob
+        global_dir = get_global("models_dir")
+        available_checkpoints = glob.glob(os.path.join(global_dir, model_save_key + "-*.pth"))
+        latest_chkpt_id = sorted([int(c.replace(model_save_key+"-", '').replace(".pth", '')) for c in available_checkpoints])[-1]
+        load_point = os.path.join(global_dir, model_save_key + "-%s.pth" % str(latest_chkpt_id))
+        model.load_state_dict(torch.load(load_point))
+        print("Loaded saved checkpoint in Train method from: ", load_point)
 
     assert accumulation_steps >= 1 and type(accumulation_steps) == int
     _ = model.train()
@@ -400,6 +412,7 @@ def train(model, optimizer, scheduler_init_fn,
 
     train_losses = []
     learning_rates = []
+    batch_count = 0
     validation_stats = dict()
     epochs = int(epochs * divisor)
     scheduler, update_in_batch, update_in_epoch = scheduler_init_fn(optimizer, epochs, batch_size, examples) if scheduler_init_fn is not None else (None, False, False)
@@ -419,6 +432,11 @@ def train(model, optimizer, scheduler_init_fn,
             loss_monitor = 0.0
             with tqdm(train_loader, "Batches") as data_batch:
                 for batch_idx, batch in enumerate(data_batch):
+                    batch_count += 1
+                    if save_every is not None and model_save_key is not None and batch_count % save_every == 0:
+                        global_dir = get_global("models_dir")
+                        torch.save(model.state_dict(), os.path.join(global_dir, "%s-%s.pth" % (model_save_key, str(batch_count))))
+
                     if model_call_back is not None:
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
                     if use_autocast:
