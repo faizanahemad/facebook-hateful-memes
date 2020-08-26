@@ -62,7 +62,7 @@ class ImageModelShim(nn.Module):
 
         resnet_out = self.resnet_reshape(torch.cat([resnet_global, resnet_in, resnet_lrf, resnet_quadrant], 1))
 
-        seq = torch.cat([resnet_out, vgg_face_in], 1)
+        seq = torch.cat([vgg_face_in, resnet_out], 1)
         seq = self.featurizer(seq)
         return seq
 
@@ -144,6 +144,32 @@ class ImageModelShimSimple(nn.Module):
         seq = self.featurizer(resnet_out)
         seq = self.out_ln(seq)
         return seq
+
+
+def get_shim_resnet(resnet='resnet18_swsl', dropout=0.0, dims=512, **kwargs):
+    assert resnet in ['resnet18_swsl', 'resnet50_swsl']
+    use_autocast = False
+    try:
+        from torch.cuda.amp import GradScaler, autocast
+        use_autocast = "cuda" in str(get_device())
+    except:
+        pass
+    use_autocast = use_autocast and get_global("use_autocast")
+
+    def lamb(images):
+        if use_autocast:
+            images = images.type(torch.cuda.HalfTensor)
+        return images
+
+    autocast_layer = LambdaLayer(lamb)
+
+    resnet = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', resnet)
+    resnet = [autocast_layer, resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1, resnet.layer2, resnet.layer3,
+              nn.Dropout2d(p=dropout), resnet.layer4, resnet.avgpool, nn.LayerNorm(dims, eps=1e-12)]
+    resnet = nn.Sequential(*resnet)
+    if "stored_model" in kwargs and kwargs["stored_model"] is not None:
+        load_stored_params(resnet, kwargs["stored_model"])
+    return resnet
 
 
 
