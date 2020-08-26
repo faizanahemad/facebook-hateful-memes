@@ -163,9 +163,13 @@ def get_shim_resnet(resnet='resnet18_swsl', dropout=0.0, dims=512, **kwargs):
 
     autocast_layer = LambdaLayer(lamb)
 
+    def squeeze_lamb(x):
+        return x.squeeze()
+    sq_lamb = LambdaLayer(squeeze_lamb)
+
     resnet = torch.hub.load('facebookresearch/semi-supervised-ImageNet1K-models', resnet)
     resnet = [autocast_layer, resnet.conv1, resnet.bn1, resnet.relu, resnet.maxpool, resnet.layer1, resnet.layer2, resnet.layer3,
-              nn.Dropout2d(p=dropout), resnet.layer4, resnet.avgpool, nn.LayerNorm(dims, eps=1e-12)]
+              nn.Dropout2d(p=dropout), resnet.layer4, resnet.avgpool, sq_lamb, nn.LayerNorm(dims, eps=1e-12)]
     resnet = nn.Sequential(*resnet)
     if "stored_model" in kwargs and kwargs["stored_model"] is not None:
         load_stored_params(resnet, kwargs["stored_model"])
