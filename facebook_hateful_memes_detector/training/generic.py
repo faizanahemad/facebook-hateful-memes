@@ -860,9 +860,8 @@ def convert_dataframe_to_dataset(df, metadata, train=True, **kwargs):
     assert "id" in df.columns or "ID" in df.columns
     id_name = "id" if "id" in df.columns else "ID"
     ids = list(df[id_name])
-    numbers = kwargs.pop("numbers", None)
     ds = TextImageDataset(ids, text, list(df.img), labels, sample_weights,
-                          numbers=numbers, numeric_regularizer=metadata["numeric_regularizer"] if train else None,
+                          numeric_regularizer=metadata["numeric_regularizer"] if train else None,
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
                           torchvision_pre_image_transform=metadata["train_torchvision_pre_image_transform"] if train else metadata["test_torchvision_pre_image_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
