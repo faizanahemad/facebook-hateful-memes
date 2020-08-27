@@ -86,19 +86,10 @@ class QuadrantCut:
             arr[x_half:, :y_half] = mean
 
         if choice == 5:
-            arr[:x_half, :] = mean
-        if choice == 6:
-            arr[x_half:, :] = mean
-        if choice == 7:
-            arr[:, y_half:] = mean
-        if choice == 8:
-            arr[:, :y_half] = mean
-
-        if choice == 9:
             arr[x_third:x_2third, :] = mean
-        if choice == 10:
+        if choice == 6:
             arr[:, y_third:y_2third] = mean
-        if choice == 11:
+        if choice == 7:
             arr[x_third:x_2third, y_third:y_2third] = mean
 
         return Image.fromarray(arr)
@@ -286,6 +277,18 @@ from gensim.models.fasttext import load_facebook_model
 from nltk.corpus import stopwords
 
 
+def isnumber(text):
+    try:
+        text = int(text)
+        return True
+    except:
+        try:
+            t = float(text)
+            return True
+        except:
+            pass
+    return False
+
 class TextAugment:
     def __init__(self, count_proba: List[float], choice_probas: Dict[str, float],
                  fasttext_file: str = None, idf_file: str = None, dab_file: str = None):
@@ -470,19 +473,6 @@ class TextAugment:
             text = "".join(chars)
             text = " ".join([w.strip() for w in text.split()])
             return text
-
-        def isnumber(text):
-            try:
-                text = int(text)
-                return True
-            except:
-                try:
-                    t = float(text)
-                    return True
-                except:
-                    pass
-            return False
-
 
         def word_join(text):
             words = text.split()
@@ -722,92 +712,22 @@ def get_transforms_for_bbox_methods():
 
     transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(90), DefinedRotation(15), HalfSwap(), QuadrantCut(),
                                                            DefinedAffine(0, scale=(0.6, 0.6)), DefinedAffine(0, translate=(0.25, 0.25)),
+                                                           DefinedAffine(0, translate=(0.1, 0.1)), transforms.RandomAffine(0, scale=(0.5, 0.5)),
+                                                           transforms.RandomAffine(0, scale=(0.75, 0.75)), transforms.RandomAffine(0, scale=(1.25, 1.25)),
                                                            transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224)]),
                                                            transforms.Compose([transforms.Resize(480), transforms.CenterCrop(400)]),
                                                            transforms.Grayscale(num_output_channels=3),
                                                            transforms.RandomHorizontalFlip(p=1.0), transforms.RandomVerticalFlip(p=1.0), identity,
-                                                           get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=10, holes_number_y=10,
+                                                           get_alb(alb.transforms.GridDropout(ratio=0.15, holes_number_x=10, holes_number_y=10,
                                                                                               random_offset=False, p=1.0)),
                                                            get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=16, holes_number_y=16,
                                                                                               random_offset=False, p=1.0)),
-                                                           get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=32, holes_number_y=32,
+                                                           get_alb(alb.transforms.GridDropout(ratio=0.35, holes_number_x=32, holes_number_y=32,
                                                                                               random_offset=False, p=1.0)),
+
+
                                                            ])
     return transforms_for_bbox_methods
-
-
-def get_image_transforms(mode="easy"):
-
-    def get_imgaug(aug):
-        def augment(image):
-            return Image.fromarray(aug(image=np.array(image.copy())))
-        return augment
-
-    def get_alb(aug):
-        def augment(image):
-            return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
-        return augment
-
-    p = 0.1
-    param1 = 0.05
-    rotation = 15
-    cutout_max_count = 2
-    cutout_size = 0.1
-    coarse_drop_max = 0.02
-    color_augs = []
-    grid_random_offset = False
-    grid_ratio = 0.25
-    distortion_scale = 0.1
-    if mode == "hard":
-        p = 0.25
-        param1 = 0.1
-        rotation = 30
-        cutout_max_count = 5
-        cutout_size = 0.25
-        coarse_drop_max = 0.1
-        element_wise_add = 40
-        color_augs = [transforms.RandomChoice([
-            get_imgaug(iaa.pillike.Posterize()),
-            get_imgaug(iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5)),
-            get_imgaug(iaa.Solarize(1.0, threshold=(32, 128))),
-            get_imgaug(iaa.imgcorruptlike.MotionBlur(severity=1)),
-            get_imgaug(iaa.AllChannelsCLAHE()),
-            get_imgaug(iaa.LogContrast(gain=(0.6, 1.4))),
-            get_imgaug(iaa.pillike.Autocontrast((10, 20), per_channel=True))
-        ])]
-        grid_random_offset = True
-        grid_ratio = 0.5
-        distortion_scale = 0.25
-
-    preprocess = transforms.Compose([
-        transforms.RandomGrayscale(p=p),
-        transforms.RandomHorizontalFlip(p=p),
-        transforms.RandomPerspective(distortion_scale=distortion_scale, p=p),
-        transforms.ColorJitter(brightness=param1, contrast=param1, saturation=param1, hue=param1),
-        transforms.RandomChoice([
-            get_imgaug(iaa.Cutout(nb_iterations=(1, cutout_max_count), size=cutout_size, squared=False, fill_mode="gaussian", fill_per_channel=True)),
-            get_imgaug(iaa.CoarseDropout((0.01, coarse_drop_max), size_percent=(0.02, 0.25), per_channel=0.5)),
-            transforms.Compose([transforms.Resize(256), transforms.RandomCrop(224)]),
-            get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
-        ]),
-        transforms.RandomChoice([
-            get_imgaug(iaa.GaussianBlur(sigma=(0.25, 1.0))),
-            transforms.RandomRotation(rotation),
-            transforms.RandomVerticalFlip(p=1.0),
-            QuadrantCut(),
-            DefinedRotation(90),
-            transforms.RandomAffine(
-                0,
-                translate=(0.25, 0.25),
-                scale=(0.6, 1.4),
-                shear=None,
-            ),
-            transforms.RandomResizedCrop(480, scale=(0.6, 1.2)),  # Zoom in
-            transforms.RandomResizedCrop(640, scale=(0.8, 1.0)),  # Zoom in
-            transforms.RandomResizedCrop(360, scale=(0.6, 0.8)),
-        ]),
-    ] + color_augs)
-    return preprocess
 
 
 def get_image_transforms_pytorch(mode="easy"):
@@ -834,6 +754,8 @@ def get_image_transforms_pytorch(mode="easy"):
     alb_proba = 0.1
     alb_dropout_proba = 0.75
     color_augs = []
+    affine_zoom = 0.25
+    affine_translate = 0.15
     if mode == "hard":
         grid_ratio = 0.15
         p = 0.25
@@ -847,6 +769,8 @@ def get_image_transforms_pytorch(mode="easy"):
         alb_proba = 0.4
         alb_dropout_proba = 1.0
         element_wise_add = 25
+        affine_zoom = 0.5
+        affine_translate = 0.2
         color_augs = [transforms.RandomChoice([
             get_imgaug(iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5)),
             get_imgaug(iaa.imgcorruptlike.MotionBlur(severity=1)),
@@ -904,14 +828,14 @@ def get_image_transforms_pytorch(mode="easy"):
             DefinedRotation(90),
             transforms.RandomAffine(
                 0,
-                translate=(0.25, 0.25),
-                scale=(0.6, 1.4),
+                translate=(affine_translate, affine_translate),
+                scale=(1 - affine_zoom, 1 + affine_zoom),  # 0.6 -> Zoom out, 1.4 -> Zoom in
                 shear=25,
             ),
             transforms.RandomResizedCrop(640, scale=(0.6, 0.8)),  # Zoom in
             transforms.RandomResizedCrop(360, scale=(0.4, 0.8)),
         ]),
-    ])
+    ] + color_augs)
     return preprocess
 
 
@@ -952,8 +876,9 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numer
         assert len(numeric_train) == len(train)
         assert len(numeric_test) == len(test)
         numeric_dev = numeric_train[:sp]
+        if test_dev:
+            numeric_train = numeric_train[sp:]
     if test_dev:
-        numeric_train = numeric_train[sp:]
         train = train[sp:]
 
     dev["img"] = list(map(joiner, dev.img))
