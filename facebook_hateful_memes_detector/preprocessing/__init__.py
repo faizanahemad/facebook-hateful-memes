@@ -808,8 +808,8 @@ def get_image_transforms_pytorch(mode="easy"):
             get_alb(alb.transforms.GridDropout(ratio=0.2+grid_ratio, holes_number_x=16, holes_number_y=16, random_offset=grid_random_offset, p=alb_dropout_proba)),
             get_alb(alb.transforms.GridDropout(ratio=0.2+grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset, p=alb_dropout_proba)),
             get_alb(alb.transforms.GridDropout(ratio=0.2+grid_ratio, holes_number_x=32, holes_number_y=32, random_offset=grid_random_offset, p=alb_dropout_proba)),
-            get_alb(alb.transforms.CoarseDropout(max_holes=32, max_height=128, max_width=128, min_holes=8, min_height=32, min_width=32, fill_value=0, p=alb_dropout_proba)),
-            get_alb(alb.transforms.CoarseDropout(max_holes=16, max_height=256, max_width=256, min_holes=4, min_height=64, min_width=64, fill_value=0, p=alb_dropout_proba)),
+            get_alb(alb.transforms.CoarseDropout(max_holes=32, max_height=64, max_width=64, min_holes=8, min_height=32, min_width=32, fill_value=0, p=alb_dropout_proba)),
+            get_alb(alb.transforms.CoarseDropout(max_holes=16, max_height=128, max_width=128, min_holes=4, min_height=64, min_width=64, fill_value=0, p=alb_dropout_proba)),
         ]),
         transforms.RandomOrder([
              get_alb(alb.transforms.MedianBlur(p=alb_proba)),
