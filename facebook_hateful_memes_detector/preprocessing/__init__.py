@@ -558,7 +558,7 @@ class TextAugment:
                 dab = pd.read_csv(dab_file).values
                 dab_store = defaultdict(list)
                 for d in dab:
-                    dab_store[d[0]].append(d[1])
+                    dab_store[int(d[0])].append(d[1])
                 self.dab_store = dab_store
 
             if k == "fasttext":
@@ -684,7 +684,7 @@ class TextAugment:
                 if aug == "fasttext":
                     text = self.__fasttext_replace__(self.augments[aug], self.indexes[aug], text)
                 elif aug == "dab":
-                    identifier = kwargs["identifier"]
+                    identifier = int(kwargs["identifier"])
                     text = random.sample(self.dab_store[identifier], 1)[0]
                 elif aug in ["glove_twitter", "glove_wiki", "word2vec"]:
                     text = self.__w2v_replace__(self.augments[aug], self.indexes[aug], text)
@@ -696,6 +696,7 @@ class TextAugment:
                     raise ValueError()
             except Exception as e:
                 print("Exception for: ", aug, "|", "Original Text", original_text, "Final Text", text, "|", augs, e)
+                raise e
         return text
 
 
@@ -928,6 +929,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
         train = dev
 
     rd = dict(train=train, test=test, dev=dev,
+              numeric_train=None, numeric_dev=None, numeric_test=None,
               submission_format=submission_format,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev, test_dev=test_dev,
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,
