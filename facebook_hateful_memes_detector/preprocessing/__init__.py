@@ -696,7 +696,6 @@ class TextAugment:
                     raise ValueError()
             except Exception as e:
                 print("Exception for: ", aug, "|", "Original Text", original_text, "Final Text", text, "|", augs, e)
-                raise e
         return text
 
 
