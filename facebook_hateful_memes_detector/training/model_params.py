@@ -63,6 +63,7 @@ def group_wise_lr(model, group_lr_conf: Dict, path=""):
     if path == "":
         for c in confs:
             c["params"] = (n for n in c["params"])
+    _ = group_wise_finetune(model, group_lr_conf)
     return confs, nms
 
 

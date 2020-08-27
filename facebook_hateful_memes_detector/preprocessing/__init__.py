@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import torch
 import re
 from typing import List, Dict, Union, Callable
@@ -22,6 +24,8 @@ from ..utils.sample import Sample
 
 
 def identity(x): return x
+
+def return_first_arg(x, **kwargs): return x
 
 
 class DefinedRotation(torchvision.transforms.RandomRotation):
@@ -239,6 +243,12 @@ class ImageAugment:
         return image
 
 
+def tokenize(text):
+    text = re.sub(r'(?<=[.,;!])(?=[^\s0-9])', ' ', text)
+    text = re.sub('[ ]+', ' ', text)
+    return re.split(r"[ ,]+", text)
+
+
 def clean_text(text):
     # https://stackoverflow.com/questions/6202549/word-tokenization-using-python-regular-expressions
     # https://stackoverflow.com/questions/44263446/python-regex-to-add-space-after-dot-or-comma/44263500
@@ -277,7 +287,8 @@ from nltk.corpus import stopwords
 
 
 class TextAugment:
-    def __init__(self, count_proba: List[float], choice_probas: Dict[str, float], fasttext_file: str = None, idf_file: str = None):
+    def __init__(self, count_proba: List[float], choice_probas: Dict[str, float],
+                 fasttext_file: str = None, idf_file: str = None, dab_file: str = None):
         self.count_proba = count_proba
         assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
         assert len(count_proba) >= 1
@@ -552,6 +563,13 @@ class TextAugment:
             if k == "split":
                 self.augments["split"] = naw.SplitAug(aug_max=1, min_char=6,)
 
+            if k == "dab":
+                assert isinstance(dab_file, str)
+                dab = pd.read_csv(dab_file).values
+                dab_store = defaultdict(list)
+                for d in dab:
+                    dab_store[d[0]].append(d[1])
+
             if k == "fasttext":
                 assert fasttext_file is not None
                 self.augments["fasttext"] = load_facebook_model(fasttext_file)
@@ -664,7 +682,7 @@ class TextAugment:
         tokens[sampled_idx] = replacement
         return " ".join(tokens)
 
-    def __call__(self, text):
+    def __call__(self, text, **kwargs):
         original_text = text
         count = np.random.choice(list(range(len(self.count_proba))), 1, replace=False, p=self.count_proba)[0]
         augs = np.random.choice(self.augs, count, replace=False, p=self.choice_probas)
@@ -697,12 +715,23 @@ def get_image2torchvision_transforms():
 
 
 def get_transforms_for_bbox_methods():
+    def get_alb(aug):
+        def augment(image):
+            return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
+        return augment
+
     transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(90), DefinedRotation(15), HalfSwap(), QuadrantCut(),
                                                            DefinedAffine(0, scale=(0.6, 0.6)), DefinedAffine(0, translate=(0.25, 0.25)),
                                                            transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224)]),
                                                            transforms.Compose([transforms.Resize(480), transforms.CenterCrop(400)]),
                                                            transforms.Grayscale(num_output_channels=3),
                                                            transforms.RandomHorizontalFlip(p=1.0), transforms.RandomVerticalFlip(p=1.0), identity,
+                                                           get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=10, holes_number_y=10,
+                                                                                              random_offset=False, p=1.0)),
+                                                           get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=16, holes_number_y=16,
+                                                                                              random_offset=False, p=1.0)),
+                                                           get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=32, holes_number_y=32,
+                                                                                              random_offset=False, p=1.0)),
                                                            ])
     return transforms_for_bbox_methods
 
@@ -716,7 +745,7 @@ def get_image_transforms(mode="easy"):
 
     def get_alb(aug):
         def augment(image):
-            return Image.fromarray(aug(image=np.array(image.copy()))['image'])
+            return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
         return augment
 
     p = 0.1
@@ -783,9 +812,14 @@ def get_image_transforms(mode="easy"):
 
 def get_image_transforms_pytorch(mode="easy"):
 
+    def get_imgaug(aug):
+        def augment(image):
+            return Image.fromarray(aug(image=np.array(image.copy())))
+        return augment
+
     def get_alb(aug):
         def augment(image):
-            return Image.fromarray(aug(image=np.array(image.copy()))['image'])
+            return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
         return augment
 
     p = 0.1
@@ -795,11 +829,13 @@ def get_image_transforms_pytorch(mode="easy"):
     cutout_size = 0.1
     grid_random_offset = False
     distortion_scale = 0.1
-    grid_ratio = 0.25
+    grid_ratio = 0.0
     cutout_proba = 0.5
     alb_proba = 0.1
+    alb_dropout_proba = 0.75
+    color_augs = []
     if mode == "hard":
-        grid_ratio = 0.5
+        grid_ratio = 0.15
         p = 0.25
         param1 = 0.15
         rotation = 30
@@ -809,6 +845,15 @@ def get_image_transforms_pytorch(mode="easy"):
         distortion_scale = 0.25
         cutout_proba = 1.0
         alb_proba = 0.4
+        alb_dropout_proba = 1.0
+        element_wise_add = 25
+        color_augs = [transforms.RandomChoice([
+            get_imgaug(iaa.AddElementwise((-element_wise_add, element_wise_add), per_channel=0.5)),
+            get_imgaug(iaa.imgcorruptlike.MotionBlur(severity=1)),
+            get_imgaug(iaa.AllChannelsCLAHE()),
+            get_imgaug(iaa.LogContrast(gain=(0.6, 1.4))),
+            get_imgaug(iaa.pillike.Autocontrast((10, 20), per_channel=True))
+        ])]
 
     def get_cutout():
         cut = transforms.Compose([
@@ -824,8 +869,6 @@ def get_image_transforms_pytorch(mode="easy"):
             img = cut(img)
         return img
 
-
-
     preprocess = transforms.Compose([
         transforms.RandomGrayscale(p=p),
         transforms.RandomHorizontalFlip(p=p),
@@ -833,8 +876,16 @@ def get_image_transforms_pytorch(mode="easy"):
         transforms.ColorJitter(brightness=param1, contrast=param1, saturation=param1, hue=param1),
         transforms.RandomChoice([
             cutout,
-            get_alb(alb.transforms.GridDropout(ratio=grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset)),
-            get_alb(alb.transforms.CoarseDropout(max_holes=8, max_height=64, max_width=64, min_holes=4, min_height=16, min_width=16, fill_value=0))
+            get_alb(alb.transforms.GridDropout(ratio=0.35+grid_ratio, holes_number_x=8, holes_number_y=8, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.GridDropout(ratio=0.35+grid_ratio, holes_number_x=16, holes_number_y=16, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.GridDropout(ratio=0.35+grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.GridDropout(ratio=0.35+grid_ratio, holes_number_x=32, holes_number_y=32, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.GridDropout(ratio=0.2+grid_ratio, holes_number_x=8, holes_number_y=8, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.GridDropout(ratio=0.2+grid_ratio, holes_number_x=16, holes_number_y=16, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.GridDropout(ratio=0.2+grid_ratio, holes_number_x=10, holes_number_y=10, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.GridDropout(ratio=0.2+grid_ratio, holes_number_x=32, holes_number_y=32, random_offset=grid_random_offset, p=alb_dropout_proba)),
+            get_alb(alb.transforms.CoarseDropout(max_holes=32, max_height=128, max_width=128, min_holes=8, min_height=32, min_width=32, fill_value=0, p=alb_dropout_proba)),
+            get_alb(alb.transforms.CoarseDropout(max_holes=16, max_height=256, max_width=256, min_holes=4, min_height=64, min_width=64, fill_value=0, p=alb_dropout_proba)),
         ]),
         transforms.RandomOrder([
              get_alb(alb.transforms.MedianBlur(p=alb_proba)),
@@ -864,8 +915,10 @@ def get_image_transforms_pytorch(mode="easy"):
     return preprocess
 
 
-def get_csv_datasets(train_file, test_file, image_dir, image_extension=".png", train_text_transform=None, train_image_transform=None,
-                     train_torchvision_image_transform=None, test_torchvision_image_transform=None,
+def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numeric_file_test,
+                     image_extension=".png",
+                     numeric_regularizer: Callable=None,
+                     train_text_transform=None, train_image_transform=None,
                      train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
                      test_text_transform=None, test_image_transform=None,
                      cache_images: bool = True, use_images: bool = True, dev: bool = False, test_dev: bool = True,
@@ -882,35 +935,45 @@ def get_csv_datasets(train_file, test_file, image_dir, image_extension=".png", t
             return img
         return img + image_extension
     train = pd.read_csv(train_file)
-    train = train.sample(frac=1.0, replace=False)
     test = pd.read_csv(test_file)
+    perm = np.random.permutation(len(train))
+    train = train.iloc[perm]
+    assert (numeric_file_train is None and numeric_file_test is None) or (numeric_file_train is not None and numeric_file_test is not None)
+    numeric_train = None
+    numeric_test = None
+    numeric_dev = None
+    sp = int(0.1 * len(train))
+    dev = train[:sp]
+
+    if numeric_file_train is not None:
+        numeric_train = pd.read_csv(numeric_file_train)
+        numeric_test = pd.read_csv(numeric_file_test)
+        numeric_train = numeric_train.iloc[perm]
+        assert len(numeric_train) == len(train)
+        assert len(numeric_test) == len(test)
+        numeric_dev = numeric_train[:sp]
     if test_dev:
-        sp = int(0.1 * len(train))
-        dev = train[:sp]
+        numeric_train = numeric_train[sp:]
         train = train[sp:]
-    else:
-        dev = train.sample(frac=0.1)
 
     dev["img"] = list(map(joiner, dev.img))
     train["img"] = list(map(joiner, train.img))
     test["img"] = list(map(joiner, test.img))
 
     rd = dict(train=train, test=test, dev=dev,
-              metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev,
+              numeric_train=numeric_train, numeric_test=numeric_test, numeric_dev=numeric_dev,
+              metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev, numeric_regularizer=numeric_regularizer,
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,
                             keep_processed_image=keep_processed_image, keep_torchvision_image=keep_torchvision_image,
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
-                            train_torchvision_image_transform=train_torchvision_image_transform,
                             train_torchvision_pre_image_transform=train_torchvision_pre_image_transform,
                             train_mixup_config=train_mixup_config, test_mixup_config=test_mixup_config,
                             test_torchvision_pre_image_transform=test_torchvision_pre_image_transform,
-                            test_torchvision_image_transform=test_torchvision_image_transform,
                             test_text_transform=test_text_transform, test_image_transform=test_image_transform))
     return rd
 
 
 def get_datasets(data_dir, train_text_transform=None, train_image_transform=None,
-                 train_torchvision_image_transform=None, test_torchvision_image_transform=None,
                  train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
                  test_text_transform=None, test_image_transform=None,
                  train_mixup_config=None, test_mixup_config=None,
@@ -941,8 +1004,6 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,
                             keep_processed_image=keep_processed_image, keep_torchvision_image=keep_torchvision_image,
                             train_text_transform=train_text_transform, train_image_transform=train_image_transform,
-                            train_torchvision_image_transform=train_torchvision_image_transform,
-                            test_torchvision_image_transform=test_torchvision_image_transform,
                             train_mixup_config=train_mixup_config, test_mixup_config=test_mixup_config,
                             train_torchvision_pre_image_transform=train_torchvision_pre_image_transform,
                             test_torchvision_pre_image_transform=test_torchvision_pre_image_transform,
@@ -991,15 +1052,20 @@ def create_collage(width, height, images, filled_position=None):
 
 class TextImageDataset(Dataset):
     def __init__(self, identifiers: List, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
+                 numbers: np.ndarray = None, embedding1: np.ndarray = None, embedding2: np.ndarray = None,
                  sample_weights: List[float] = None, cached_images: Dict = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
-                 torchvision_image_transform=None, torchvision_pre_image_transform=None,
+                 torchvision_pre_image_transform=identity, numeric_regularizer: Callable = identity,
                  mixup_config=None,
                  keep_original_text: bool = False, keep_original_image: bool = False,
                  keep_processed_image: bool = False, keep_torchvision_image: bool = False):
         self.texts = list(texts)
         self.identifiers = list(identifiers)
         self.image_locations = image_locations
+        self.numbers = numbers
+        if numbers is not None:
+            assert isinstance(numbers, np.ndarray)
+        self.numeric_regularizer = numeric_regularizer if numeric_regularizer is not None else identity
         from tqdm.auto import tqdm as tqdm
         self.images = dict()
         if use_images:
@@ -1008,7 +1074,7 @@ class TextImageDataset(Dataset):
             elif cache_images:
                 self.images = {l: Image.open(l).convert('RGB') if l is not None else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8)) for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")}
         self.labels = labels if labels is not None else ([0] * len(texts))
-        self.text_transform = text_transform if text_transform is not None else identity
+        self.text_transform = text_transform if text_transform is not None else return_first_arg
         self.image_transform = image_transform if image_transform is not None else identity
         self.use_images = use_images
         self.sample_weights = [1.0] * len(texts) if sample_weights is None else sample_weights
@@ -1016,7 +1082,6 @@ class TextImageDataset(Dataset):
         self.keep_original_text = keep_original_text
         self.keep_original_image = keep_original_image
         self.to_torchvision = get_image2torchvision_transforms()
-        self.torchvision_image_transform = torchvision_image_transform if torchvision_image_transform is not None else identity
         self.torchvision_pre_image_transform = torchvision_pre_image_transform if torchvision_pre_image_transform is not None else identity
         self.keep_processed_image = keep_processed_image
         self.keep_torchvision_image = keep_torchvision_image
@@ -1027,8 +1092,9 @@ class TextImageDataset(Dataset):
         identifier = self.identifiers[item]
         label = self.labels[item] if self.labels is not None else 0
         sample_weight = self.sample_weights[item]
-        # clean_text
         s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight, "image": None})
+        if self.numbers is not None:
+            s.numbers = self.numeric_regularizer(self.numbers[item])
 
         if self.use_images and (self.keep_torchvision_image or self.keep_original_image or self.keep_processed_image):
             l = self.image_locations[item]
@@ -1040,11 +1106,12 @@ class TextImageDataset(Dataset):
         return s
 
     def process_example(self, sample):
-        identifier, text, image, label, sample_weight, mixup = sample["id"], sample["text"], sample["image"], sample["label"], sample["sample_weight"], sample["mixup"]
+        s = Sample(sample)
         # clean_text
-        orig_text = text
-        text = self.text_transform(text) # Give ID here to retrieve DAB examples
-        s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight, "mixup": mixup})
+        orig_text = s["text"]
+        text = self.text_transform(orig_text, identifier=s.id)  # Give ID here to retrieve DAB examples
+        s.text = text
+        image = s["image"]
         if image is not None:
             if self.keep_original_image:
                 s.original_image = image
@@ -1052,7 +1119,7 @@ class TextImageDataset(Dataset):
                 image = self.image_transform(image.copy())
                 s.image = image
             if self.keep_torchvision_image:
-                torchvision_image = self.torchvision_image_transform(self.to_torchvision(self.torchvision_pre_image_transform(image)))
+                torchvision_image = self.to_torchvision(self.torchvision_pre_image_transform(image))
                 s.torchvision_image = torchvision_image
 
         if self.keep_original_text:
@@ -1068,10 +1135,13 @@ class TextImageDataset(Dataset):
         if sample.image is not None:
             positions = random.sample([(0, 0), (0, 1), (1, 0), (1, 1)], len(samples))
             image = create_collage(640, 640, [s.image for s in samples], filled_position=positions)
+
         text = " ".join([s.text for s in samples])
         label = min(sum([s.label for s in samples]), 1)
-        sample_weight = sum([s.sample_weight for s in samples]) / len(indices)
+        sample_weight = sum([s.sample_weight for s in samples]) / len(samples)
         sample = Sample({"id": -1, "text": text, "label": label, "sample_weight": sample_weight, "image": image})
+        if self.numbers is not None:
+            sample.numbers = np.stack([s.numbers for s in samples]).mean(0)
         return sample
 
     def __getitem__(self, item):

@@ -860,9 +860,10 @@ def convert_dataframe_to_dataset(df, metadata, train=True, **kwargs):
     assert "id" in df.columns or "ID" in df.columns
     id_name = "id" if "id" in df.columns else "ID"
     ids = list(df[id_name])
+    numbers = kwargs.pop("numbers", None)
     ds = TextImageDataset(ids, text, list(df.img), labels, sample_weights,
+                          numbers=numbers, numeric_regularizer=metadata["numeric_regularizer"] if train else None,
                           text_transform=metadata["train_text_transform"] if train else metadata["test_text_transform"],
-                          torchvision_image_transform=metadata["train_torchvision_image_transform"] if train else metadata["test_torchvision_image_transform"],
                           torchvision_pre_image_transform=metadata["train_torchvision_pre_image_transform"] if train else metadata["test_torchvision_pre_image_transform"],
                           image_transform=metadata["train_image_transform"] if train else metadata["test_image_transform"],
                           cache_images=metadata["cache_images"], use_images=metadata["use_images"],
@@ -870,44 +871,6 @@ def convert_dataframe_to_dataset(df, metadata, train=True, **kwargs):
                           keep_processed_image=metadata["keep_processed_image"], keep_torchvision_image=metadata["keep_torchvision_image"],
                           mixup_config=metadata["train_mixup_config"] if train else None,  **kwargs)
     return ds
-
-
-def random_split_for_augmented_dataset(datadict, n_splits=5, random_state=None, uniform_sample_binary_labels=True):
-    from sklearn.model_selection import train_test_split
-    from sklearn.model_selection import StratifiedKFold, KFold
-    metadata = datadict["metadata"]
-    train = datadict["train"]
-    if uniform_sample_binary_labels and len(set(train.label)) == 2:
-        # TODO: This code is specific to FB competition since it assumes that zeros are more than ones
-        ones = train[train["label"] == 1]
-        zeros = train[train["label"] == 0]
-        kf1, kf2 = KFold(n_splits=5, shuffle=True), KFold(n_splits=5, shuffle=True)
-        for (ones_train_idx, ones_test_idx), (zeros_train_idx, zeros_test_idx) in zip(kf1.split(ones), kf2.split(zeros)):
-            ones_train = ones.iloc[ones_train_idx]
-            ones_test = ones.iloc[ones_test_idx]
-            zeros_train = pd.concat((zeros.iloc[zeros_train_idx], zeros.iloc[zeros_test_idx[len(ones_test_idx):]]))
-            zeros_test = zeros.iloc[zeros_test_idx[:len(ones_test_idx)]]
-            train_split = pd.concat((ones_train, zeros_train)).sample(frac=1.0)
-            test_split = pd.concat((ones_test, zeros_test)).sample(frac=1.0)
-            print("Doing Special split for FB", "\n", "Train Labels =", train_split.label.value_counts(),
-                  "Test Labels =", test_split.label.value_counts())
-            assert len(set(ones_train["id"]).intersection(set(ones_test["id"]))) == 0
-            assert len(set(zeros_train["id"]).intersection(set(zeros_test["id"]))) == 0
-            assert len(set(train_split["id"]).intersection(set(test_split["id"]))) == 0
-            yield (train_split,
-                   test_split)
-
-    else:
-        skf = StratifiedKFold(n_splits=n_splits, random_state=random_state, shuffle=True)
-        # print("TRAIN Sizes =",train.shape, "\n", train.label.value_counts())
-        # skf = KFold(n_splits=n_splits, random_state=random_state, shuffle=True)
-        for train_idx, test_idx in skf.split(train, train.label):
-            train_split = train.iloc[train_idx]
-            test_split = train.iloc[test_idx]
-            assert len(set(train_split["id"]).intersection(set(test_split["id"]))) == 0
-            # print("Train Test Split sizes =","\n",train_split.label.value_counts(),"\n",test_split.label.value_counts())
-            yield (train_split,
-                   test_split)
 
 
 def identity(x): return x
@@ -935,21 +898,18 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     actual_test = data["test"]
     assert not (test_dev and kfold)
 
-    if test_dev:
-        trin = data["train"]
-        test = data["dev"]
-        metadata = data["metadata"]
-        folds = [(trin,
-                  test)]
-    else:
-        folds = random_split_for_augmented_dataset(data, random_state=random_state)
+    trin = data["train"]
+    test = data["dev"]
+    metadata = data["metadata"]
+    folds = [(trin,
+              test)]
 
     nfolds = []
     assert consistency_loss_weight >= 0
     for d in folds:
-        training_fold_dataset = convert_dataframe_to_dataset(d[0], metadata, consistency_loss_weight == 0)
-        training_test_dataset = convert_dataframe_to_dataset(d[0], metadata, False, cached_images=training_fold_dataset.images)
-        testing_fold_dataset = convert_dataframe_to_dataset(d[1], metadata, False)
+        training_fold_dataset = convert_dataframe_to_dataset(d[0], metadata, consistency_loss_weight == 0, numbers=data["numeric_train"])
+        training_test_dataset = convert_dataframe_to_dataset(d[0], metadata, False, cached_images=training_fold_dataset.images, numbers=data["numeric_train"])
+        testing_fold_dataset = convert_dataframe_to_dataset(d[1], metadata, False, numbers=data["numeric_dev"])
         nfolds.append((training_fold_dataset, training_test_dataset, testing_fold_dataset))
 
     folds = nfolds
