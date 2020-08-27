@@ -559,6 +559,7 @@ class TextAugment:
                 dab_store = defaultdict(list)
                 for d in dab:
                     dab_store[d[0]].append(d[1])
+                self.dab_store = dab_store
 
             if k == "fasttext":
                 assert fasttext_file is not None
@@ -682,6 +683,9 @@ class TextAugment:
             try:
                 if aug == "fasttext":
                     text = self.__fasttext_replace__(self.augments[aug], self.indexes[aug], text)
+                elif aug == "dab":
+                    identifier = kwargs["identifier"]
+                    text = random.sample(self.dab_store[identifier], 1)[0]
                 elif aug in ["glove_twitter", "glove_wiki", "word2vec"]:
                     text = self.__w2v_replace__(self.augments[aug], self.indexes[aug], text)
                 elif callable(self.augments[aug]):
