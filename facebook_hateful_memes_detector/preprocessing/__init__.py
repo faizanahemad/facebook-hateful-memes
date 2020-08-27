@@ -499,7 +499,7 @@ class TextAugment:
                      "stopword_insert", "word_join", "word_cutout", "first_part_select", "number_modify",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
                      "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select",
-                     "punctuation_insert", "punctuation_replace", "punctuation_strip", "punctuation_continue"]
+                     "punctuation_insert", "punctuation_replace", "punctuation_strip", "punctuation_continue", "dab"]
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
