@@ -814,7 +814,7 @@ def get_image_transforms_pytorch(mode="easy"):
 
     def get_imgaug(aug):
         def augment(image):
-            return Image.fromarray(aug(image=np.array(image.copy())))
+            return Image.fromarray(aug(image=np.array(image, dtype=np.uint8)))
         return augment
 
     def get_alb(aug):
