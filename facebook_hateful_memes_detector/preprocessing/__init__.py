@@ -616,24 +616,23 @@ class TextAugment:
         idfs: Dict[str, float] = self.idfs
         max_score = self.max_idf_score
         words = text.lower().split()
-        idf_scores = {w: idfs[w] if w in idfs else max_score for w in words}
-        max_score = max(list(idf_scores.values()))
-        max_minus_score = [max_score - s for w, s in idf_scores.items()]
+        idf_scores = [(w, idfs[w] if w in idfs else max_score) for w in words]
+        max_score = max(list([sc[1] for sc in idf_scores]))
+        max_minus_score = [max_score - s for w, s in idf_scores]
         z = sum(max_minus_score) / len(words)
         if z == 0:
             word_scores = [1 / len(words)] * len(words)
         else:
             p = 0.6
             word_scores = [min(p * s / z, 1) for s in max_minus_score]
-        return dict(zip(words, word_scores))
+        return list(zip(words, word_scores))
 
     def word_cutout(self, text):
         words = text.split()
         proba = self.idf_proba(text)
         # np.mean(list(proba.values()))
         try:
-            probas = [proba[w.lower()] for w in words]
-            probas = [(1 / np.sqrt(len(w))) * p for w, p in zip(words, probas)]
+            probas = [(1 / np.sqrt(len(w))) * p for w, (ws, p) in zip(words, proba)]
             if len(words) <= 3:
                 return text
 
@@ -664,12 +663,12 @@ class TextAugment:
         t_2_i = {w: i for i, w in enumerate(tokens)}
         if len(t_2_i) <= 3:
             return text
-        proba = self.idf_proba(text)
+        words, proba = zip(*self.idf_proba(text))
         success = False
         repeat_count = 0
         while not success and repeat_count <= 10:
             repeat_count += 1
-            sampled = random.choices(list(proba.keys()), list(proba.values()), k=1)[0]
+            sampled = random.choices(words, proba, k=1)[0]
             if sampled in tm:
                 candidates = [w for w, d in tm.most_similar(sampled, topn=10, indexer=indexer)][1:]
                 success = True
