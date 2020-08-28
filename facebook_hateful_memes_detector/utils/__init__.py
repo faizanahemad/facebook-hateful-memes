@@ -274,8 +274,15 @@ class GaussianNoise(nn.Module):
 def get_regularization_layers(model):
     reg_layers = []
     for c in model.children():
-        if isinstance(c, (GaussianNoise, nn.Dropout, nn.Dropout2d)):
-            reg_layers.append((c, c.p if hasattr(c, "p") else c.sigma))
+        if isinstance(c, (GaussianNoise, nn.Dropout, nn.Dropout2d, WordMasking)):
+            if hasattr(c, "p"):
+                reg_layers.append((c, c.p))
+            elif hasattr(c, "word_masking_proba"):
+                reg_layers.append((c, c.word_masking_proba))
+            elif hasattr(c, "sigma"):
+                reg_layers.append((c, c.sigma))
+            else:
+                raise NotImplementedError
         else:
             reg_layers.extend(get_regularization_layers(c))
     return reg_layers
@@ -1220,6 +1227,43 @@ def clean_memory():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     _ = gc.collect()
+
+
+class WordMasking(nn.Module):
+    def __init__(self, tokenizer, word_masking_proba, **kwargs):
+        super().__init__()
+        self.tokenizer = tokenizer
+        self.word_masking_proba = word_masking_proba
+        self.whole_word_masking = kwargs.pop("whole_word_masking", False)
+
+    def forward(self, texts):
+        if self.training and self.word_masking_proba > 0:
+            tokenizer = self.tokenizer
+            proba = self.word_masking_proba
+            if self.whole_word_masking:
+                texts = [random_whole_word_mask(t, tokenizer, proba) for t in texts]
+            else:
+                texts = [random_word_mask(t, tokenizer, proba) for t in texts]
+        return texts
+
+
+def random_whole_word_mask(text: str, tokenizer, probability: float) -> str:
+    if probability == 0 or len(text) == 0:
+        return text
+    tokens = text.split()
+    new_tokens = []
+    for idx, token in enumerate(tokens):
+        prob = random.random()
+        if prob < probability:
+            prob /= probability
+            if prob < 0.8 or len(token) <= 3:
+                tks = [tokenizer.mask_token] * len(tokenizer.tokenize(token, add_special_tokens=True))
+            else:
+                tks = [token]
+        else:
+            tks = [token]
+        new_tokens.extend(tks)
+    return " ".join(new_tokens)
 
 
 def random_word_mask(text: str, tokenizer, probability: float) -> str:

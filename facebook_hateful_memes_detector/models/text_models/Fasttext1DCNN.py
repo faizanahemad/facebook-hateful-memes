@@ -11,7 +11,7 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
 from ...training import calculate_auc_dice_loss, get_auc_dice_loss
-from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList, load_stored_params
+from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList, load_stored_params, get_regularization_layers
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
 
@@ -70,7 +70,7 @@ class Fasttext1DCNNModel(nn.Module):
 
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.reg_layers = get_regularization_layers(self)
         self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
         self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
         self.auc_method = kwargs.pop("auc_method", 1)

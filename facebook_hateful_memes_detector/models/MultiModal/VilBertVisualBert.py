@@ -16,7 +16,8 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...training import calculate_auc_dice_loss, get_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
-    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask, load_stored_params, LinearHead
+    dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask, load_stored_params, LinearHead, get_regularization_layers, \
+    WordMasking
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 
@@ -137,7 +138,8 @@ class VilBertVisualBertModel(nn.Module):
 
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.word_masking = WordMasking(tokenizer=self.text_processor._tokenizer, word_masking_proba=self.word_masking_proba, **kwargs)
+        self.reg_layers = get_regularization_layers(self)
         self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
         self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
         self.auc_method = kwargs.pop("auc_method", 1)
@@ -145,8 +147,7 @@ class VilBertVisualBertModel(nn.Module):
 
     def get_tokens(self, texts):
         keys = ["input_ids", "input_mask", "segment_ids"]
-        if self.training and self.word_masking_proba > 0:
-            texts = [random_word_mask(t, self.text_processor._tokenizer, self.word_masking_proba) for t in texts]
+        texts = self.word_masking(texts)
         texts = [self.text_processor({"text": t}) for t in texts]
         texts = SampleList([Sample({k: t[k] for k in keys}) for t in texts])
         for k in keys:

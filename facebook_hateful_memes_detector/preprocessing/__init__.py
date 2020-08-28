@@ -496,6 +496,7 @@ class TextAugment:
         if not choice_probas.keys().isdisjoint(["glove_wiki", "glove_twitter", "word2vec", "fasttext"]):
             assert idf_file is not None
             tfidf = pd.read_csv(idf_file)
+            tfidf['token'] = tfidf['token'].apply(lambda x: x.lower())
             self.idfs = dict(zip(tfidf.to_dict()['token'].values(), tfidf.to_dict()['idf'].values()))
             self.max_idf_score = tfidf.idf.max()
             tfidf = tfidf[tfidf["idf"] < tfidf["idf"].max()]
@@ -627,8 +628,9 @@ class TextAugment:
         return dict(zip(words, word_scores))
 
     def word_cutout(self, text):
-        proba = self.idf_proba(text)
         words = text.split()
+        proba = self.idf_proba(text)
+        proba = [proba[w.lower()] for w in words]
         probas = [(1 / np.sqrt(len(w))) * p for w, p in zip(words, proba)]
         if len(words) <= 3:
             return text

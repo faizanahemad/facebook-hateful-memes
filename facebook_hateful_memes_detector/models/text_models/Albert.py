@@ -11,7 +11,8 @@ from transformers import AlbertModel, AlbertTokenizer, AlbertForSequenceClassifi
 import torchvision.models as models
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
-from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global
+from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global, \
+    get_regularization_layers, WordMasking
 import os
 import random
 import math
@@ -83,7 +84,8 @@ class AlbertClassifer(Fasttext1DCNNModel):
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.word_masking = WordMasking(tokenizer=self.tokenizer, word_masking_proba=self.word_masking_proba, **kwargs)
+        self.reg_layers = get_regularization_layers(self)
 
     def fasttext_vectors(self, texts: List[str]):
         word_vectors = self.get_fasttext_vectors(texts, 8 * int(self.n_tokens_in/(8*1.375) + 1), **self.word_vectorizers)
@@ -94,8 +96,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
         n_tokens_in = self.n_tokens_in
-        if self.training and self.word_masking_proba > 0:
-            texts = [random_word_mask(t, tokenizer, self.word_masking_proba) for t in texts]
+        texts = self.word_masking(texts)
         converted_texts = tokenizer.batch_encode_plus(texts, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
         input_ids, attention_mask = converted_texts["input_ids"], converted_texts["attention_mask"]
         return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())

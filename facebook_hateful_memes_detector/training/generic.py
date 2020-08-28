@@ -268,7 +268,7 @@ def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef)
     return loss
 
 
-def get_regularizer_scheduler(warmup_proportion=0.7):
+def get_regularizer_scheduler(warmup_proportion=0.2):
     def scheduler(model, batch, num_batches, epoch, num_epochs):
         total_batches = num_batches * num_epochs
         cur_batch = num_batches * epoch + batch
@@ -277,8 +277,8 @@ def get_regularizer_scheduler(warmup_proportion=0.7):
             return
         for layer, param in model.reg_layers:
             new_param = np.interp(cur_batch,
-                                  [0, warmup_batches, total_batches],
-                                  [param, param, 0])
+                                  [0, warmup_batches, total_batches-warmup_batches, total_batches],
+                                  [param/2, param, param, param/2])
             if layer.__class__ == GaussianNoise:
                 layer.sigma = new_param
             elif layer.__class__ == nn.Dropout or layer.__class__ == nn.Dropout2d:

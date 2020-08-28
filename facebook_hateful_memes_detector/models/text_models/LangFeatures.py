@@ -24,7 +24,7 @@ from nltk.chunk import ne_chunk
 import spacy
 
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_pos_tag_indices, pad_tensor, \
-    get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract, get_device, clean_memory
+    get_penn_treebank_pos_tag_indices, get_all_tags, has_words, ExpandContract, get_device, clean_memory, get_regularization_layers
 from ...utils import get_universal_deps_indices, has_digits, load_stored_params
 from ..external import get_pytextrank_wc_keylen, get_rake_nltk_wc, get_rake_nltk_phrases
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
@@ -213,7 +213,7 @@ class LangFeaturesModel(Fasttext1DCNNModel):
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.reg_layers = get_regularization_layers(self)
 
     def get_one_crawl_sentence_vector(self, tm, sentence):
         tokens = fasttext.tokenize(sentence)

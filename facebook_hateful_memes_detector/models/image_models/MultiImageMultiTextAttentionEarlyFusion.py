@@ -16,7 +16,7 @@ from torchnlp.word_to_vector import BPEmb
 
 from ...training import calculate_auc_dice_loss, get_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_device, \
-    dict2sampleList, clean_memory, get_vgg_face_model, load_stored_params
+    dict2sampleList, clean_memory, get_vgg_face_model, load_stored_params, get_regularization_layers
 from ..classifiers import TransformerEnsembleFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 from ..external.detr import get_detr_model
@@ -136,7 +136,7 @@ class MultiImageMultiTextAttentionEarlyFusionModel(nn.Module):
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.reg_layers = get_regularization_layers(self)
         self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
         self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
         self.auc_method = kwargs.pop("auc_method", 1)
