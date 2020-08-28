@@ -1230,10 +1230,10 @@ def clean_memory():
 
 
 class WordMasking(nn.Module):
-    def __init__(self, tokenizer, word_masking_proba, **kwargs):
+    def __init__(self, tokenizer, **kwargs):
         super().__init__()
         self.tokenizer = tokenizer
-        self.word_masking_proba = word_masking_proba
+        self.word_masking_proba = kwargs.pop("word_masking_proba", 0.0)
         self.whole_word_masking = kwargs.pop("whole_word_masking", False)
 
     def forward(self, texts):

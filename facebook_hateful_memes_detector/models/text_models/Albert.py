@@ -84,7 +84,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-        self.word_masking = WordMasking(tokenizer=self.tokenizer, word_masking_proba=self.word_masking_proba, **kwargs)
+        self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)
         self.reg_layers = get_regularization_layers(self)
 
     def fasttext_vectors(self, texts: List[str]):

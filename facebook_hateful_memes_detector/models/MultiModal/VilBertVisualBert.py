@@ -138,7 +138,7 @@ class VilBertVisualBertModel(nn.Module):
 
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-        self.word_masking = WordMasking(tokenizer=self.text_processor._tokenizer, word_masking_proba=self.word_masking_proba, **kwargs)
+        self.word_masking = WordMasking(tokenizer=self.text_processor._tokenizer, **kwargs)
         self.reg_layers = get_regularization_layers(self)
         self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
         self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
