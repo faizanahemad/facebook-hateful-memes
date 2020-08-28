@@ -493,7 +493,7 @@ class TextAugment:
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
-        if not choice_probas.keys().isdisjoint(["glove_wiki", "glove_twitter", "word2vec", "fasttext"]):
+        if not choice_probas.keys().isdisjoint(["glove_wiki", "glove_twitter", "word2vec", "fasttext", "word_cutout"]):
             assert idf_file is not None
             tfidf = pd.read_csv(idf_file)
             tfidf['token'] = tfidf['token'].apply(lambda x: x.lower() if isinstance(x, str) else x)
@@ -630,14 +630,19 @@ class TextAugment:
     def word_cutout(self, text):
         words = text.split()
         proba = self.idf_proba(text)
-        proba = [proba[w.lower()] for w in words]
-        probas = [(1 / np.sqrt(len(w))) * p for w, p in zip(words, proba)]
-        if len(words) <= 3:
-            return text
+        # np.mean(list(proba.values()))
+        try:
+            probas = [proba[w.lower()] for w in words]
+            probas = [(1 / np.sqrt(len(w))) * p for w, p in zip(words, probas)]
+            if len(words) <= 3:
+                return text
 
-        cut_idx = random.choices(range(len(words)), probas)[0]
-        words = words[:cut_idx] + words[cut_idx + 1:]
-        return " ".join(words)
+            cut_idx = random.choices(range(len(words)), probas)[0]
+            words = words[:cut_idx] + words[cut_idx + 1:]
+            return " ".join(words)
+        except Exception as e:
+            print(proba, text, words, "\n",e)
+            raise e
 
     def __fasttext_replace__(self, tm, indexer, text):
         tokens = text.split()
@@ -700,7 +705,6 @@ class TextAugment:
                     raise ValueError()
             except Exception as e:
                 print("Exception for: ", aug, "|", "Original Text", original_text, "Final Text", text, "|", augs, e)
-                raise e
         return text
 
 
