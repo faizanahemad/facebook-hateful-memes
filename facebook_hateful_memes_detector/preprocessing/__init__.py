@@ -631,17 +631,13 @@ class TextAugment:
         words = text.split()
         proba = self.idf_proba(text)
         # np.mean(list(proba.values()))
-        try:
-            probas = [(1 / np.sqrt(len(w))) * p for w, (ws, p) in zip(words, proba)]
-            if len(words) <= 3:
-                return text
+        probas = [(1 / np.sqrt(len(w))) * p for w, (ws, p) in zip(words, proba)]
+        if len(words) <= 3:
+            return text
 
-            cut_idx = random.choices(range(len(words)), probas)[0]
-            words = words[:cut_idx] + words[cut_idx + 1:]
-            return " ".join(words)
-        except Exception as e:
-            print(proba, text, words, "\n",e)
-            raise e
+        cut_idx = random.choices(range(len(words)), probas)[0]
+        words = words[:cut_idx] + words[cut_idx + 1:]
+        return " ".join(words)
 
     def __fasttext_replace__(self, tm, indexer, text):
         tokens = text.split()

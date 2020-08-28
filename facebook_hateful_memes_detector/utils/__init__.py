@@ -1257,7 +1257,7 @@ def random_whole_word_mask(text: str, tokenizer, probability: float) -> str:
         if prob < probability:
             prob /= probability
             if prob < 0.8 or len(token) <= 3:
-                tks = [tokenizer.mask_token] * len(tokenizer.tokenize(token, add_special_tokens=True))
+                tks = [tokenizer.mask_token] * len(tokenizer.tokenize(token))
             else:
                 tks = [token]
         else:
