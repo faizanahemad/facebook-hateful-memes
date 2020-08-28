@@ -14,7 +14,7 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise, my_collate
-from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset
+from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset, make_weights_for_uda
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.data import Subset
@@ -401,6 +401,18 @@ def train(model, optimizer, scheduler_init_fn,
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
         sampler = WeightedRandomSampler(weights, examples, replacement=False)
         divisor = float(len(training_fold_labels)) / examples
+        shuffle = False
+    elif sampling_policy == "uda_with_replacement":
+        weights = make_weights_for_uda(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
+        sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
+        shuffle = False
+        examples = len(training_fold_labels)
+        divisor = 1
+    elif sampling_policy == "uda_without_replacement":
+        weights = make_weights_for_uda(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
+        sampler = WeightedRandomSampler(weights, int(len(weights) / 2), replacement=False)
+        divisor = 2
+        examples = int(len(weights) / 2)
         shuffle = False
     else:
         sampler = None

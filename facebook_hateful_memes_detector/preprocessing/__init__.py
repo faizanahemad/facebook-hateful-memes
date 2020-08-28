@@ -953,6 +953,24 @@ def make_weights_for_balanced_classes(labels, weight_per_class: Dict = None):
     return torch.DoubleTensor(weight)
 
 
+def make_weights_for_uda(labels, weight_per_class: Dict = None):
+    labels = labels.numpy()
+    from collections import Counter
+    count = Counter(labels)
+    N = len(labels)
+    last_label = max(labels)
+    last_label_occ = count[last_label]
+    last_excluded_count = N - last_label_occ
+    last_excluded_ratio = last_excluded_count / N
+    if weight_per_class is None:
+        weight_per_class = {clas: last_excluded_count / float(occ) for clas, occ in count.items() if clas != last_label}
+        tot_weights = sum(list(weight_per_class.values()))
+        weight_per_class = {clas: (w / tot_weights) * last_excluded_ratio for clas, w in weight_per_class.items()}
+        weight_per_class[last_label] = 1.0 - last_excluded_ratio
+    weight = [weight_per_class[label] for label in labels]
+    return torch.DoubleTensor(weight)
+
+
 def create_collage(width, height, images, filled_position=None):
     cols = 2
     rows = 2
@@ -982,7 +1000,7 @@ def create_collage(width, height, images, filled_position=None):
 
 class TextImageDataset(Dataset):
     def __init__(self, identifiers: List, texts: List[str], image_locations: List[str], labels: torch.Tensor = None,
-                 numbers: np.ndarray = None, embedding1: np.ndarray = None, embedding2: np.ndarray = None,
+                 numbers: np.ndarray = None, embed1: np.ndarray = None, embed2: np.ndarray = None,
                  sample_weights: List[float] = None, cached_images: Dict = None,
                  text_transform=None, image_transform=None, cache_images: bool = True, use_images: bool = True,
                  torchvision_pre_image_transform=identity, numeric_regularizer: Callable = identity,
@@ -992,9 +1010,15 @@ class TextImageDataset(Dataset):
         self.texts = list(texts)
         self.identifiers = list(identifiers)
         self.image_locations = image_locations
-        self.numbers = numbers
         if numbers is not None:
             assert isinstance(numbers, np.ndarray)
+            self.numbers = numbers
+        if embed1 is not None:
+            assert isinstance(embed1, np.ndarray)
+            self.embed1 = embed1
+        if embed2 is not None:
+            assert isinstance(embed2, np.ndarray)
+            self.embed2 = embed2
         self.numeric_regularizer = numeric_regularizer if numeric_regularizer is not None else identity
         from tqdm.auto import tqdm as tqdm
         self.images = dict()
@@ -1023,8 +1047,12 @@ class TextImageDataset(Dataset):
         label = self.labels[item] if self.labels is not None else 0
         sample_weight = self.sample_weights[item]
         s = Sample({"id": identifier, "text": text, "label": label, "sample_weight": sample_weight, "image": None})
-        if self.numbers is not None:
-            s.numbers = self.numeric_regularizer(self.numbers[item])
+        if hasattr(self, "numbers"):
+            s.numbers = torch.tensor(self.numeric_regularizer(self.numbers[item]))
+        if hasattr(self, "embed1"):
+            s.embed1 = torch.tensor(self.embed1[item])
+        if hasattr(self, "embed2"):
+            s.embed2 = torch.tensor(self.embed2[item])
 
         if self.use_images and (self.keep_torchvision_image or self.keep_original_image or self.keep_processed_image):
             l = self.image_locations[item]
@@ -1070,8 +1098,13 @@ class TextImageDataset(Dataset):
         label = min(sum([s.label for s in samples]), 1)
         sample_weight = sum([s.sample_weight for s in samples]) / len(samples)
         sample = Sample({"id": -1, "text": text, "label": label, "sample_weight": sample_weight, "image": image})
-        if self.numbers is not None:
-            sample.numbers = np.stack([s.numbers for s in samples]).mean(0)
+        if hasattr(self, "numbers"):
+            sample.numbers = torch.stack([s.numbers for s in samples]).mean(0)
+        if hasattr(self, "embed1"):
+            sample.embed1 = torch.stack([s.embed1 for s in samples]).mean(0)
+        if hasattr(self, "embed2"):
+            sample.embed2 = torch.stack([s.embed2 for s in samples]).mean(0)
+
         return sample
 
     def __getitem__(self, item):
