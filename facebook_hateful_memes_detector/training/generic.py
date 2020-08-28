@@ -281,7 +281,7 @@ def get_regularizer_scheduler(warmup_proportion=0.7):
                                   [param, param, 0])
             if layer.__class__ == GaussianNoise:
                 layer.sigma = new_param
-            elif layer.__class__ == nn.Dropout:
+            elif layer.__class__ == nn.Dropout or layer.__class__ == nn.Dropout2d:
                 layer.p = new_param
             else:
                 raise NotImplementedError

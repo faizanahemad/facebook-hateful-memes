@@ -484,16 +484,6 @@ class TextAugment:
             words = words[:idx] + [w1] + words[idx + 2:]
             return " ".join(words)
 
-        def word_cutout(text):
-            words = text.split()
-            probas = [1/np.sqrt(len(w)) for w in words]
-            if len(words) <= 3:
-                return text
-
-            cut_idx = random.choices(range(len(words)), probas)[0]
-            words = words[:cut_idx] + words[cut_idx + 1:]
-            return " ".join(words)
-
         self.augs = ["keyboard", "ocr", "char_insert", "char_substitute", "char_swap", "char_delete",
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
                      "stopword_insert", "word_join", "word_cutout", "first_part_select", "number_modify",
@@ -538,8 +528,6 @@ class TextAugment:
                 self.augments["stopword_insert"] = stopword_insert
             if k == "word_join":
                 self.augments["word_join"] = word_join
-            if k == "word_cutout":
-                self.augments["word_cutout"] = word_cutout
             if k == "text_rotate":
                 self.augments["text_rotate"] = text_rotate
             if k == "sentence_shuffle":
@@ -638,6 +626,17 @@ class TextAugment:
             word_scores = [min(p * s / z, 1) for s in max_minus_score]
         return dict(zip(words, word_scores))
 
+    def word_cutout(self, text):
+        proba = self.idf_proba(text)
+        words = text.split()
+        probas = [(1 / np.sqrt(len(w))) * p for w, p in zip(words, proba)]
+        if len(words) <= 3:
+            return text
+
+        cut_idx = random.choices(range(len(words)), probas)[0]
+        words = words[:cut_idx] + words[cut_idx + 1:]
+        return " ".join(words)
+
     def __fasttext_replace__(self, tm, indexer, text):
         tokens = text.split()
         t_2_i = {w: i for i, w in enumerate(tokens)}
@@ -653,6 +652,7 @@ class TextAugment:
         return " ".join(tokens)
 
     def __w2v_replace__(self, tm, indexer, text):
+        # TODO: Test if makng length aware in proba selection performs better
         tokens = text.split()
         t_2_i = {w: i for i, w in enumerate(tokens)}
         if len(t_2_i) <= 3:
@@ -683,6 +683,8 @@ class TextAugment:
             try:
                 if aug == "fasttext":
                     text = self.__fasttext_replace__(self.augments[aug], self.indexes[aug], text)
+                elif aug == "word_cutout":
+                    text = self.word_cutout(text)
                 elif aug == "dab":
                     identifier = int(kwargs["identifier"])
                     text = random.sample(self.dab_store[identifier], 1)[0]

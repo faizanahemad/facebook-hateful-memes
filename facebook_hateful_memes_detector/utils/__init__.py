@@ -271,6 +271,16 @@ class GaussianNoise(nn.Module):
         return x
 
 
+def get_regularization_layers(model):
+    reg_layers = []
+    for c in model.children():
+        if isinstance(c, (GaussianNoise, nn.Dropout, nn.Dropout2d)):
+            reg_layers.append((c, c.p if hasattr(c, "p") else c.sigma))
+        else:
+            reg_layers.extend(get_regularization_layers(c))
+    return reg_layers
+
+
 def has_words(text):
     text = re.sub('[ ]+', ' ', text)
     text = re.sub(r"[^A-Za-z ]+", ' ', text)
