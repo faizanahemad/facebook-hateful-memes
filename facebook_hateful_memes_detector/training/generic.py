@@ -13,7 +13,7 @@ import contractions
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 
-from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise, my_collate
+from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise, my_collate, WordMasking
 from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset, make_weights_for_uda
 import gc
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -283,6 +283,8 @@ def get_regularizer_scheduler(warmup_proportion=0.2):
                 layer.sigma = new_param
             elif layer.__class__ == nn.Dropout or layer.__class__ == nn.Dropout2d:
                 layer.p = new_param
+            elif layer.__class__ == WordMasking:
+                layer.word_masking_proba = new_param
             else:
                 raise NotImplementedError
 
