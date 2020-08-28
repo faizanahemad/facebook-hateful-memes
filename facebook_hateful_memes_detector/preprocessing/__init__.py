@@ -496,7 +496,7 @@ class TextAugment:
         if not choice_probas.keys().isdisjoint(["glove_wiki", "glove_twitter", "word2vec", "fasttext"]):
             assert idf_file is not None
             tfidf = pd.read_csv(idf_file)
-            tfidf['token'] = tfidf['token'].apply(lambda x: x.lower())
+            tfidf['token'] = tfidf['token'].apply(lambda x: x.lower() if isinstance(x, str) else x)
             self.idfs = dict(zip(tfidf.to_dict()['token'].values(), tfidf.to_dict()['idf'].values()))
             self.max_idf_score = tfidf.idf.max()
             tfidf = tfidf[tfidf["idf"] < tfidf["idf"].max()]
