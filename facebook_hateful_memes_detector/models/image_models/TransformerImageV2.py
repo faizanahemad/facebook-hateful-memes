@@ -34,7 +34,7 @@ from ...utils.ImageModelShims import ImageCaptioningShim, ImageModelShim, ImageM
 
 # Keep per head loss stats, make GRU heads separate
 
-class TransformerImageV2Model(AlbertClassifer):
+class TransformerImageV2Model(nn.Module):
     def __init__(self, image_model, classifier_dims, num_classes,
                  gaussian_noise, dropout,
                  internal_dims, n_layers,
@@ -43,10 +43,7 @@ class TransformerImageV2Model(AlbertClassifer):
                  head_masks=0,
                  use_as_super=False, **kwargs):
         embedding_dims = 768
-        super(TransformerImageV2Model, self).__init__(classifier_dims, num_classes, gaussian_noise, dropout,
-                                                      internal_dims, n_layers,
-                                                      featurizer, final_layer_builder,
-                                                      n_tokens_in, n_tokens_out, True, **kwargs)
+        super(TransformerImageV2Model, self).__init__()
         assert n_tokens_in % n_tokens_out == 0
         #
         self.head_masks = head_masks

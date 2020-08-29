@@ -616,7 +616,7 @@ class TextAugment:
         idfs: Dict[str, float] = self.idfs
         max_score = self.max_idf_score
         words = text.lower().split()
-        idf_scores = [(w, idfs[w] if w in idfs else max_score) for w in words]
+        idf_scores = [(w, idfs[w] if w in idfs and not isnumber(w) else max_score) for w in words]
         max_score = max(list([sc[1] for sc in idf_scores]))
         max_minus_score = [max_score - s for w, s in idf_scores]
         z = sum(max_minus_score) / len(words)
