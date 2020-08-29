@@ -4,6 +4,8 @@ import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+
+from ...training import get_auc_dice_loss
 from ...utils.sample import SampleList, Sample
 
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, BasicFeaturizer, TransformerFeaturizer
@@ -192,6 +194,10 @@ class ImageGRUModel(nn.Module):
             load_stored_params(self, kwargs["stored_model"])
         self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)
         self.reg_layers = get_regularization_layers(self)
+        self.auc_loss_coef = kwargs.pop("auc_loss_coef", 0.0)
+        self.dice_loss_coef = kwargs.pop("dice_loss_coef", 0.0)
+        self.auc_method = kwargs.pop("auc_method", 1)
+        self.auc_dice_loss = get_auc_dice_loss(num_classes, self.dice_loss_coef, self.auc_loss_coef, auc_method=self.auc_method)
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
