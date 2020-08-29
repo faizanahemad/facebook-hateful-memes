@@ -848,6 +848,7 @@ def get_image_transforms_pytorch(mode="easy"):
 
 
 def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numeric_file_test,
+                     embed1, embed2, embed1_dim, embed2_dim,
                      image_extension=".png",
                      numeric_regularizer: Callable=None,
                      train_text_transform=None, train_image_transform=None,
@@ -877,6 +878,36 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numer
     sp = int(0.1 * len(train))
     dev = train[:sp]
 
+    assert (embed1 is None and embed1_dim is None) or (embed1 is not None and embed1_dim is not None)
+    assert (embed2 is None and embed2_dim is None) or (embed2 is not None and embed2_dim is not None)
+
+    from torch.utils.data import Subset
+    embed1_train = None
+    embed1_test = None
+    embed1_dev = None
+    if embed1 is not None:
+        assert embed1_dim[0] == train.shape[0] + test.shape[0]
+        embed1 = np.memmap(embed1, dtype='float32', mode='r', shape=embed1_dim)
+        embed1_train = Subset(embed1, list(range(train.shape[0])))
+        embed1_test = Subset(embed1, list(range(train.shape[0], train.shape[0] + test.shape[0])))
+        embed1_train = Subset(embed1_train, perm)
+        embed1_dev = Subset(embed1_train, list(range(sp)))
+        if test_dev:
+            embed1_train = Subset(embed1_train, list(range(sp, len(embed1_train))))
+
+    embed2_train = None
+    embed2_test = None
+    embed2_dev = None
+    if embed2 is not None:
+        assert embed2_dim[0] == train.shape[0] + test.shape[0]
+        embed2 = np.memmap(embed2, dtype='float32', mode='r', shape=embed2_dim)
+        embed2_train = Subset(embed2, list(range(train.shape[0])))
+        embed2_test = Subset(embed2, list(range(train.shape[0], train.shape[0] + test.shape[0])))
+        embed2_train = Subset(embed2_train, perm)
+        embed2_dev = Subset(embed2_train, list(range(sp)))
+        if test_dev:
+            embed2_train = Subset(embed2_train, list(range(sp, len(embed2_train))))
+
     if numeric_file_train is not None:
         numeric_train = pd.read_csv(numeric_file_train)
         numeric_test = pd.read_csv(numeric_file_test)
@@ -895,6 +926,8 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numer
 
     rd = dict(train=train, test=test, dev=dev,
               numeric_train=numeric_train, numeric_test=numeric_test, numeric_dev=numeric_dev,
+              embed1_train=embed1_train, embed1_test=embed1_test, embed1_dev=embed1_dev,
+              embed2_train=embed2_train, embed2_test=embed2_test, embed2_dev=embed2_dev,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev, numeric_regularizer=numeric_regularizer,
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,
                             keep_processed_image=keep_processed_image, keep_torchvision_image=keep_torchvision_image,
@@ -933,6 +966,8 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
 
     rd = dict(train=train, test=test, dev=dev,
               numeric_train=None, numeric_dev=None, numeric_test=None,
+              embed1_train=None, embed1_test=None, embed1_dev=None,
+              embed2_train=None, embed2_test=None, embed2_dev=None,
               submission_format=submission_format,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev, test_dev=test_dev,
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,

@@ -921,9 +921,11 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     nfolds = []
     assert consistency_loss_weight >= 0
     for d in folds:
-        training_fold_dataset = convert_dataframe_to_dataset(d[0], metadata, consistency_loss_weight == 0, numbers=data["numeric_train"])
-        training_test_dataset = convert_dataframe_to_dataset(d[0], metadata, False, cached_images=training_fold_dataset.images, numbers=data["numeric_train"])
-        testing_fold_dataset = convert_dataframe_to_dataset(d[1], metadata, False, numbers=data["numeric_dev"])
+        training_fold_dataset = convert_dataframe_to_dataset(d[0], metadata, consistency_loss_weight == 0,
+                                                             numbers=data["numeric_train"], embed1=data["embed1_train"], embed2=data["embed2_train"])
+        training_test_dataset = convert_dataframe_to_dataset(d[0], metadata, False, cached_images=training_fold_dataset.images,
+                                                             numbers=data["numeric_train"], embed1=data["embed1_train"], embed2=data["embed2_train"])
+        testing_fold_dataset = convert_dataframe_to_dataset(d[1], metadata, False, numbers=data["numeric_dev"], embed1=data["embed1_dev"], embed2=data["embed2_dev"])
         nfolds.append((training_fold_dataset, training_test_dataset, testing_fold_dataset))
 
     folds = nfolds

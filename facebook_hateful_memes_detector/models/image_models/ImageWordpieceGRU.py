@@ -15,13 +15,13 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global, \
     get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_vgg_face_model, PositionalEncoding2D, Transpose, init_fc, dict2sampleList, \
-    clean_memory
+    clean_memory, get_regularization_layers, WordMasking
 from ..external.detr import get_detr_model, DETRShim
 import transformers
 import os
 import random
 import math
-from ...utils.ImageModelShims import ImageCaptioningShim, ImageModelShim, ImageModelShimSimple
+from ...utils.ImageModelShims import ImageCaptioningShim, ImageModelShim, ImageModelShimSimple, get_shim_resnet
 
 
 # t5-small albert-base-v2 ctrl distilgpt2 google/electra-base-generator microsoft/DialoGPT-small allenai/scibert_scivocab_uncased activebus/BERT_Review allenai/reviews_roberta_base
@@ -51,35 +51,90 @@ class ImageGRUModel(AlbertClassifer):
         attention_drop_proba = kwargs.pop("attention_drop_proba", 0.0)
         self.attention_drop_proba = attention_drop_proba
 
-        if type(image_model) == dict:
-            module_gaussian = image_model.pop("gaussian_noise", 0.0)
-            module_dropout = image_model.pop("dropout", 0.0)
-            stored_model = image_model.pop("stored_model", None)
-            im_model = ImageModelShimSimple(resnet="resnet18_swsl", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model, **image_model)
-        elif type(image_model) == str:
-            module_gaussian = 0.0
-            module_dropout = 0.0
-            stored_model = image_model
-            im_model = ImageModelShimSimple(resnet="resnet18_swsl", dropout=module_dropout, gaussian_noise=module_gaussian, stored_model=stored_model)
-        elif type(image_model) == ImageModelShimSimple:
-            im_model = image_model
-        else:
-            raise NotImplementedError()
+        numbers_dim = kwargs.pop("numbers_dim", False)
+        image_dim = kwargs.pop("image_dim", False)
+        embed1_dim = kwargs.pop("embed1_dim", False)
+        embed2_dim = kwargs.pop("embed1_dim", False)
 
-        im_shape = (im_model.out_channels, 64)
-        if embedding_dims != im_model.out_channels:
-            im_proc = nn.Linear(im_model.out_channels, embedding_dims)
-            init_fc(im_proc, "linear")
-            im_proc = [im_proc, nn.Dropout(dropout)]
-        else:
-            im_proc = []
-        im_proc = nn.Sequential(*im_proc, nn.LayerNorm(embedding_dims))
-        self.im_model = im_model
-        self.post_proc = im_proc
-        self.im_shape = im_shape
+        def expand(x):
+            return x.unsqueeze(1)
 
-        self.total_tokens = 1 + 10 + n_tokens_in + 10 + 1
+        if numbers_dim:
+            fc0 = nn.Linear(numbers_dim, 512)
+            init_fc(fc0, "leaky_relu")
+            fc1 = nn.Linear(512, embedding_dims)
+            init_fc(fc1, "leaky_relu")
+            self.numbers_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
+                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
+
+        if embed1_dim:
+            fc0 = nn.Linear(embed1_dim, min(embed1_dim * 4, 1024))
+            init_fc(fc0, "leaky_relu")
+            fc1 = nn.Linear(min(embed1_dim * 4, 1024), embedding_dims)
+            init_fc(fc1, "leaky_relu")
+            self.embed1_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
+                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
+
+        if embed2_dim:
+            fc0 = nn.Linear(embed2_dim, min(embed2_dim * 4, 1024))
+            init_fc(fc0, "leaky_relu")
+            fc1 = nn.Linear(min(embed2_dim * 4, 1024), embedding_dims)
+            init_fc(fc1, "leaky_relu")
+            self.embed2_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
+                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
+
+        if numbers_dim:
+            fc0 = nn.Linear(numbers_dim, 512)
+            init_fc(fc0, "leaky_relu")
+            fc1 = nn.Linear(512, embedding_dims)
+            init_fc(fc1, "leaky_relu")
+            self.numbers_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise), nn.LayerNorm(embedding_dims))
+
+        if embed1_dim:
+            fc0 = nn.Linear(embed1_dim, min(embed1_dim * 4, 1024))
+            init_fc(fc0, "leaky_relu")
+            fc1 = nn.Linear(min(embed1_dim * 4, 1024), embedding_dims)
+            init_fc(fc1, "leaky_relu")
+            self.embed1_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
+                                               nn.LayerNorm(embedding_dims))
+
+        if embed2_dim:
+            fc0 = nn.Linear(embed2_dim, min(embed2_dim * 4, 1024))
+            init_fc(fc0, "leaky_relu")
+            fc1 = nn.Linear(min(embed2_dim * 4, 1024), embedding_dims)
+            init_fc(fc1, "leaky_relu")
+            self.embed2_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
+                                               nn.LayerNorm(embedding_dims))
+
+        if image_dim:
+            if type(image_model) == dict:
+                module_dropout = image_model.pop("dropout", 0.0)
+                stored_model = image_model.pop("stored_model", None)
+                im_model = get_shim_resnet(resnet='resnet18_swsl', dropout=module_dropout, dims=image_dim, stored_model=stored_model)
+            elif type(image_model) == str:
+                module_dropout = 0.0
+                stored_model = image_model
+                im_model = get_shim_resnet(resnet='resnet18_swsl', dropout=module_dropout, dims=image_dim, stored_model=stored_model)
+            else:
+                raise NotImplementedError()
+
+            if embedding_dims != image_dim:
+                im_proc = nn.Linear(image_dim, embedding_dims)  # TODO: Try conv1D grouped, less params
+                init_fc(im_proc, "linear")
+                im_proc = [im_proc, nn.Dropout(dropout)]
+            else:
+                im_proc = []
+
+            im_proc.append(LambdaLayer(expand))
+            im_proc = nn.Sequential(*im_proc, nn.LayerNorm(embedding_dims))
+            self.im_model = im_model
+            self.post_proc = im_proc
+
+
+        self.total_tokens = 1 + int(bool(image_dim)) + int(bool(numbers_dim)) + int(bool(embed1_dim)) + int(bool(embed2_dim)) + n_tokens_in \
+                            + int(bool(numbers_dim)) + int(bool(embed1_dim)) + int(bool(embed2_dim)) + int(bool(image_dim)) + 1
         self.text_tokens = n_tokens_in
+        self.skips = 1 + int(bool(image_dim)) + int(bool(numbers_dim)) + int(bool(embed1_dim)) + int(bool(embed2_dim))
 
         model = kwargs["model"]
 
@@ -136,16 +191,17 @@ class ImageGRUModel(AlbertClassifer):
 
         self.LayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)
         self.dropout = nn.Dropout(dropout)
+        self.alternatives = nn.Embedding(4, embedding_dims)
+        init_fc(self.alternatives, "linear")
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
-
-        self.reg_layers = [(c, c.p if hasattr(c, "p") else c.sigma) for c in self.children() if c.__class__ == GaussianNoise or c.__class__ == nn.Dropout]
+        self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)
+        self.reg_layers = get_regularization_layers(self)
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
         n_tokens_in = self.text_tokens
-        if self.training and self.word_masking_proba > 0:
-            texts = [random_word_mask(t, tokenizer, self.word_masking_proba) for t in texts]
+        texts = self.word_masking(texts)
         converted_texts = tokenizer.batch_encode_plus(texts, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
         input_ids, attention_mask = converted_texts["input_ids"], converted_texts["attention_mask"]
         return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())
@@ -155,21 +211,42 @@ class ImageGRUModel(AlbertClassifer):
         input_ids, _ = self.tokenise(sampleList.text)
         word_embeddings = self.gru_lin(self.word_embeddings(input_ids))
         global_word_view = word_embeddings.mean(1).unsqueeze(1)
+        embeddings = word_embeddings
         if hasattr(sampleList, "torchvision_image"):
             img = sampleList.torchvision_image
             img = img.to(get_device())
             im_repr = self.im_model(img)
-            im_repr = self.post_proc(im_repr).to(get_device())
-            image_vectors = im_repr[:, :10]
+            image_vectors = self.post_proc(im_repr).to(get_device())
             clean_memory()
             image_vectors = image_vectors.to(get_device())
-        else:
-            image_vectors = torch.zeros(word_embeddings.size(0), 10, word_embeddings.size(2), dtype=torch.float, device=get_device())
-        embeddings = torch.cat([global_word_view, image_vectors, word_embeddings, image_vectors, global_word_view], 1)
+            embeddings = torch.cat([image_vectors, embeddings, image_vectors], 1)
+
+        if hasattr(sampleList, "numbers"):
+            numbers = sampleList.numbers
+            numbers = numbers.to(get_device())
+            numbers = self.numbers_embed(numbers)
+            clean_memory()
+            embeddings = torch.cat([numbers, embeddings, numbers], 1)
+
+        if hasattr(sampleList, "embed1"):
+            embed1 = sampleList.embed1
+            embed1 = embed1.to(get_device())
+            embed1 = self.embed1_embed(embed1)
+            clean_memory()
+            embeddings = torch.cat([embed1, embeddings, embed1], 1)
+
+        if hasattr(sampleList, "embed2"):
+            embed2 = sampleList.embed2
+            embed2 = embed2.to(get_device())
+            embed2 = self.embed2_embed(embed2)
+            clean_memory()
+            embeddings = torch.cat([embed2, embeddings, embed2], 1)
+
+        embeddings = torch.cat([global_word_view, embeddings, global_word_view], 1)
         
         hidden_state = self.gru.forward(embeddings, filter_indices=not self.do_mlm)
         if self.do_mlm:
-            hidden_state = self.gru_out(hidden_state[:, 11:11+self.text_tokens])
+            hidden_state = self.gru_out(hidden_state[:, self.skips:self.skips+self.text_tokens])
         return (hidden_state,)
 
     def forward(self, sampleList: SampleList):

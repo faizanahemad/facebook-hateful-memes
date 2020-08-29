@@ -36,9 +36,12 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
     dev_df = datadict["dev"]
     test_df = datadict["test"]
     metadata = datadict["metadata"]
-    dataset = convert_dataframe_to_dataset(train_df, metadata, consistency_loss_weight == 0, numbers=datadict["numeric_train"])
-    dev_dataset = convert_dataframe_to_dataset(dev_df, metadata, False, numbers=datadict["numeric_dev"])
-    test_dataset = convert_dataframe_to_dataset(test_df, metadata, False, numbers=datadict["numeric_test"])
+    dataset = convert_dataframe_to_dataset(train_df, metadata, consistency_loss_weight == 0,
+                                           numbers=datadict["numeric_train"], embed1=datadict["embed1_train"], embed2=datadict["embed2_train"])
+    dev_dataset = convert_dataframe_to_dataset(dev_df, metadata, False, numbers=datadict["numeric_dev"],
+                                               embed1=datadict["embed1_dev"], embed2=datadict["embed2_dev"])
+    test_dataset = convert_dataframe_to_dataset(test_df, metadata, False, numbers=datadict["numeric_test"],
+                                                embed1=datadict["embed1_test"], embed2=datadict["embed2_test"])
     if callable(model_fn):
         model, optimizer = model_fn()
     else:
@@ -76,7 +79,8 @@ def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_m
     test = datadict["test"]
     ids = test["id"] if "id" in test.columns else test["ID"]
     id_name = "id" if "id" in test.columns else "ID"
-    test_dataset = convert_dataframe_to_dataset(test, metadata, False, numbers=datadict["numeric_test"])
+    test_dataset = convert_dataframe_to_dataset(test, metadata, False,
+                                                numbers=datadict["numeric_test"],  embed1=datadict["embed1_test"], embed2=datadict["embed2_test"])
     proba_list, all_probas_list, predictions_list, labels_list = generate_predictions(model, batch_size, test_dataset, collate_fn=my_collate,
                                                                                       prediction_iters=prediction_iters,
                                                                                       evaluate_in_train_mode=evaluate_in_train_mode,)
