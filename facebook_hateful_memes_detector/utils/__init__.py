@@ -1548,8 +1548,9 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
                                                 sampling_policy=None,
                                                 class_weights=None)
 
-        smclr.plot_loss_acc_hist()
-        if test_acc:
+        if hasattr(smclr, "plot_loss_acc_hist"):
+            smclr.plot_loss_acc_hist()
+        if test_acc and hasattr(smclr, "test_accuracy"):
             acc_head = smclr.test_accuracy(pre_batch_size, pre_dataset, collate_fn=collate_fn)
 
     ##
@@ -1577,9 +1578,10 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
                                             sampling_policy=None,
                                             class_weights=None)
 
-    smclr.plot_loss_acc_hist()
+    if hasattr(smclr, "plot_loss_acc_hist"):
+        smclr.plot_loss_acc_hist()
     acc = np.nan
-    if test_acc:
+    if test_acc and hasattr(smclr, "test_accuracy"):
         acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
         print("Head Acc = ", acc_head, "Full Acc = ", acc)
     return (acc_head, acc)
