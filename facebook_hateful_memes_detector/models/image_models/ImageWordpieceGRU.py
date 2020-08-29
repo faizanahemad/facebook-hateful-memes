@@ -188,8 +188,6 @@ class ImageGRUModel(nn.Module):
 
         self.LayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)
         self.dropout = nn.Dropout(dropout)
-        self.alternatives = nn.Embedding(4, embedding_dims)
-        init_fc(self.alternatives, "linear")
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)

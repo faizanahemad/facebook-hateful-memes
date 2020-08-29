@@ -133,7 +133,6 @@ class TransformerImageV2Model(nn.Module):
             raise NotImplementedError()
 
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
-        init_fc(self.alternatives, "linear")
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)
