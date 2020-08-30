@@ -1521,7 +1521,7 @@ def merge_sample_lists(*samples):
 
 def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_post,
                pre_lr, post_lr, pre_batch_size, post_batch_size,
-               pre_epochs, full_epochs, collate_fn, scheduler_init_fn=None, test_acc=False, effective_batch_size=256):
+               pre_epochs, full_epochs, collate_fn, scheduler_init_fn=None, test_acc=False, effective_batch_size=256, sampling_policy=None,):
     from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
     acc_head = np.nan
     if pre_epochs > 0:
@@ -1545,7 +1545,7 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
                                                 accumulation_steps=effective_batch_size // pre_batch_size + 1,
                                                 plot=True,
                                                 collate_fn=collate_fn,
-                                                sampling_policy=None,
+                                                sampling_policy=sampling_policy,
                                                 class_weights=None)
 
         if hasattr(smclr, "plot_loss_acc_hist"):
@@ -1575,7 +1575,7 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
                                             accumulation_steps=effective_batch_size // post_batch_size + 1,
                                             plot=True,
                                             collate_fn=collate_fn,
-                                            sampling_policy=None,
+                                            sampling_policy=sampling_policy,
                                             class_weights=None)
 
     if hasattr(smclr, "plot_loss_acc_hist"):
