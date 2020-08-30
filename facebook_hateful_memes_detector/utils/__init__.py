@@ -1008,7 +1008,7 @@ class Transformer(nn.Module):
 class MultiLayerTransformerDecoderHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout, gaussian_noise,
                  attention_drop_proba,
-                 loss=None, n_queries=16, n_layers=3, n_decoders=2):
+                 loss=None, n_queries=16, n_layers=3, n_decoders=2, **kwargs):
         super().__init__()
         self.task = loss
         if loss not in ["classification", "focal", "regression", "k-classification"]:
@@ -1024,7 +1024,7 @@ class MultiLayerTransformerDecoderHead(nn.Module):
             decoder_norm = LayerNorm(n_dims)
             decoder = TransformerDecoder(decoder_layer, n_layers, decoder_norm, gaussian_noise, attention_drop_proba)
             decoders.append(decoder)
-            classifier = DecoderEnsemblingHead(n_dims, n_queries, n_out, dropout, loss)
+            classifier = DecoderEnsemblingHead(n_dims, n_queries, n_out, dropout, loss, **kwargs)
             classifiers.append(classifier)
             decoder_query = nn.Parameter(torch.randn(n_queries, n_dims) * (1 / n_dims), requires_grad=True)
             tgt_norm = nn.LayerNorm(n_dims)

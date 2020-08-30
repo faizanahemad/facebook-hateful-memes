@@ -18,7 +18,7 @@ def fb_1d_loss_builder(n_dims, n_tokens, n_out, dropout, **kwargs):
         attention_drop_proba = kwargs.pop("attention_drop_proba", 0.0)
         head = MultiLayerTransformerDecoderHead(n_dims, n_tokens, n_out, dropout,
                                                 gaussian_noise, attention_drop_proba, loss, n_layers=n_classifier_layers,
-                                                n_queries=16, n_decoders=n_classifier_decoders)
+                                                n_queries=16, n_decoders=n_classifier_decoders, **kwargs)
     else:
         raise NotImplementedError
     return head
