@@ -1086,10 +1086,11 @@ class CNNHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
                  loss, width="wide", **kwargs):
         super().__init__()
+        uda = kwargs.pop("uda", False)
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
         self.task = loss
-        self.loss = get_loss_by_task(loss, n_out)
+        self.loss = get_loss_by_task(loss, n_out if uda else None)
         c1 = nn.Conv1d(n_dims, n_out, 3 if width == "narrow" else n_tokens, 1, padding=0, groups=1, bias=True)
         init_fc(c1, "linear")
         avp = nn.AdaptiveAvgPool1d(1)
@@ -1120,7 +1121,8 @@ class DecoderEnsemblingHead(nn.Module):
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
         self.task = loss
-        self.loss = get_loss_by_task(loss, n_out)
+        uda = kwargs.pop("uda", False)
+        self.loss = get_loss_by_task(loss, n_out if uda else None)
         n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
         n_classifiers = kwargs["n_classifiers"] if "n_classifiers" in kwargs else 2
         assert n_classifiers <= n_tokens
@@ -1166,7 +1168,7 @@ class LinearHead(CNNHead):
         :param task:
         :param loss:
         """
-        super().__init__(n_dims, n_tokens, n_out, dropout, loss)
+        super().__init__(n_dims, n_tokens, n_out, dropout, loss, **kwargs)
         n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
         lin0 = nn.Linear(n_dims, n_dims)
         init_fc(lin0, "leaky_relu")

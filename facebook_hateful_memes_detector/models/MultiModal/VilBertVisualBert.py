@@ -127,7 +127,8 @@ class VilBertVisualBertModel(nn.Module):
             init_fc(lin, "linear")
             dp = nn.Dropout(dropout)
             self.final_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise), lin1, nn.LeakyReLU(), dp, lin)
-            self.loss = get_loss_by_task(loss, num_classes)
+            uda = kwargs.pop("uda", False)
+            self.loss = get_loss_by_task(loss, num_classes if uda else None)
         else:
             n_tokens_out = n_tokens_out + len(model_name)
             self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
