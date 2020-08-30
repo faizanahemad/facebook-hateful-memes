@@ -847,7 +847,7 @@ def get_image_transforms_pytorch(mode="easy"):
     return preprocess
 
 
-def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numeric_file_test,
+def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_file_dim,
                      embed1, embed2, embed1_dim, embed2_dim,
                      image_extension=".png",
                      numeric_regularizer: Callable=None,
@@ -860,6 +860,7 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numer
                      keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     use_dev = dev
     joiner_p = lambda img: (os.path.join(image_dir, img)) if (img is not None and type(img) == str and img != "nan") else None
+    from torch.utils.data import Subset
     def joiner(img):
         img = joiner_p(img)
         if img is None:
@@ -871,17 +872,24 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numer
     test = pd.read_csv(test_file)
     perm = np.random.permutation(len(train))
     train = train.iloc[perm]
-    assert (numeric_file_train is None and numeric_file_test is None) or (numeric_file_train is not None and numeric_file_test is not None)
+    sp = int(0.1 * len(train))
+    dev = train[:sp]
+    assert (numeric_file is None and numeric_file_dim is None) or (numeric_file is not None and numeric_file_dim is not None)
+    assert (embed1 is None and embed1_dim is None) or (embed1 is not None and embed1_dim is not None)
+    assert (embed2 is None and embed2_dim is None) or (embed2 is not None and embed2_dim is not None)
     numeric_train = None
     numeric_test = None
     numeric_dev = None
-    sp = int(0.1 * len(train))
-    dev = train[:sp]
+    if numeric_file is not None:
+        assert numeric_file_dim[0] == train.shape[0] + test.shape[0]
+        numeric_file = np.memmap(numeric_file, dtype='float32', mode='r', shape=numeric_file_dim)
+        numeric_train = Subset(numeric_file, list(range(train.shape[0])))
+        numeric_test = Subset(embed1, list(range(train.shape[0], train.shape[0] + test.shape[0])))
+        numeric_train = Subset(numeric_train, perm)
+        numeric_dev = Subset(numeric_train, list(range(sp)))
+        if test_dev:
+            numeric_train = Subset(numeric_train, list(range(sp, len(numeric_train))))
 
-    assert (embed1 is None and embed1_dim is None) or (embed1 is not None and embed1_dim is not None)
-    assert (embed2 is None and embed2_dim is None) or (embed2 is not None and embed2_dim is not None)
-
-    from torch.utils.data import Subset
     embed1_train = None
     embed1_test = None
     embed1_dev = None
@@ -908,15 +916,6 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file_train, numer
         if test_dev:
             embed2_train = Subset(embed2_train, list(range(sp, len(embed2_train))))
 
-    if numeric_file_train is not None:
-        numeric_train = pd.read_csv(numeric_file_train)
-        numeric_test = pd.read_csv(numeric_file_test)
-        numeric_train = numeric_train.iloc[perm]
-        assert len(numeric_train) == len(train)
-        assert len(numeric_test) == len(test)
-        numeric_dev = numeric_train[:sp]
-        if test_dev:
-            numeric_train = numeric_train[sp:]
     if test_dev:
         train = train[sp:]
 
