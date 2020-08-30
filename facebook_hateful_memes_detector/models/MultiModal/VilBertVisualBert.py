@@ -71,27 +71,27 @@ class VilBertVisualBertModel(nn.Module):
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
             for p in self.vilbert.parameters():
                 p.requires_grad = False
-            self.model_heads["vilbert"] = LinearHead(1024, 1, num_classes, dropout, self.task)
+            self.model_heads["vilbert"] = LinearHead(1024, 1, num_classes, dropout, self.task, **kwargs)
         if "visual_bert" in model_name:
             self.visual_bert = get_visual_bert(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
             for p in self.visual_bert.parameters():
                 p.requires_grad = False
-            self.model_heads["visual_bert"] = LinearHead(768, 1, num_classes, dropout, self.task)
+            self.model_heads["visual_bert"] = LinearHead(768, 1, num_classes, dropout, self.task, **kwargs)
         if "lxmert" in model_name:
             self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
             self.lxmert.to(get_device())
             for p in self.lxmert.parameters():
                 p.requires_grad = False
-            self.model_heads["lxmert"] = LinearHead(768, 1, num_classes, dropout, self.task)
+            self.model_heads["lxmert"] = LinearHead(768, 1, num_classes, dropout, self.task, **kwargs)
 
         if "mmbt_region" in model_name:
             self.mmbt_region = get_mmbt_region(get_device())
             n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
             for p in self.mmbt_region.parameters():
                 p.requires_grad = False
-            self.model_heads["mmbt_region"] = LinearHead(768, 1, num_classes, dropout, self.task)
+            self.model_heads["mmbt_region"] = LinearHead(768, 1, num_classes, dropout, self.task, **kwargs)
 
         if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
             raise NotImplementedError()

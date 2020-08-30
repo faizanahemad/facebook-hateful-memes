@@ -1086,7 +1086,7 @@ class CNNHead(nn.Module):
     def __init__(self, n_dims, n_tokens, n_out, dropout,
                  loss, width="wide", **kwargs):
         super().__init__()
-        uda = kwargs.pop("uda", False)
+        uda = kwargs["uda"] if "uda" in kwargs else False
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
         self.task = loss
@@ -1121,7 +1121,7 @@ class DecoderEnsemblingHead(nn.Module):
         if loss not in ["classification", "focal", "regression", "k-classification"]:
             raise NotImplementedError(loss)
         self.task = loss
-        uda = kwargs.pop("uda", False)
+        uda = kwargs["uda"] if "uda" in kwargs else False
         self.loss = get_loss_by_task(loss, n_out if uda else None)
         n_classifier_layers = kwargs["n_classifier_layers"] if "n_classifier_layers" in kwargs else 1
         n_classifiers = kwargs["n_classifiers"] if "n_classifiers" in kwargs else 2
