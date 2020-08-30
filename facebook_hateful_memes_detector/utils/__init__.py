@@ -603,8 +603,8 @@ class FocalLoss(nn.Module):
     def forward(self, inputs, targets):
         if self.sentinel_class is not None:
             mult = targets != self.sentinel_class
-        inputs = inputs[mult]
-        targets = targets[mult]
+            inputs = inputs[mult]
+            targets = targets[mult]
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
         pt = torch.exp(-BCE_loss)
         F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
@@ -623,8 +623,8 @@ class CELoss(nn.Module):
     def forward(self, inputs, targets):
         if self.sentinel_class is not None:
             mult = targets != self.sentinel_class
-        inputs = inputs[mult]
-        targets = targets[mult]
+            inputs = inputs[mult]
+            targets = targets[mult]
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
         if self.reduce:
             return torch.mean(BCE_loss)
