@@ -1250,7 +1250,8 @@ class WordMasking(nn.Module):
 
 
 def random_whole_word_mask(text: str, tokenizer, probability: float) -> str:
-    if probability == 0 or len(text) == 0:
+    text = str(text)
+    if probability == 0 or len(text) == 0 or len(text.split()) <= 2:
         return text
     tokens = text.split()
     new_tokens = []
@@ -1269,7 +1270,8 @@ def random_whole_word_mask(text: str, tokenizer, probability: float) -> str:
 
 
 def random_word_mask(text: str, tokenizer, probability: float) -> str:
-    if probability == 0:
+    text = str(text)
+    if probability == 0 or len(text.split()) <= 1:
         return text
     tokens = tokenizer.tokenize(text)
     for idx, token in enumerate(tokens):
