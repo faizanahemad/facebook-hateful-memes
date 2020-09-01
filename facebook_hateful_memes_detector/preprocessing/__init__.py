@@ -873,7 +873,7 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
     perm = np.random.permutation(len(train))
     train = train.iloc[perm]
     sp = int(0.1 * len(train))
-    dev = train[:sp]
+    dev = train[:sp].copy(deep=True)
     assert (numeric_file is None and numeric_file_dim is None) or (numeric_file is not None and numeric_file_dim is not None)
     assert (embed1 is None and embed1_dim is None) or (embed1 is not None and embed1_dim is not None)
     assert (embed2 is None and embed2_dim is None) or (embed2 is not None and embed2_dim is not None)
@@ -882,7 +882,8 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
     numeric_dev = None
     if numeric_file is not None:
         assert numeric_file_dim[0] == train.shape[0] + test.shape[0]
-        numeric_file = np.memmap(numeric_file, dtype='float32', mode='r', shape=numeric_file_dim)
+        if type(numeric_file) == str:
+            numeric_file = np.memmap(numeric_file, dtype='float32', mode='r', shape=numeric_file_dim)
         numeric_train = Subset(numeric_file, list(range(train.shape[0])))
         numeric_test = Subset(embed1, list(range(train.shape[0], train.shape[0] + test.shape[0])))
         numeric_train = Subset(numeric_train, perm)
@@ -895,7 +896,8 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
     embed1_dev = None
     if embed1 is not None:
         assert embed1_dim[0] == train.shape[0] + test.shape[0]
-        embed1 = np.memmap(embed1, dtype='float32', mode='r', shape=embed1_dim)
+        if type(embed1) == str:
+            embed1 = np.memmap(embed1, dtype='float32', mode='r', shape=embed1_dim)
         embed1_train = Subset(embed1, list(range(train.shape[0])))
         embed1_test = Subset(embed1, list(range(train.shape[0], train.shape[0] + test.shape[0])))
         embed1_train = Subset(embed1_train, perm)
@@ -908,7 +910,8 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
     embed2_dev = None
     if embed2 is not None:
         assert embed2_dim[0] == train.shape[0] + test.shape[0]
-        embed2 = np.memmap(embed2, dtype='float32', mode='r', shape=embed2_dim)
+        if type(embed2) == str:
+            embed2 = np.memmap(embed2, dtype='float32', mode='r', shape=embed2_dim)
         embed2_train = Subset(embed2, list(range(train.shape[0])))
         embed2_test = Subset(embed2, list(range(train.shape[0], train.shape[0] + test.shape[0])))
         embed2_train = Subset(embed2_train, perm)
@@ -917,7 +920,7 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
             embed2_train = Subset(embed2_train, list(range(sp, len(embed2_train))))
 
     if test_dev:
-        train = train[sp:]
+        train = train[sp:].copy(deep=True)
 
     dev["img"] = list(map(joiner, dev.img))
     train["img"] = list(map(joiner, train.img))
