@@ -24,6 +24,7 @@ from torch.nn import TransformerDecoder, TransformerDecoderLayer, TransformerEnc
 from torch.nn.init import xavier_uniform_
 from torch.utils.data import DataLoader
 from torchnlp.encoders.text.default_reserved_tokens import DEFAULT_PADDING_INDEX
+from torch.utils.checkpoint import checkpoint
 
 from .globals import get_device, set_device, set_cpu_as_device, set_first_gpu, memory, build_cache, get_global
 
@@ -1452,7 +1453,7 @@ class SimCLR(MLMPretraining):
         self.aug_time.append(mts - ats)
         if self.low_memory and hasattr(x1, "__len__"):
             print("Low memory Evaluation. X Len = ", len(x1))
-            x1 = self.model(x1)
+            x1 = checkpoint(self.model(x1))
             clean_memory()
             with torch.no_grad():
                 x2 = self.model(x2)
