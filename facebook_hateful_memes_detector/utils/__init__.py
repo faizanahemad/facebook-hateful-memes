@@ -35,8 +35,6 @@ RE_D = re.compile('\d')
 def my_collate(batch):
     # Create and return sample list with proper name and type set
     sample_list = SampleList(batch)
-    sample_list.dataset_name = ""
-    sample_list.dataset_type = ""
     clean_memory()
     return sample_list
 
@@ -1429,13 +1427,14 @@ class MLMPretraining(nn.Module):
 
 
 class SimCLR(MLMPretraining):
-    def __init__(self, model, in_dims, hidden_size, dropout, augment_1: Callable, augment_2: Callable):
+    def __init__(self, model, in_dims, hidden_size, dropout, augment_1: Callable, augment_2: Callable, low_memory=False):
         super(SimCLR, self).__init__(model, None, hidden_size, "leaky_relu", 0, True)
         self.aug_1 = augment_1
         self.aug_2 = augment_2
         self.model = model
         self.aug_time = []
         self.model_time = []
+        self.low_memory = low_memory
 
         lin0 = nn.Linear(in_dims, hidden_size)
         init_fc(lin0, "leaky_relu")
@@ -1451,8 +1450,30 @@ class SimCLR(MLMPretraining):
         x2 = self.aug_2(x)
         mts = time.time()
         self.aug_time.append(mts - ats)
-        x1 = self.model(x1)
-        x2 = self.model(x2)
+        if self.low_memory and hasattr(x1, "__len__"):
+            print("Low memory Evaluation. X Len = ", len(x1))
+            xl = len(x1)
+            xlh = xl // 2
+            xh = x1[:xlh]
+            x1_h1 = self.model(xh)
+            xh = x1[xlh:]
+            x1_h2 = self.model(xh)
+            x1 = torch.cat((x1_h1, x1_h2), 0)
+
+            xh = x2[:xlh]
+            x2_h1 = self.model(xh)
+            xh = x2[xlh:]
+            x2_h2 = self.model(xh)
+            x2 = torch.cat((x2_h1, x2_h2), 0)
+            del xh
+            del x1_h1
+            del x1_h2
+            del x2_h1
+            del x2_h2
+            clean_memory()
+        else:
+            x1 = self.model(x1)
+            x2 = self.model(x2)
         self.model_time.append(time.time() - mts)
 
         if isinstance(x1, (list, tuple)):
