@@ -1468,8 +1468,12 @@ class SimCLR(MLMPretraining):
             x2 = list(sorted(x2, key=operator.itemgetter(0), reverse=True))[0][1]
         x1 = x1.squeeze()
         x2 = x2.squeeze()
-        x1 = self.final_layer(x1)
-        x2 = self.final_layer(x2)
+        if self.low_memory:
+            x1 = checkpoint(self.final_layer, x1)
+            x2 = checkpoint(self.final_layer, x2)
+        else:
+            x1 = self.final_layer(x1)
+            x2 = self.final_layer(x2)
 
         if len(x1.size()) == 3:
             x1 = x1 / x1.norm(dim=2, keepdim=True).clamp(min=1e-5)
@@ -1484,10 +1488,13 @@ class SimCLR(MLMPretraining):
         x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
         x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
         x2 = x2.transpose(0, 1)
-        x = x1.mm(x2)  # batch x batch
+        if self.low_memory:
+            x = checkpoint(torch.matmul, x1, x2)
+        else:
+            x = x1.mm(x2)  # batch x batch
         labels = torch.arange(0, len(x), device=x.device, dtype=torch.long)
         loss = self.loss(x, labels)
-        x = torch.softmax(x, 1)
+        x = torch.softmax(x.detach(), 1)
         predictions = x.max(dim=1).indices
         accuracy = accuracy_score(labels.cpu(), predictions.cpu())
         self.accuracy_hist.append(accuracy)
