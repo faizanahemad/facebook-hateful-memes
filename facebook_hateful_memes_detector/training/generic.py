@@ -230,44 +230,6 @@ def get_auc_dice_loss(n_classes, dice_loss_coef, auc_loss_coef, auc_method=1):
     return loss
 
 
-def calculate_auc_dice_loss(logits, labels, loss, auc_loss_coef, dice_loss_coef):
-    binary = logits.size(1) == 2
-    if binary:
-        auc_loss = 0.0
-        probas = logits[:, 1]
-        if auc_loss_coef > 0:
-            pos_probas = labels * probas
-            neg_probas = (1 - labels) * probas
-
-            loss_1, loss_2 = 0.0, 0.0
-            neg_proba_max = neg_probas.max()
-            pos_proba_min = pos_probas.min()
-            loss_1 = F.leaky_relu(neg_probas - pos_proba_min).mean()
-            loss_2 = F.leaky_relu(neg_proba_max - pos_probas).mean()
-
-            pos_probas = pos_probas[pos_probas < neg_proba_max]
-            neg_probas = neg_probas[neg_probas > pos_proba_min]
-
-            num_entries_neg = max(1, int(len(neg_probas) / 4))
-            num_entries_pos = max(1, int(len(pos_probas) / 4))
-            if 1 <= num_entries_neg <= len(neg_probas):
-                neg_probas_max = torch.topk(neg_probas, num_entries_neg, 0).values.mean()
-                # neg_probas_max = neg_probas.max()
-                loss_2 = (neg_probas_max - pos_probas).mean()
-
-
-            if 1 <= num_entries_pos <= len(pos_probas):
-                pos_probas_min = torch.topk(pos_probas, num_entries_pos, 0, largest=False).values.mean()
-                # pos_probas_min = pos_probas.min()
-                loss_1 = (neg_probas - pos_probas_min).mean()
-            auc_loss = loss_1 + loss_2
-
-        dice = dice_loss(probas, sigma=dice_sigma).mean()
-        loss = (loss + auc_loss_coef * auc_loss + dice_loss_coef * dice) / (1 + auc_loss_coef + dice_loss_coef)
-
-    return loss
-
-
 def get_regularizer_scheduler(warmup_proportion=0.2):
     def scheduler(model, batch, num_batches, epoch, num_epochs):
         total_batches = num_batches * num_epochs
@@ -892,7 +854,6 @@ def identity(x): return x
 
 def train_validate_ntimes(model_fn, data, batch_size, epochs,
                           accumulation_steps=1,
-                          kfold=False,
                           scheduler_init_fn=None, model_call_back=None,
                           random_state=None, validation_epochs=None, show_model_stats=False,
                           sampling_policy=None,
@@ -910,66 +871,56 @@ def train_validate_ntimes(model_fn, data, batch_size, epochs,
     metadata = data["metadata"]
     test_dev = data["metadata"]["test_dev"]
     actual_test = data["test"]
-    assert not (test_dev and kfold)
 
     trin = data["train"]
-    test = data["dev"]
+    dev = data["dev"]
+    test = data["test"]
     metadata = data["metadata"]
-    folds = [(trin,
-              test)]
 
-    nfolds = []
     assert consistency_loss_weight >= 0
-    for d in folds:
-        training_fold_dataset = convert_dataframe_to_dataset(d[0], metadata, consistency_loss_weight == 0,
-                                                             numbers=data["numeric_train"], embed1=data["embed1_train"], embed2=data["embed2_train"])
-        training_test_dataset = convert_dataframe_to_dataset(d[0], metadata, False, cached_images=training_fold_dataset.images,
-                                                             numbers=data["numeric_train"], embed1=data["embed1_train"], embed2=data["embed2_train"])
-        testing_fold_dataset = convert_dataframe_to_dataset(d[1], metadata, False, numbers=data["numeric_dev"], embed1=data["embed1_dev"], embed2=data["embed2_dev"])
-        nfolds.append((training_fold_dataset, training_test_dataset, testing_fold_dataset))
+    training_fold_dataset = convert_dataframe_to_dataset(trin, metadata, consistency_loss_weight == 0,
+                                                         numbers=data["numeric_train"], embed1=data["embed1_train"], embed2=data["embed2_train"])
+    training_test_dataset = convert_dataframe_to_dataset(trin, metadata, False, cached_images=training_fold_dataset.images,
+                                                         numbers=data["numeric_train"], embed1=data["embed1_train"], embed2=data["embed2_train"])
+    testing_fold_dataset = convert_dataframe_to_dataset(dev, metadata, False, numbers=data["numeric_dev"], embed1=data["embed1_dev"], embed2=data["embed2_dev"])
 
-    folds = nfolds
-    for training_fold_dataset, training_test_dataset, testing_fold_dataset in folds:
-        if callable(model_fn):
-            model, optimizer = model_fn()
-        else:
-            model, optimizer = model_fn
-        if show_model_stats:
-            model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
-            params = sum([np.prod(p.size()) for p in model_parameters])
-            print("Trainable Params = %s" % (params), "\n", model)
-            show_model_stats = not show_model_stats
-        validation_strategy = dict(validation_epochs=validation_epochs,
-                                   train=dict(method=validate, args=[model, batch_size, training_test_dataset], kwargs=dict(display_detail=False)),
-                                   val=dict(method=validate, args=[model, batch_size, testing_fold_dataset], kwargs=dict(display_detail=False,
-                                                                                                                         prediction_iters=prediction_iters,
-                                                                                                                         evaluate_in_train_mode=evaluate_in_train_mode)))
-        validation_strategy = validation_strategy if validation_epochs is not None else None
-        if consistency_loss_weight > 0:
-            tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
-            testing_dataset = convert_dataframe_to_dataset(actual_test, metadata, False)
-            from torch.utils.data import ConcatDataset
-            train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, ConcatDataset((testing_fold_dataset, testing_dataset)), num_classes, aug_1, aug_2)
-            collate_fn = label_consistency_collate
-        else:
-            tmodel = model
-            train_dataset = training_fold_dataset
-            collate_fn = my_collate
-        tmodel.to(get_device())
-        train_losses, learning_rates, validation_stats = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back,
-                                                               accumulation_steps,
-                                                               validation_strategy, plot=not kfold, sampling_policy=sampling_policy,
-                                                               class_weights=class_weights, collate_fn=collate_fn, )
+    if callable(model_fn):
+        model, optimizer = model_fn()
+    else:
+        model, optimizer = model_fn
+    if show_model_stats:
+        model_parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
+        params = sum([np.prod(p.size()) for p in model_parameters])
+        print("Trainable Params = %s" % (params), "\n", model)
+    validation_strategy = dict(validation_epochs=validation_epochs,
+                               train=dict(method=validate, args=[model, batch_size, training_test_dataset], kwargs=dict(display_detail=False)),
+                               val=dict(method=validate, args=[model, batch_size, testing_fold_dataset], kwargs=dict(display_detail=False,
+                                                                                                                     prediction_iters=prediction_iters,
+                                                                                                                     evaluate_in_train_mode=evaluate_in_train_mode)))
+    validation_strategy = validation_strategy if validation_epochs is not None else None
+    if consistency_loss_weight > 0:
+        tmodel = ModelWrapperForConsistency(model, num_classes, consistency_loss_weight)
+        testing_dataset = convert_dataframe_to_dataset(actual_test, metadata, False)
+        from torch.utils.data import ConcatDataset
+        train_dataset = LabelConsistencyDatasetWrapper(training_fold_dataset, ConcatDataset((testing_fold_dataset, testing_dataset)), num_classes, aug_1, aug_2)
+        collate_fn = label_consistency_collate
+    else:
+        tmodel = model
+        train_dataset = training_fold_dataset
+        collate_fn = my_collate
+    tmodel.to(get_device())
+    train_losses, learning_rates, validation_stats = train(tmodel, optimizer, scheduler_init_fn, batch_size, epochs, train_dataset, model_call_back,
+                                                           accumulation_steps,
+                                                           validation_strategy, plot=True, sampling_policy=sampling_policy,
+                                                           class_weights=class_weights, collate_fn=collate_fn, )
 
-        validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)
-        train_scores, prfs_train = validate(model, batch_size, training_test_dataset, display_detail=False, prediction_iters=prediction_iters,
-                                                                                                            evaluate_in_train_mode=evaluate_in_train_mode)
-        prfs_list.append(prfs_train + prfs_val)
-        rdf = dict(train=train_scores, val=validation_scores)
-        rdf = pd.DataFrame(data=rdf, index=index)
-        results_list.append(rdf)
-        if not kfold:
-            break
+    validation_scores, prfs_val = validate(model, batch_size, testing_fold_dataset, display_detail=True)
+    train_scores, prfs_train = validate(model, batch_size, training_test_dataset, display_detail=False, prediction_iters=prediction_iters,
+                                                                                                        evaluate_in_train_mode=evaluate_in_train_mode)
+    prfs_list.append(prfs_train + prfs_val)
+    rdf = dict(train=train_scores, val=validation_scores)
+    rdf = pd.DataFrame(data=rdf, index=index)
+    results_list.append(rdf)
 
     results = np.stack(results_list, axis=0)
     means = pd.DataFrame(results.mean(0), index=index)

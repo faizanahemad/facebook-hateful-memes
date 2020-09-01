@@ -10,7 +10,7 @@ from ...utils.sample import SampleList, Sample
 from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 
-from ...training import calculate_auc_dice_loss, get_auc_dice_loss
+from ...training import get_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, ExpandContract, get_device, dict2sampleList, load_stored_params, get_regularization_layers
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer, BasicFeaturizer
 
