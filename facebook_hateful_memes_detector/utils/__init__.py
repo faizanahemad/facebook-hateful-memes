@@ -1468,12 +1468,8 @@ class SimCLR(MLMPretraining):
             x2 = list(sorted(x2, key=operator.itemgetter(0), reverse=True))[0][1]
         x1 = x1.squeeze()
         x2 = x2.squeeze()
-        if self.low_memory:
-            x1 = checkpoint(self.final_layer, x1)
-            x2 = checkpoint(self.final_layer, x2)
-        else:
-            x1 = self.final_layer(x1)
-            x2 = self.final_layer(x2)
+        x1 = self.final_layer(x1)
+        x2 = self.final_layer(x2)
 
         if len(x1.size()) == 3:
             x1 = x1 / x1.norm(dim=2, keepdim=True).clamp(min=1e-5)
