@@ -1452,24 +1452,10 @@ class SimCLR(MLMPretraining):
         self.aug_time.append(mts - ats)
         if self.low_memory and hasattr(x1, "__len__"):
             print("Low memory Evaluation. X Len = ", len(x1))
-            xl = len(x1)
-            xlh = xl // 2
-            xh = x1[:xlh]
-            x1_h1 = self.model(xh)
-            xh = x1[xlh:]
-            x1_h2 = self.model(xh)
-            x1 = torch.cat((x1_h1, x1_h2), 0)
-
-            xh = x2[:xlh]
-            x2_h1 = self.model(xh)
-            xh = x2[xlh:]
-            x2_h2 = self.model(xh)
-            x2 = torch.cat((x2_h1, x2_h2), 0)
-            del xh
-            del x1_h1
-            del x1_h2
-            del x2_h1
-            del x2_h2
+            x1 = self.model(x1)
+            clean_memory()
+            with torch.no_grad():
+                x2 = self.model(x2)
             clean_memory()
         else:
             x1 = self.model(x1)
