@@ -1052,13 +1052,13 @@ class TextImageDataset(Dataset):
         self.identifiers = list(identifiers)
         self.image_locations = image_locations
         if numbers is not None:
-            assert isinstance(numbers, np.ndarray)
+            assert isinstance(numbers, (np.ndarray, Dataset))
             self.numbers = numbers
         if embed1 is not None:
-            assert isinstance(embed1, np.ndarray)
+            assert isinstance(embed1, (np.ndarray, Dataset))
             self.embed1 = embed1
         if embed2 is not None:
-            assert isinstance(embed2, np.ndarray)
+            assert isinstance(embed2, (np.ndarray, Dataset))
             self.embed2 = embed2
         self.numeric_regularizer = numeric_regularizer if numeric_regularizer is not None else identity
         from tqdm.auto import tqdm as tqdm
