@@ -859,7 +859,7 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
                      train_mixup_config=None, test_mixup_config=None,
                      keep_processed_image: bool = False, keep_torchvision_image: bool = False):
     use_dev = dev
-    joiner_p = lambda img: (os.path.join(image_dir, img)) if (img is not None and type(img) == str and img != "nan") else None
+    joiner_p = lambda img: (os.path.join(image_dir, str(img))) if (img is not None and isinstance(img, (int, str)) and img != "nan") else None
     from torch.utils.data import Subset
     def joiner(img):
         img = joiner_p(img)
