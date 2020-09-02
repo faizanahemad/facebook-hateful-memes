@@ -892,7 +892,7 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
         if type(numeric_file) == str:
             numeric_file = np.memmap(numeric_file, dtype='float32', mode='r', shape=numeric_file_dim)
         numeric_train = Subset(numeric_file, list(range(train.shape[0])))
-        numeric_test = Subset(embed1, list(range(train.shape[0], train.shape[0] + test.shape[0])))
+        numeric_test = Subset(numeric_file, list(range(train.shape[0], train.shape[0] + test.shape[0])))
         numeric_train = Subset(numeric_train, perm)
         numeric_dev = Subset(numeric_train, list(range(sp)))
         if test_dev:
