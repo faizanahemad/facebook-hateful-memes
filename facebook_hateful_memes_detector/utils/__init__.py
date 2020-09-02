@@ -1207,7 +1207,7 @@ def print_code(func):
     print(highlight(code, PythonLexer(), TerminalFormatter()))
 
 
-def dict2sampleList(samples: Dict):
+def dict2sampleList(samples: Dict, *args, **kwargs):
     if type(samples) == dict:
         sl = SampleList()
         for k, v in samples.items():

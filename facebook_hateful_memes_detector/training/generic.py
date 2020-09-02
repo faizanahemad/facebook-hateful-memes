@@ -699,7 +699,7 @@ def generate_predictions(model, batch_size, dataset,
                     else:
                         logits, _, _, _ = model(batch)
                     try:
-                        batch = dict2sampleList(batch, device=get_device())
+                        batch = dict2sampleList(batch)
                         labels = batch["label"]
                     except:
                         labels = batch[-1]
