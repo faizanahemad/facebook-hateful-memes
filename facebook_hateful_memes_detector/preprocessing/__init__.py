@@ -868,6 +868,13 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
         if img.endswith(image_extension):
             return img
         return img + image_extension
+
+    def joiner_v2(img):
+        img = joiner(img)
+        if os.path.exists(img):
+            return img
+        return None
+
     train = pd.read_csv(train_file)
     test = pd.read_csv(test_file)
     perm = np.random.permutation(len(train))
@@ -922,9 +929,9 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
     if test_dev:
         train = train[sp:].copy(deep=True)
 
-    dev["img"] = list(map(joiner, dev.img))
-    train["img"] = list(map(joiner, train.img))
-    test["img"] = list(map(joiner, test.img))
+    dev["img"] = list(map(joiner_v2, dev.img))
+    train["img"] = list(map(joiner_v2, train.img))
+    test["img"] = list(map(joiner_v2, test.img))
 
     rd = dict(train=train, test=test, dev=dev,
               numeric_train=numeric_train, numeric_test=numeric_test, numeric_dev=numeric_dev,
