@@ -1114,12 +1114,14 @@ class TextImageDataset(Dataset):
         if image is not None:
             if self.keep_original_image:
                 s.original_image = image
-            if self.keep_processed_image:
-                image = self.image_transform(image.copy())
-                s.image = image
             if self.keep_torchvision_image:
                 torchvision_image = self.to_torchvision(self.torchvision_pre_image_transform(image))
                 s.torchvision_image = torchvision_image
+            if self.keep_processed_image:
+                image = self.image_transform(image.copy())
+                s.image = image
+            else:
+                del s['image']
 
         if self.keep_original_text:
             s.original_text = orig_text
