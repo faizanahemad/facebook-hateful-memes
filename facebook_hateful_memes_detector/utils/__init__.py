@@ -1319,11 +1319,21 @@ class BertLMPredictionHead(nn.Module):
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
         if low_memory:
-            self.decoder = nn.Conv1d((hidden_size // 4), vocab_size, 1, 1, groups=4)
+            self.decoder1 = nn.Conv1d((hidden_size // 8), vocab_size // 2, 1, 1, groups=1)
+            self.decoder2 = nn.Conv1d((hidden_size // 8), vocab_size - vocab_size // 2, 1, 1, groups=1)
+
+            def decode(x):
+                x = x.transpose(1, 2)
+                d1 = self.decoder1(x)
+                d2 = self.decoder2(x)
+                d = torch.cat((d1, d2), 1)
+                return d.transpose(1, 2)
+            self.decoder = decode
         else:
             self.decoder = nn.Linear(hidden_size, vocab_size, bias=True)
+            init_fc(self.decoder, "linear")
         self.vocab_size = vocab_size
-        init_fc(self.decoder, "linear")
+
         self.n_tokens_in = n_tokens_in
         self.loss_fct = CrossEntropyLoss(reduction='none')
 
