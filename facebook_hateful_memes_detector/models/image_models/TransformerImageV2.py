@@ -65,7 +65,7 @@ class TransformerImageV2Model(nn.Module):
             fc1 = nn.Linear(512, embedding_dims)
             init_fc(fc1, "leaky_relu")
             self.numbers_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
+                                               LambdaLayer(expand))
             self.NumberLayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)
 
         if embed1_dim:
@@ -74,7 +74,7 @@ class TransformerImageV2Model(nn.Module):
             fc1 = nn.Linear(min(embed1_dim * 4, 1024), embedding_dims)
             init_fc(fc1, "leaky_relu")
             self.embed1_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
+                                               LambdaLayer(expand))
             self.Embed1LayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)
 
         if embed2_dim:
@@ -83,7 +83,7 @@ class TransformerImageV2Model(nn.Module):
             fc1 = nn.Linear(min(embed2_dim * 4, 1024), embedding_dims)
             init_fc(fc1, "leaky_relu")
             self.embed2_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
+                                               LambdaLayer(expand))
             self.Embed2LayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)
 
         if image_dim:
@@ -103,10 +103,10 @@ class TransformerImageV2Model(nn.Module):
                 init_fc(im_proc, "linear")
                 im_proc = [im_proc, nn.Dropout(dropout)]
             else:
-                im_proc = []
+                im_proc = [nn.Identity()]
 
             im_proc.append(LambdaLayer(expand))
-            im_proc = nn.Sequential(*im_proc, nn.LayerNorm(embedding_dims))
+            im_proc = nn.Sequential(*im_proc)
             self.im_model = im_model
             self.post_proc = im_proc
             self.LayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)

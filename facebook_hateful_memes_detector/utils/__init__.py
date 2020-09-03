@@ -1293,15 +1293,16 @@ def random_word_mask(text: str, tokenizer, probability: float) -> str:
 
 
 class BertPredictionHeadTransform(nn.Module):
-    def __init__(self, hidden_size, hidden_act):
+    def __init__(self, hidden_size, hidden_act, low_memory=False):
         super().__init__()
-        self.dense = nn.Linear(hidden_size, hidden_size)
+        self.dense = nn.Linear(hidden_size, (hidden_size // 4) if low_memory else hidden_size)
+        init_fc(self.dense, hidden_act)
         if isinstance(hidden_act, str):
             from transformers.modeling_bert import ACT2FN
             self.transform_act_fn = ACT2FN[hidden_act]
         else:
             self.transform_act_fn = hidden_act
-        self.LayerNorm = nn.LayerNorm(hidden_size)
+        self.LayerNorm = nn.LayerNorm((hidden_size // 4) if low_memory else hidden_size)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -1311,19 +1312,18 @@ class BertPredictionHeadTransform(nn.Module):
 
 
 class BertLMPredictionHead(nn.Module):
-    def __init__(self, hidden_size, vocab_size, hidden_act, n_tokens_in):
+    def __init__(self, hidden_size, vocab_size, hidden_act, n_tokens_in, low_memory=False):
         super().__init__()
-        self.transform = BertPredictionHeadTransform(hidden_size, hidden_act)
+        self.transform = BertPredictionHeadTransform(hidden_size, hidden_act, low_memory=low_memory)
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
-        self.decoder = nn.Linear(hidden_size, vocab_size, bias=False)
-
-        self.bias = nn.Parameter(torch.zeros(vocab_size))
+        if low_memory:
+            self.decoder = nn.Conv1d((hidden_size // 4), vocab_size, 1, 1, groups=4)
+        else:
+            self.decoder = nn.Linear(hidden_size, vocab_size, bias=True)
         self.vocab_size = vocab_size
-
-        # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
-        self.decoder.bias = self.bias
+        init_fc(self.decoder, "linear")
         self.n_tokens_in = n_tokens_in
         self.loss_fct = CrossEntropyLoss(reduction='none')
 
@@ -1346,12 +1346,12 @@ class BertLMPredictionHead(nn.Module):
 
 
 class MLMPretraining(nn.Module):
-    def __init__(self, model, tokenizer, hidden_size, hidden_act, n_tokens_in, use_as_super=False):
+    def __init__(self, model, tokenizer, hidden_size, hidden_act, n_tokens_in, use_as_super=False, low_memory=False):
         super().__init__()
         self.model = model
 
         if not use_as_super:
-            self.mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, hidden_act, n_tokens_in)
+            self.mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, hidden_act, n_tokens_in, low_memory=low_memory)
             self.tokenizer = tokenizer
             self.n_tokens_in = n_tokens_in
         self.accuracy_hist = []

@@ -164,7 +164,7 @@ class TransformerImageModel(AlbertClassifer):
         position_ids = position_ids.unsqueeze(0).expand(image_vectors.size()[:2])  # (bs, max_seq_length)
         position_embeddings = self.model.embeddings.position_embeddings(position_ids)  # (bs, max_seq_length, dim)
 
-        image_vectors = image_vectors + position_embeddings  # (bs, max_seq_length, dim)
+        image_vectors = image_vectors * math.sqrt(image_vectors.size(-1)) + position_embeddings  # (bs, max_seq_length, dim)
         image_vectors = self.LayerNorm(image_vectors)  # (bs, max_seq_length, dim)
         image_vectors = self.dropout(image_vectors)  # (bs, max_seq_length, dim)
         attention_mask = attention_mask.to(get_device())
