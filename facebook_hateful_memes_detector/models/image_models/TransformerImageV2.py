@@ -55,7 +55,7 @@ class TransformerImageV2Model(nn.Module):
         numbers_dim = kwargs.pop("numbers_dim", False)
         image_dim = kwargs.pop("image_dim", False)
         embed1_dim = kwargs.pop("embed1_dim", False)
-        embed2_dim = kwargs.pop("embed1_dim", False)
+        embed2_dim = kwargs.pop("embed2_dim", False)
 
         def expand(x):
             return x.unsqueeze(1)
