@@ -134,6 +134,7 @@ class TransformerImageV2Model(nn.Module):
         else:
             raise NotImplementedError()
 
+        self.do_mlm = kwargs.pop("do_mlm", False)
         self.final_layer = final_layer_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
@@ -247,7 +248,9 @@ class TransformerImageV2Model(nn.Module):
         attention_mask = attention_mask.unsqueeze(1).unsqueeze(1)
         tfmr_output = encoder(embeddings, attention_mask, head_mask=head_mask)
         hidden_state = tfmr_output[0]
-        output = (hidden_state,) + tfmr_output[1:]
+        hidden_state = self.featurizer.forward(hidden_state, filter_indices=not self.do_mlm)
+        if self.do_mlm:
+            hidden_state = hidden_state[:, :self.text_tokens]
         return (hidden_state,)
 
     def forward(self, sampleList: SampleList):
@@ -255,9 +258,9 @@ class TransformerImageV2Model(nn.Module):
         labels = torch.tensor(sampleList.label).to(get_device())
         # sample_weights = torch.tensor(sampleList.sample_weight, dtype=float).to(get_device())
         vectors = self.get_vectors(sampleList)[-1]
-        vectors = self.featurizer(vectors)
-        logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
-
-        if self.training:
-            loss += self.auc_dice_loss(logits, labels)
+        logits, loss = None, None
+        if not self.do_mlm:
+            logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
+            if self.training:
+                loss += self.auc_dice_loss(logits, labels)
         return logits, vectors.mean(1), vectors, loss

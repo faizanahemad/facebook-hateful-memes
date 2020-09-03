@@ -44,9 +44,12 @@ class TransformerFeaturizer(nn.Module):
         self.global_layer_norm = nn.LayerNorm(n_internal_dims)
         self.tgt_norm = nn.LayerNorm(n_internal_dims)
 
-    def forward(self, x):
+    def forward(self, x, filter_indices=True):
         if not self.transformer_needed:
-            return x[:, :self.n_tokens_out]
+            if filter_indices:
+                return x[:, :self.n_tokens_out]
+            else:
+                return x
         x = self.input_nn(x) if self.input_nn is not None else x
 
         x = x.transpose(0, 1) * math.sqrt(self.n_internal_dims)
@@ -61,11 +64,13 @@ class TransformerFeaturizer(nn.Module):
             transformer_tgt = self.tgt_norm(transformer_tgt)
             # TODO: do we need tgt_norm?
         x, _ = self.transformer(x, transformer_tgt)
-        x = x[:self.n_tokens_out]
         x = x.transpose(0, 1)
+        if filter_indices:
+            x = x[:, :self.n_tokens_out]
+            assert x.size(1) == self.n_tokens_out
 
         x = self.output_nn(x) if self.output_nn is not None else x
-        assert x.size(1) == self.n_tokens_out and x.size(2) == self.n_channels_out
+        assert x.size(2) == self.n_channels_out
         return x
 
 

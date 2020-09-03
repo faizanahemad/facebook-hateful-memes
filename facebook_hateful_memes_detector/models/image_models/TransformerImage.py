@@ -198,7 +198,6 @@ class TransformerImageModel(AlbertClassifer):
             attention_mask = attention_mask.unsqueeze(1).unsqueeze(1)
         tfmr_output = encoder(embeddings, attention_mask, head_mask=head_mask)
         hidden_state = tfmr_output[0]
-        output = (hidden_state,) + tfmr_output[1:]
         return (hidden_state,)
 
     def forward(self, sampleList: SampleList):

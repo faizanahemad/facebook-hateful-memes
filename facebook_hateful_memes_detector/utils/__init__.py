@@ -1453,9 +1453,7 @@ class SimCLR(MLMPretraining):
         self.aug_time.append(mts - ats)
         if self.low_memory and hasattr(x1, "__len__"):
             x1 = checkpoint(self.model, x1)
-            clean_memory()
             x2 = checkpoint(self.model, x2)
-            clean_memory()
         else:
             x1 = self.model(x1)
             x2 = self.model(x2)
