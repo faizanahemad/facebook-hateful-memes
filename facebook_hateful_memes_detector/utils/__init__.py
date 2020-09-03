@@ -1295,14 +1295,14 @@ def random_word_mask(text: str, tokenizer, probability: float) -> str:
 class BertPredictionHeadTransform(nn.Module):
     def __init__(self, hidden_size, hidden_act, low_memory=False):
         super().__init__()
-        self.dense = nn.Linear(hidden_size, (hidden_size // 4) if low_memory else hidden_size)
+        self.dense = nn.Linear(hidden_size, (hidden_size // 8) if low_memory else hidden_size)
         init_fc(self.dense, hidden_act)
         if isinstance(hidden_act, str):
             from transformers.modeling_bert import ACT2FN
             self.transform_act_fn = ACT2FN[hidden_act]
         else:
             self.transform_act_fn = hidden_act
-        self.LayerNorm = nn.LayerNorm((hidden_size // 4) if low_memory else hidden_size)
+        self.LayerNorm = nn.LayerNorm((hidden_size // 8) if low_memory else hidden_size)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -1319,8 +1319,9 @@ class BertLMPredictionHead(nn.Module):
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
         if low_memory:
-            self.decoder1 = nn.Conv1d((hidden_size // 8), vocab_size // 2, 1, 1, groups=1)
-            self.decoder2 = nn.Conv1d((hidden_size // 8), vocab_size - vocab_size // 2, 1, 1, groups=1)
+            bigger_vocab = 8 * (vocab_size // 8)
+            self.decoder1 = nn.Conv1d((hidden_size // 8), bigger_vocab, 1, 1, groups=8)
+            self.decoder2 = nn.Conv1d((hidden_size // 8), vocab_size - bigger_vocab, 1, 1, groups=1)
 
             def decode(x):
                 x = x.transpose(1, 2)
