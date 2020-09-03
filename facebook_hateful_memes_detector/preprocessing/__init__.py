@@ -871,6 +871,8 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
 
     def joiner_v2(img):
         img = joiner(img)
+        if img is None:
+            return None
         if os.path.exists(img):
             return img
         return None
