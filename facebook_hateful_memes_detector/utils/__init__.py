@@ -1342,7 +1342,7 @@ class BertLMPredictionHead(nn.Module):
         hidden_states = hidden_states[:, :self.n_tokens_in]
         hidden_states = self.transform(hidden_states)
         hidden_states = self.decoder(hidden_states)
-        hidden_states = hidden_states.view(-1, self.vocab_size)
+        hidden_states = hidden_states.contiguous().view(-1, self.vocab_size)
         input_ids = input_ids.view(-1)
         masked_lm_loss = 0.0
         if self.training:
