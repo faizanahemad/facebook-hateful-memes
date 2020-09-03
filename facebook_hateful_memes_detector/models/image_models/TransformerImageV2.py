@@ -46,7 +46,6 @@ class TransformerImageV2Model(nn.Module):
                  use_as_super=False, **kwargs):
         embedding_dims = 768
         super(TransformerImageV2Model, self).__init__()
-        assert n_tokens_in % n_tokens_out == 0
         #
         self.head_masks = head_masks
         assert self.head_masks <= 12
