@@ -676,6 +676,7 @@ class TextAugment:
         return " ".join(tokens)
 
     def __call__(self, text, **kwargs):
+        text = str(text)
         original_text = text
         count = np.random.choice(list(range(len(self.count_proba))), 1, replace=False, p=self.count_proba)[0]
         augs = np.random.choice(self.augs, count, replace=False, p=self.choice_probas)
