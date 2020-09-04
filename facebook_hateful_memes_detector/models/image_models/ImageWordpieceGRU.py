@@ -129,11 +129,9 @@ class ImageGRUModel(nn.Module):
             self.im_model = im_model
             self.post_proc = im_proc
 
-
-        self.total_tokens = 1 + int(bool(image_dim)) + int(bool(numbers_dim)) + int(bool(embed1_dim)) + int(bool(embed2_dim)) + n_tokens_in \
-                            + int(bool(numbers_dim)) + int(bool(embed1_dim)) + int(bool(embed2_dim)) + int(bool(image_dim)) + 1
         self.text_tokens = n_tokens_in
-        self.skips = 1 + int(bool(image_dim)) + int(bool(numbers_dim)) + int(bool(embed1_dim)) + int(bool(embed2_dim))
+        self.skips = int(bool(image_dim)) + int(bool(numbers_dim)) + int(bool(embed1_dim)) + int(bool(embed2_dim))
+        self.total_tokens = self.skips + n_tokens_in + self.skips
 
         model = kwargs["model"]
 
@@ -156,6 +154,10 @@ class ImageGRUModel(nn.Module):
         elif model == "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext":
             self.word_embeddings = model_class.from_pretrained(model).embeddings.word_embeddings
             self.word_embedding_dims = 768
+        elif model == "ctrl":
+            self.word_embeddings = model_class.from_pretrained(model).w
+            self.word_embedding_dims = 1280
+        #
         elif model == "mrm8488/bert-tiny-5-finetuned-squadv2":
             self.word_embeddings = model_class.from_pretrained(model).embeddings.word_embeddings
             self.word_embedding_dims = 128
@@ -165,9 +167,6 @@ class ImageGRUModel(nn.Module):
         elif model == "google/electra-base-generator":
             self.word_embeddings = model_class.from_pretrained(model).embeddings.word_embeddings
             self.word_embedding_dims = 768
-        elif model == "ctrl":
-            self.word_embeddings = model_class.from_pretrained(model).w
-            self.word_embedding_dims = 1280
         elif model == "t5-small":
             self.word_embeddings = model_class.from_pretrained(model).shared
             self.word_embedding_dims = 512
@@ -211,7 +210,6 @@ class ImageGRUModel(nn.Module):
         sampleList = dict2sampleList(sampleList, device=get_device())
         input_ids, _ = self.tokenise(sampleList.text)
         word_embeddings = self.gru_lin(self.word_embeddings(input_ids))
-        global_word_view = word_embeddings.mean(1).unsqueeze(1)
         embeddings = word_embeddings
         if hasattr(sampleList, "torchvision_image"):
             img = sampleList.torchvision_image
@@ -242,12 +240,10 @@ class ImageGRUModel(nn.Module):
             embed2 = self.embed2_embed(embed2)
             clean_memory()
             embeddings = torch.cat([embed2, embeddings, embed2], 1)
-
-        embeddings = torch.cat([global_word_view, embeddings, global_word_view], 1)
         
-        hidden_state = self.gru.forward(embeddings, filter_indices=not self.do_mlm)
+        hidden_state = self.gru_out(self.gru.forward(embeddings, filter_indices=not self.do_mlm))
         if self.do_mlm:
-            hidden_state = self.gru_out(hidden_state[:, self.skips:self.skips+self.text_tokens])
+            hidden_state = hidden_state[:, self.skips:self.skips+self.text_tokens]
         return (hidden_state,)
 
     def forward(self, sampleList: SampleList):
