@@ -53,7 +53,7 @@ from transformers import (
     set_seed,
     PreTrainedModel,
     DataCollator,
-    EvalPrediction
+    EvalPrediction, XLMRobertaTokenizer
 )
 
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR, EvalPrediction, PredictionOutput, TrainOutput
@@ -495,7 +495,10 @@ def main():
         logger.warning("You are instantiating a new config instance from scratch.")
 
     if model_args.tokenizer_name:
-        tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, cache_dir=model_args.cache_dir)
+        if model_args.tokenizer_name == "microsoft/Multilingual-MiniLM-L12-H384":
+            XLMRobertaTokenizer.from_pretrained(model_args.tokenizer_name, cache_dir=model_args.cache_dir)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, cache_dir=model_args.cache_dir)
     elif model_args.model_name_or_path:
         tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, cache_dir=model_args.cache_dir)
     else:
