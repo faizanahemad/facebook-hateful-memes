@@ -15,7 +15,7 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global, \
     get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_vgg_face_model, PositionalEncoding2D, Transpose, init_fc, dict2sampleList, \
-    clean_memory, get_regularization_layers, WordMasking
+    clean_memory, get_regularization_layers, WordMasking, FeatureDropout
 from ..external.detr import get_detr_model, DETRShim
 import transformers
 import os
@@ -43,7 +43,7 @@ class TransformerImageModel(AlbertClassifer):
         assert self.head_masks <= 12
         attention_drop_proba = kwargs.pop("attention_drop_proba", 0.0)
         self.attention_drop_proba = attention_drop_proba
-
+        self.feature_dropout = FeatureDropout(dropout)
         names, im_models, im_shapes, im_procs = [], [], [], []
         for imo in image_models:
             if type(imo) == dict:
@@ -155,7 +155,9 @@ class TransformerImageModel(AlbertClassifer):
             kw = dict(ignore_cache=mixup) if k in self.require_raw_img else dict()
             im_repr = m(x, **kw)
             im_repr = self.post_procs[k](im_repr)
-            image_vectors.append(im_repr.to(get_device()))
+            im_repr = im_repr.to(get_device())
+            im_repr = self.feature_dropout(im_repr)
+            image_vectors.append(im_repr)
             clean_memory()
 
         image_vectors = torch.cat(image_vectors, 1)

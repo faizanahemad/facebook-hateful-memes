@@ -17,7 +17,7 @@ from torchnlp.word_to_vector import BPEmb
 from ...training import get_auc_dice_loss
 from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvision_classification_models, get_device, get_image_info_fn, Transpose, \
     dict2sampleList, loss_calculator, get_loss_by_task, clean_memory, pad_tensor, random_word_mask, load_stored_params, LinearHead, get_regularization_layers, \
-    WordMasking
+    WordMasking, FeatureDropout
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
 
@@ -61,7 +61,7 @@ class VilBertVisualBertModel(nn.Module):
         self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
         assert type(model_name) == dict
         for k, v in model_name.items():
-            dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
+            dp = FeatureDropout(v["dropout"] if "dropout" in v else 0.0)
             gn = GaussianNoise(v["gaussian_noise"] if "gaussian_noise" in v else 0.0)
             self.model_regularizers[k] = nn.Sequential(dp, gn)
 
@@ -544,6 +544,7 @@ class VilBertVisualBertModel(nn.Module):
             logits, loss = self.final_layer(vectors, labels)
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
+        # TODO: Check the weights here -> Use 0.9, 0.1 maybe
         loss = 0.75 * loss + 0.25 * pre_loss
         logits = (0.75 * logits + 0.25 * pre_logits)
         return logits, pooled_output, sequence_output, loss

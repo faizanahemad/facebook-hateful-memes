@@ -163,7 +163,7 @@ class TransformerImageV2Model(nn.Module):
             img = img.to(get_device())
             im_repr = self.im_model(img)
             image_vectors = self.post_proc(im_repr).to(get_device())
-            clean_memory()
+            image_vectors = self.feature_dropout(image_vectors)
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.size(0), image_vectors.size(1), device=get_device(), dtype=attention_mask.dtype)],
                 1)
@@ -183,7 +183,6 @@ class TransformerImageV2Model(nn.Module):
             numbers = numbers.to(get_device())
             numbers = self.feature_dropout(numbers)
             numbers = self.numbers_embed(numbers)
-            clean_memory()
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.size(0), 1, device=get_device(), dtype=attention_mask.dtype)],
                 1)
@@ -203,7 +202,6 @@ class TransformerImageV2Model(nn.Module):
             embed1 = embed1.to(get_device())
             embed1 = self.feature_dropout(embed1)
             embed1 = self.embed1_embed(embed1)
-            clean_memory()
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.size(0), 1, device=get_device(), dtype=attention_mask.dtype)],
                 1)
@@ -224,7 +222,6 @@ class TransformerImageV2Model(nn.Module):
             embed2 = embed2.to(get_device())
             embed2 = self.feature_dropout(embed2)
             embed2 = self.embed2_embed(embed2)
-            clean_memory()
             attention_mask = torch.cat(
                 [attention_mask, torch.ones(attention_mask.size(0), 1, device=get_device(), dtype=attention_mask.dtype)],
                 1)

@@ -187,13 +187,14 @@ class ImageGRUModel(nn.Module):
         sampleList = dict2sampleList(sampleList, device=get_device())
         input_ids, _ = self.tokenise(sampleList.text)
         word_embeddings = self.gru_lin(self.word_embeddings(input_ids))
+        word_embeddings = self.feature_dropout(word_embeddings)
         embeddings = word_embeddings
         if hasattr(sampleList, "torchvision_image"):
             img = sampleList.torchvision_image
             img = img.to(get_device())
             im_repr = self.im_model(img)
             image_vectors = self.post_proc(im_repr).to(get_device())
-            clean_memory()
+            image_vectors = self.feature_dropout(image_vectors)
             image_vectors = image_vectors.to(get_device())
             embeddings = torch.cat([image_vectors, embeddings, image_vectors], 1)
 
@@ -202,7 +203,6 @@ class ImageGRUModel(nn.Module):
             numbers = numbers.to(get_device())
             numbers = self.feature_dropout(numbers)
             numbers = self.numbers_embed(numbers)
-            clean_memory()
             embeddings = torch.cat([numbers, embeddings, numbers], 1)
 
         if hasattr(sampleList, "embed1"):
@@ -210,7 +210,6 @@ class ImageGRUModel(nn.Module):
             embed1 = embed1.to(get_device())
             embed1 = self.feature_dropout(embed1)
             embed1 = self.embed1_embed(embed1)
-            clean_memory()
             embeddings = torch.cat([embed1, embeddings, embed1], 1)
 
         if hasattr(sampleList, "embed2"):
@@ -218,7 +217,6 @@ class ImageGRUModel(nn.Module):
             embed2 = embed2.to(get_device())
             embed2 = self.feature_dropout(embed2)
             embed2 = self.embed2_embed(embed2)
-            clean_memory()
             embeddings = torch.cat([embed2, embeddings, embed2], 1)
         
         hidden_state = self.gru_out(self.gru.forward(embeddings, filter_indices=not self.do_mlm))

@@ -1617,7 +1617,7 @@ class FeatureDropout(nn.Module):
         self.scale = 1.0 / (1 - p)
 
     def forward(self, x):
-        if self.training:
+        if self.training and self.p > 0:
             mask = (torch.rand(x.size(-1)) >= self.p).type(torch.float).expand(*x.size()[:-1], -1)
             mask = mask.to(get_device())
             x = x * mask
