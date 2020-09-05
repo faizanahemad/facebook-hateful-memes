@@ -1607,3 +1607,19 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
         acc = smclr.test_accuracy(post_batch_size, post_dataset, collate_fn=collate_fn)
         print("Head Acc = ", acc_head, "Full Acc = ", acc)
     return (acc_head, acc)
+
+
+class FeatureDropout(nn.Module):
+    def __init__(self, p):
+        super().__init__()
+        self.p = p
+        assert 0 <= p <= 1.0
+        self.scale = 1.0 / (1 - p)
+
+    def forward(self, x):
+        if self.training:
+            mask = (torch.rand(x.size(-1)) >= self.p).type(torch.float).expand(*x.size()[:-1], -1)
+            mask = mask.to(get_device())
+            x = x * mask
+            return x * self.scale
+        return x

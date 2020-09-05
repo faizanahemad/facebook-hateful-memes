@@ -17,7 +17,7 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global, \
     get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_vgg_face_model, PositionalEncoding2D, Transpose, init_fc, dict2sampleList, \
-    clean_memory, get_regularization_layers, WordMasking
+    clean_memory, get_regularization_layers, WordMasking, FeatureDropout
 from ..external.detr import get_detr_model, DETRShim
 import transformers
 import os
@@ -59,6 +59,7 @@ class TransformerImageV2Model(nn.Module):
         def expand(x):
             return x.unsqueeze(1)
 
+        self.feature_dropout = FeatureDropout(dropout)
         if numbers_dim:
             fc0 = nn.Linear(numbers_dim, 512)
             init_fc(fc0, "leaky_relu")
@@ -180,6 +181,7 @@ class TransformerImageV2Model(nn.Module):
         if hasattr(sampleList, "numbers"):
             numbers = sampleList.numbers
             numbers = numbers.to(get_device())
+            numbers = self.feature_dropout(numbers)
             numbers = self.numbers_embed(numbers)
             clean_memory()
             attention_mask = torch.cat(
@@ -199,6 +201,7 @@ class TransformerImageV2Model(nn.Module):
         if hasattr(sampleList, "embed1"):
             embed1 = sampleList.embed1
             embed1 = embed1.to(get_device())
+            embed1 = self.feature_dropout(embed1)
             embed1 = self.embed1_embed(embed1)
             clean_memory()
             attention_mask = torch.cat(
@@ -219,6 +222,7 @@ class TransformerImageV2Model(nn.Module):
         if hasattr(sampleList, "embed2"):
             embed2 = sampleList.embed2
             embed2 = embed2.to(get_device())
+            embed2 = self.feature_dropout(embed2)
             embed2 = self.embed2_embed(embed2)
             clean_memory()
             attention_mask = torch.cat(

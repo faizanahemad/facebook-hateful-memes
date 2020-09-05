@@ -17,7 +17,7 @@ from torchnlp.word_to_vector import CharNGram
 from torchnlp.word_to_vector import BPEmb
 from ...utils import get_device, GaussianNoise, random_word_mask, load_stored_params, ExpandContract, Transformer, PositionalEncoding, LambdaLayer, get_global, \
     get_torchvision_classification_models, get_image_info_fn, LambdaLayer, get_vgg_face_model, PositionalEncoding2D, Transpose, init_fc, dict2sampleList, \
-    clean_memory, get_regularization_layers, WordMasking
+    clean_memory, get_regularization_layers, WordMasking, FeatureDropout
 from ..external.detr import get_detr_model, DETRShim
 import transformers
 import os
@@ -58,30 +58,7 @@ class ImageGRUModel(nn.Module):
         def expand(x):
             return x.unsqueeze(1)
 
-        if numbers_dim:
-            fc0 = nn.Linear(numbers_dim, 512)
-            init_fc(fc0, "leaky_relu")
-            fc1 = nn.Linear(512, embedding_dims)
-            init_fc(fc1, "leaky_relu")
-            self.numbers_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
-
-        if embed1_dim:
-            fc0 = nn.Linear(embed1_dim, min(embed1_dim * 4, 1024))
-            init_fc(fc0, "leaky_relu")
-            fc1 = nn.Linear(min(embed1_dim * 4, 1024), embedding_dims)
-            init_fc(fc1, "leaky_relu")
-            self.embed1_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
-
-        if embed2_dim:
-            fc0 = nn.Linear(embed2_dim, min(embed2_dim * 4, 1024))
-            init_fc(fc0, "leaky_relu")
-            fc1 = nn.Linear(min(embed2_dim * 4, 1024), embedding_dims)
-            init_fc(fc1, "leaky_relu")
-            self.embed2_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                               nn.LayerNorm(embedding_dims), LambdaLayer(expand))
-
+        self.feature_dropout = FeatureDropout(dropout)
         if numbers_dim:
             fc0 = nn.Linear(numbers_dim, 512)
             init_fc(fc0, "leaky_relu")
@@ -223,6 +200,7 @@ class ImageGRUModel(nn.Module):
         if hasattr(sampleList, "numbers"):
             numbers = sampleList.numbers
             numbers = numbers.to(get_device())
+            numbers = self.feature_dropout(numbers)
             numbers = self.numbers_embed(numbers)
             clean_memory()
             embeddings = torch.cat([numbers, embeddings, numbers], 1)
@@ -230,6 +208,7 @@ class ImageGRUModel(nn.Module):
         if hasattr(sampleList, "embed1"):
             embed1 = sampleList.embed1
             embed1 = embed1.to(get_device())
+            embed1 = self.feature_dropout(embed1)
             embed1 = self.embed1_embed(embed1)
             clean_memory()
             embeddings = torch.cat([embed1, embeddings, embed1], 1)
@@ -237,6 +216,7 @@ class ImageGRUModel(nn.Module):
         if hasattr(sampleList, "embed2"):
             embed2 = sampleList.embed2
             embed2 = embed2.to(get_device())
+            embed2 = self.feature_dropout(embed2)
             embed2 = self.embed2_embed(embed2)
             clean_memory()
             embeddings = torch.cat([embed2, embeddings, embed2], 1)

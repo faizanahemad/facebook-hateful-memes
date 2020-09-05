@@ -496,7 +496,7 @@ def main():
 
     if model_args.tokenizer_name:
         if model_args.tokenizer_name == "microsoft/Multilingual-MiniLM-L12-H384":
-            XLMRobertaTokenizer.from_pretrained(model_args.tokenizer_name, cache_dir=model_args.cache_dir)
+            tokenizer = XLMRobertaTokenizer.from_pretrained(model_args.tokenizer_name, cache_dir=model_args.cache_dir)
         else:
             tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, cache_dir=model_args.cache_dir)
     elif model_args.model_name_or_path:
