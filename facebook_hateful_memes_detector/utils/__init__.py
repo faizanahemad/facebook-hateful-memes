@@ -1439,7 +1439,7 @@ class MLMPretraining(nn.Module):
 
 
 class SimCLR(MLMPretraining):
-    def __init__(self, model, in_dims, hidden_size, dropout, augment_1: Callable, augment_2: Callable, low_memory=False):
+    def __init__(self, model, in_dims, hidden_size, dropout, augment_1: Callable, augment_2: Callable, temperature=0.1, low_memory=False):
         super(SimCLR, self).__init__(model, None, hidden_size, "leaky_relu", 0, True)
         self.aug_1 = augment_1
         self.aug_2 = augment_2
@@ -1447,6 +1447,7 @@ class SimCLR(MLMPretraining):
         self.aug_time = []
         self.model_time = []
         self.low_memory = low_memory
+        self.temperature = temperature
 
         lin0 = nn.Linear(in_dims, hidden_size)
         init_fc(lin0, "leaky_relu")
@@ -1484,20 +1485,24 @@ class SimCLR(MLMPretraining):
             x1 = x1 / x1.norm(dim=2, keepdim=True).clamp(min=1e-5)
             x2 = x2 / x2.norm(dim=2, keepdim=True).clamp(min=1e-5)
             if x1.size(1) > 16:
-                x1 = torch.cat((x1[:, :16].flatten(1, 2).squeeze(), x1[:, 16:].mean(1)), 1)
-                x2 = torch.cat((x2[:, :16].flatten(1, 2).squeeze(), x2[:, 16:].mean(1)), 1)
+                x1 = torch.cat((x1[:, :8].flatten(1, 2).squeeze(), x1[:, 8:].mean(1)), 1)
+                x2 = torch.cat((x2[:, :8].flatten(1, 2).squeeze(), x2[:, 8:].mean(1)), 1)
             else:
                 x1 = x1.flatten(1, 2).squeeze()
                 x2 = x2.flatten(1, 2).squeeze()
 
         x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
         x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
-        x2 = x2.transpose(0, 1)
+        xsiz = x1.size(0)
+        x1 = torch.cat((x1, x2), 0)
+        x2 = x1.transpose(0, 1)
         if self.low_memory:
             x = checkpoint(torch.matmul, x1, x2)
         else:
             x = x1.mm(x2)  # batch x batch
-        labels = torch.arange(0, len(x), device=x.device, dtype=torch.long)
+        x = x - (torch.eye(x.size(0)) * 1000)
+        labels = torch.arange(xsiz, 2 * xsiz, device=x.device, dtype=torch.long)+torch.arange(0, xsiz, device=x.device, dtype=torch.long)
+        x = x / self.temperature
         loss = self.loss(x, labels)
         x = torch.softmax(x.detach(), 1)
         predictions = x.max(dim=1).indices
