@@ -1500,7 +1500,7 @@ class SimCLR(MLMPretraining):
             x = checkpoint(torch.matmul, x1, x2)
         else:
             x = x1.mm(x2)  # batch x batch
-        x = x - (torch.eye(x.size(0)) * 1000)
+        x = x - (torch.eye(x.size(0), device=x.device) * 1000)
         labels = torch.arange(xsiz, 2 * xsiz, device=x.device, dtype=torch.long)+torch.arange(0, xsiz, device=x.device, dtype=torch.long)
         x = x / self.temperature
         loss = self.loss(x, labels)
