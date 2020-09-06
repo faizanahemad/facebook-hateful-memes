@@ -1472,8 +1472,9 @@ class SimCLR(MLMPretraining):
         self.model_time.append(time.time() - mts)
 
         if isinstance(x1, (list, tuple)):
-            x1 = [(len(x.size()), x) for x in x1 if isinstance(x, torch.Tensor)]
-            x2 = [(len(x.size()), x) for x in x2 if isinstance(x, torch.Tensor)]
+            max_xs = max([len(x.size()) for x in x1 if isinstance(x, torch.Tensor)])
+            x1 = [(x.size(-1), x) for x in x1 if isinstance(x, torch.Tensor) and len(x.size()) == max_xs]
+            x2 = [(x.size(-1), x) for x in x2 if isinstance(x, torch.Tensor) and len(x.size()) == max_xs]
             x1 = list(sorted(x1, key=operator.itemgetter(0), reverse=True))[0][1]
             x2 = list(sorted(x2, key=operator.itemgetter(0), reverse=True))[0][1]
         x1 = x1.squeeze()
