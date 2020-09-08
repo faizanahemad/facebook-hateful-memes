@@ -273,7 +273,7 @@ class GaussianNoise(nn.Module):
 def get_regularization_layers(model):
     reg_layers = []
     for c in model.children():
-        if isinstance(c, (GaussianNoise, nn.Dropout, nn.Dropout2d, WordMasking)):
+        if isinstance(c, (GaussianNoise, nn.Dropout, nn.Dropout2d, WordMasking, FeatureDropout)):
             if hasattr(c, "p"):
                 reg_layers.append((c, c.p))
             elif hasattr(c, "word_masking_proba"):

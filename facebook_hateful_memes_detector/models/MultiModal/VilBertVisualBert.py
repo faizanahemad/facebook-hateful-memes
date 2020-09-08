@@ -58,6 +58,7 @@ class VilBertVisualBertModel(nn.Module):
         self.model_heads = nn.ModuleDict()
         self.bbox_swaps = kwargs.pop("bbox_swaps", 0)
         self.bbox_copies = kwargs.pop("bbox_copies", 0)
+        self.bbox_deletes = kwargs.pop("bbox_deletes", 0)
         self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
         assert type(model_name) == dict
         for k, v in model_name.items():
@@ -167,7 +168,7 @@ class VilBertVisualBertModel(nn.Module):
         sl.segment_ids = textSampleList.segment_ids
         return sl
 
-    def bbox_aug(self, sample, swaps=0, copies=0, gaussian_noise=identity,
+    def bbox_aug(self, sample, swaps=0, copies=0, deletes=0, gaussian_noise=identity,
                  extractor_type="vilbert_visual_bert"):
 
         # TODO: Do manual inspection
@@ -181,16 +182,21 @@ class VilBertVisualBertModel(nn.Module):
             changes = [imf, bbox, cls_prob]
 
             for i in range(swaps):
-                swap = random.sample(range(36), 2)
+                swap = random.sample(range(100), 2)
                 for v in changes:
                     t = v[swap[1]]
                     v[swap[1]] = v[swap[0]]
                     v[swap[0]] = t
 
             for i in range(copies):
-                copi = random.sample(range(36), 2)
+                copi = random.sample(range(100), 2)
                 for v in changes:
                     v[copi[0]] = v[copi[1]]
+
+            for i in range(deletes):
+                copi = random.sample(range(99), 1)
+                for v in changes:
+                    v[copi[0]] = v[-1]
 
         elif extractor_type == "lxmert":
             for i in range(swaps):
@@ -216,7 +222,7 @@ class VilBertVisualBertModel(nn.Module):
         # Copy one bbox to another and erase the 2nd one entirely
         imgfs = [self.get_img_details(im, ignore_cache=ignore_cache) for im, ignore_cache in zip(orig_image, mixup)]
         samples = [Sample(dict(image_feature_0=feat_list, image_info_0=info_list)) for feat_list, info_list in imgfs]
-        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_gaussian_noise, "vilbert_visual_bert") for s in samples]
+        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_deletes, self.bbox_gaussian_noise, "vilbert_visual_bert") for s in samples]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
