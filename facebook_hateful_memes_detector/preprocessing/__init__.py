@@ -848,20 +848,8 @@ def get_image_transforms_pytorch(mode="easy"):
     return preprocess
 
 
-def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_file_dim,
-                     embed1, embed2, embed1_dim, embed2_dim,
-                     image_extension=".png",
-                     numeric_regularizer: Callable=None,
-                     train_text_transform=None, train_image_transform=None,
-                     train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
-                     test_text_transform=None, test_image_transform=None,
-                     cache_images: bool = True, use_images: bool = True, dev: bool = False, test_dev: bool = True,
-                     keep_original_text: bool = False, keep_original_image: bool = False,
-                     train_mixup_config=None, test_mixup_config=None,
-                     keep_processed_image: bool = False, keep_torchvision_image: bool = False):
-    use_dev = dev
+def build_image_locations(img_paths, image_dir, image_extension=".png",):
     joiner_p = lambda img: (os.path.join(image_dir, str(img))) if (img is not None and isinstance(img, (int, str)) and img != "nan") else None
-    from torch.utils.data import Subset
     def joiner(img):
         img = joiner_p(img)
         if img is None:
@@ -877,6 +865,23 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
         if os.path.exists(img):
             return img
         return None
+
+    return list(map(joiner_v2, img_paths))
+
+
+def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_file_dim,
+                     embed1, embed2, embed1_dim, embed2_dim,
+                     image_extension=".png",
+                     numeric_regularizer: Callable=None,
+                     train_text_transform=None, train_image_transform=None,
+                     train_torchvision_pre_image_transform=None, test_torchvision_pre_image_transform=None,
+                     test_text_transform=None, test_image_transform=None,
+                     cache_images: bool = True, use_images: bool = True, dev: bool = False, test_dev: bool = True,
+                     keep_original_text: bool = False, keep_original_image: bool = False,
+                     train_mixup_config=None, test_mixup_config=None,
+                     keep_processed_image: bool = False, keep_torchvision_image: bool = False):
+    use_dev = dev
+    from torch.utils.data import Subset
 
     train = pd.read_csv(train_file)
     test = pd.read_csv(test_file)
@@ -932,9 +937,9 @@ def get_csv_datasets(train_file, test_file, image_dir, numeric_file, numeric_fil
     if test_dev:
         train = train[sp:].copy(deep=True)
 
-    dev["img"] = list(map(joiner_v2, dev.img))
-    train["img"] = list(map(joiner_v2, train.img))
-    test["img"] = list(map(joiner_v2, test.img))
+    dev["img"] = build_image_locations(dev.img, image_dir, image_extension)
+    train["img"] = build_image_locations(train.img, image_dir, image_extension)
+    test["img"] = build_image_locations(test.img, image_dir, image_extension)
 
     rd = dict(train=train, test=test, dev=dev,
               numeric_train=numeric_train, numeric_test=numeric_test, numeric_dev=numeric_dev,
