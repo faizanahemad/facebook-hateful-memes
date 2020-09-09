@@ -702,7 +702,10 @@ def generate_predictions(model, batch_size, dataset,
                         batch = dict2sampleList(batch)
                         labels = batch["label"]
                     except:
-                        labels = batch[-1]
+                        if isinstance(batch, (dict, collections.abc.Mapping)):
+                            labels = torch.tensor(batch["label"])
+                        else:
+                            labels = batch[-1]
                     labels_list.extend(labels.tolist() if type(labels) == torch.Tensor else labels)
                     logits = logits.cpu().detach()
                     logits_list.extend(logits.tolist())
