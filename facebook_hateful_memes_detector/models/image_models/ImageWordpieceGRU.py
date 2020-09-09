@@ -97,7 +97,7 @@ class ImageGRUModel(nn.Module):
             if embedding_dims != image_dim:
                 im_proc = nn.Linear(image_dim, embedding_dims)  # TODO: Try conv1D grouped, less params
                 init_fc(im_proc, "linear")
-                im_proc = [im_proc]
+                im_proc = [im_proc, nn.Identity()]
             else:
                 im_proc = []
 
