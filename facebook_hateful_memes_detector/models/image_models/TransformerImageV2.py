@@ -61,27 +61,27 @@ class TransformerImageV2Model(nn.Module):
 
         self.feature_dropout = FeatureDropout(dropout)
         if numbers_dim:
-            fc0 = nn.Linear(numbers_dim, 512)
+            fc0 = nn.Linear(numbers_dim, min(numbers_dim * 4, 2048))
             init_fc(fc0, "leaky_relu")
-            fc1 = nn.Linear(512, embedding_dims)
+            fc1 = nn.Linear(min(numbers_dim * 4, 2048), embedding_dims)
             init_fc(fc1, "leaky_relu")
             self.numbers_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
                                                LambdaLayer(expand))
             self.NumberLayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)
 
         if embed1_dim:
-            fc0 = nn.Linear(embed1_dim, min(embed1_dim * 4, 1024))
+            fc0 = nn.Linear(embed1_dim, min(embed1_dim * 4, 2048))
             init_fc(fc0, "leaky_relu")
-            fc1 = nn.Linear(min(embed1_dim * 4, 1024), embedding_dims)
+            fc1 = nn.Linear(min(embed1_dim * 4, 2048), embedding_dims)
             init_fc(fc1, "leaky_relu")
             self.embed1_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
                                                LambdaLayer(expand))
             self.Embed1LayerNorm = nn.LayerNorm(embedding_dims, eps=1e-12)
 
         if embed2_dim:
-            fc0 = nn.Linear(embed2_dim, min(embed2_dim * 4, 1024))
+            fc0 = nn.Linear(embed2_dim, min(embed2_dim * 4, 2048))
             init_fc(fc0, "leaky_relu")
-            fc1 = nn.Linear(min(embed2_dim * 4, 1024), embedding_dims)
+            fc1 = nn.Linear(min(embed2_dim * 4, 2048), embedding_dims)
             init_fc(fc1, "leaky_relu")
             self.embed2_embed = nn.Sequential(fc0, nn.LeakyReLU(), nn.Dropout(dropout), fc1, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
                                                LambdaLayer(expand))
@@ -102,7 +102,7 @@ class TransformerImageV2Model(nn.Module):
             if embedding_dims != image_dim:
                 im_proc = nn.Linear(image_dim, embedding_dims)  # TODO: Try conv1D grouped, less params
                 init_fc(im_proc, "linear")
-                im_proc = [im_proc, nn.Dropout(dropout)]
+                im_proc = [im_proc]
             else:
                 im_proc = [nn.Identity()]
 
