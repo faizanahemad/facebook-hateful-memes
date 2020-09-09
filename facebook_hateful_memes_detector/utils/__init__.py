@@ -1549,7 +1549,8 @@ def merge_sample_lists(*samples):
 
 def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_post,
                pre_lr, post_lr, pre_batch_size, post_batch_size,
-               pre_epochs, full_epochs, collate_fn, scheduler_init_fn=None, test_acc=False, effective_batch_size=256, sampling_policy=None,):
+               pre_epochs, full_epochs, collate_fn, scheduler_init_fn=None, test_acc=False,
+               effective_batch_size=256, sampling_policy=None, weight_decay=1e-3):
     from ..training import group_wise_finetune, group_wise_lr, train, get_cosine_schedule_with_warmup, get_constant_schedule_with_warmup
     acc_head = np.nan
     if pre_epochs > 0:
@@ -1588,7 +1589,7 @@ def run_simclr(smclr, pre_dataset, post_dataset, lr_strategy_pre, lr_strategy_po
     optimizer_params = dict(lr=post_lr,
                             betas=(0.9, 0.98),
                             eps=1e-08,
-                            weight_decay=1e-3)
+                            weight_decay=weight_decay)
 
     _ = group_wise_finetune(smclr, lr_strategy_post)
     params_conf, _ = group_wise_lr(smclr, lr_strategy_post)
