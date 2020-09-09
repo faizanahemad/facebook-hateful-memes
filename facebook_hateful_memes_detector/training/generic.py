@@ -309,8 +309,8 @@ def train(model, optimizer, scheduler_init_fn,
         from tqdm.notebook import tqdm, trange
     else:
         from tqdm import tqdm as tqdm, trange
-    if hasattr(dataset, "labels") and isinstance(dataset.labels, (list, tuple, torch.Tensor, np.ndarray)) and len(dataset.labels) > 0:
-        training_fold_labels = torch.tensor(dataset.labels)
+    if hasattr(dataset, "labels") and isinstance(dataset.labels, (list, tuple, torch.Tensor, np.ndarray, pd.Series)) and len(dataset.labels) > 0:
+        training_fold_labels = torch.tensor(list(dataset.labels))
 
     assert hasattr(dataset, "labels") or sampling_policy is None
 
