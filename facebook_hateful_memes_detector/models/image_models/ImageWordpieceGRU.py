@@ -231,7 +231,8 @@ class ImageGRUModel(nn.Module):
         vectors = self.get_vectors(sampleList)[-1]
         logits, loss = None, None
         if not self.do_mlm:
-            logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
-            if self.training:
-                loss += self.auc_dice_loss(logits, labels)
+            if self.final_layer is not None:
+                logits, loss = self.final_layer(vectors, labels)
+                if self.training:
+                    loss += self.auc_dice_loss(logits, labels)
         return logits, vectors.mean(1), vectors, loss
