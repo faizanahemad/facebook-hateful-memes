@@ -295,7 +295,7 @@ class TextAugment:
         self.count_proba = count_proba
         assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
         assert len(count_proba) >= 1
-        assert (len(count_proba) - 1) < sum([v > 0 for v in choice_probas.values()])
+        assert (len(count_proba) - 1) <= sum([v > 0 for v in choice_probas.values()])
 
         import nlpaug.augmenter.char as nac
         import nlpaug.augmenter.word as naw
