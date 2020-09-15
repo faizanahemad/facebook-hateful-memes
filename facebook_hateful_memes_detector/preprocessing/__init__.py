@@ -19,7 +19,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 import random
 
-from ..utils import read_json_lines_into_df
+from ..utils import read_json_lines_into_df, isNan
 from ..utils.sample import Sample
 
 
@@ -1082,7 +1082,7 @@ class TextImageDataset(Dataset):
             if cached_images is not None:
                 self.images = cached_images
             elif cache_images:
-                self.images = {l: Image.open(l).convert('RGB') if l is not None else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8)) for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")}
+                self.images = {l: Image.open(l).convert('RGB') if not isNan(l) else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8)) for l in tqdm(list(set(image_locations)), "Caching Images in Dataset")}
         self.labels = labels if labels is not None else ([0] * len(texts))
         self.text_transform = text_transform if text_transform is not None else return_first_arg
         self.image_transform = image_transform if image_transform is not None else identity
@@ -1114,7 +1114,7 @@ class TextImageDataset(Dataset):
             l = self.image_locations[item]
             image = self.images.get(l)
             if image is None:
-                image = Image.open(l).convert('RGB') if l is not None else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
+                image = Image.open(l).convert('RGB') if not isNan(l) else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
             s.image = image
 
         return s
@@ -1181,7 +1181,7 @@ class TextImageDataset(Dataset):
 
     def show(self, item):
         l = self.image_locations[item]
-        image = Image.open(l)
+        image = Image.open(l).convert('RGB') if not isNan(l) else Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
         text = self.texts[item]
         label = self.labels[item] if self.labels is not None else None
         print(text, "|", "Label = ", label)

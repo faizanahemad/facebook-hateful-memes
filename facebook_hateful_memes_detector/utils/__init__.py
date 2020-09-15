@@ -206,6 +206,21 @@ def get_pos_tag_indices():
     return pos_tags
 
 
+def isNan(v):
+    if v is None:
+        return True
+    if type(v) == str:
+        if v.lower() == "nan" or v.lower() == "none":
+            return True
+        else:
+            return False
+
+    if type(v) != str and np.isnan(v):
+        return True
+
+    return False
+
+
 def init_weight(param, initializer, nonlinearity, nonlinearity_param=None):
     initializer = getattr(nn.init, initializer)
     initializer(param, nn.init.calculate_gain(nonlinearity, nonlinearity_param))
