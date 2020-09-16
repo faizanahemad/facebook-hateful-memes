@@ -446,6 +446,7 @@ def train(model, optimizer, scheduler_init_fn,
                         with autocast():
                             res = model(batch)
                             loss = res[-1]
+                            assert not torch.isnan(loss).any()
                             loss = loss / accumulation_steps
                             loss_monitor += loss.cpu().detach().item()
                         scaler.scale(loss).backward()
@@ -459,6 +460,7 @@ def train(model, optimizer, scheduler_init_fn,
                     else:
                         res = model(batch)
                         loss = res[-1]
+                        assert not torch.isnan(loss).any()
                         loss = loss / accumulation_steps
                         loss_monitor += loss.cpu().detach().item()
                         loss.backward()
