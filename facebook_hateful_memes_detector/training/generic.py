@@ -651,9 +651,7 @@ class ModelWrapperForConsistency:
         loss1 = res1[-1]
         loss2 = res2[-1]
         loss = (loss1 + loss2) / 2
-        logits1 = torch.softmax(res1[0], dim=1).to(get_device())
-        logits2 = torch.softmax(res2[0], dim=1).to(get_device())
-        logits = (logits1 + logits2)/2
+        logits = (res1[0] + res2[0])/2
         loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(logits1, logits2)
         return logits, res1[1], res1[2], loss
 
