@@ -1025,6 +1025,8 @@ def make_weights_for_uda(labels, weight_per_class: Dict = None):
         weight_per_class = {clas: (w / tot_weights) * last_excluded_ratio for clas, w in weight_per_class.items()}
         weight_per_class[last_label] = 1.0 - last_excluded_ratio
     weight = [weight_per_class[label] for label in labels]
+    si, se = sum(weight[:last_excluded_count]), sum(weight[last_excluded_count:])
+    weight = [last_excluded_ratio*w/si for w in weight[:last_excluded_count]] + [(1.0 - last_excluded_ratio)*w/se for w in weight[last_excluded_count:]]
     return torch.DoubleTensor(weight)
 
 
@@ -1054,6 +1056,8 @@ def make_sqrt_weights_for_uda(labels, weight_per_class: Dict = None):
         weight_per_class = {clas: (w / tot_weights) * last_excluded_ratio for clas, w in weight_per_class.items()}
         weight_per_class[last_label] = 1.0 - last_excluded_ratio
     weight = [weight_per_class[label] for label in labels]
+    si, se = sum(weight[:last_excluded_count]), sum(weight[last_excluded_count:])
+    weight = [last_excluded_ratio * w / si for w in weight[:last_excluded_count]] + [(1.0 - last_excluded_ratio) * w / se for w in weight[last_excluded_count:]]
     return torch.DoubleTensor(weight)
 
 
