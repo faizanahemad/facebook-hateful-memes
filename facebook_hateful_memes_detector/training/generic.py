@@ -339,7 +339,8 @@ def train(model, optimizer, scheduler_init_fn,
     except:
         pass
     assert sampling_policy is None or sampling_policy in ["with_replacement", "without_replacement", "without_replacement_v2", "without_replacement_v3",
-                                                          "uda_with_replacement", "uda_without_replacement"]
+                                                          "uda_with_replacement", "uda_without_replacement", "sqrt_with_replacement", "sqrt_without_replacement",
+                                                          "sqrt_uda_without_replacement", "sqrt_uda_with_replacement"]
     if sampling_policy == "with_replacement":
         weights = make_weights_for_balanced_classes(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
         sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
