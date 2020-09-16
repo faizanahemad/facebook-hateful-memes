@@ -320,7 +320,7 @@ class CustomSampler(Sampler):
         if not isinstance(replacement, bool):
             raise ValueError("replacement should be a boolean value, but got "
                              "replacement={}".format(replacement))
-        self.weights = torch.as_tensor(weights, dtype=torch.double) / torch.sum(torch.tensor(self.weights, dtype=torch.double))
+        self.weights = torch.as_tensor(weights, dtype=torch.double) / torch.sum(torch.tensor(weights, dtype=torch.double))
         self.num_samples = num_samples
         self.replacement = replacement
 
