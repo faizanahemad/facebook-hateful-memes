@@ -652,7 +652,7 @@ class ModelWrapperForConsistency:
         loss2 = res2[-1]
         loss = (loss1 + loss2) / 2
         logits = (res1[0] + res2[0])/2
-        loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(logits1, logits2)
+        loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(res1[0], res2[0])
         return logits, res1[1], res1[2], loss
 
     def train(self):
