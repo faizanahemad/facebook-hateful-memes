@@ -16,7 +16,7 @@ from sklearn.metrics import confusion_matrix
 from ..utils import in_notebook, get_device, dict2sampleList, clean_memory, GaussianNoise, my_collate, WordMasking
 from ..preprocessing import make_weights_for_balanced_classes, TextImageDataset, make_weights_for_uda, make_sqrt_weights_for_balanced_classes, make_sqrt_weights_for_uda
 import gc
-from torch.utils.data.sampler import WeightedRandomSampler
+from torch.utils.data.sampler import WeightedRandomSampler, Sampler
 from torch.utils.data import Subset
 from ..utils.sample import *
 from transformers import optimization
@@ -295,6 +295,42 @@ def get_cosine_with_hard_restarts_schedule_with_warmup(warmup_proportion=0.2, nu
     return init_fn
 
 
+class CustomSampler(Sampler):
+    r"""Samples elements from ``[0,..,len(weights)-1]`` with given probabilities (weights).
+
+    Args:
+        weights (sequence)   : a sequence of weights, not necessary summing up to one
+        num_samples (int): number of samples to draw
+        replacement (bool): if ``True``, samples are drawn with replacement.
+            If not, they are drawn without replacement, which means that when a
+            sample index is drawn for a row, it cannot be drawn again for that row.
+
+    Example:
+        >>> list(WeightedRandomSampler([0.1, 0.9, 0.4, 0.7, 3.0, 0.6], 5, replacement=True))
+        [4, 4, 1, 4, 5]
+        >>> list(WeightedRandomSampler([0.9, 0.4, 0.05, 0.2, 0.3, 0.1], 5, replacement=False))
+        [0, 1, 4, 3, 2]
+    """
+
+    def __init__(self, weights, num_samples, replacement=True):
+        if not isinstance(num_samples, int) or isinstance(num_samples, bool) or \
+                num_samples <= 0:
+            raise ValueError("num_samples should be a positive integer "
+                             "value, but got num_samples={}".format(num_samples))
+        if not isinstance(replacement, bool):
+            raise ValueError("replacement should be a boolean value, but got "
+                             "replacement={}".format(replacement))
+        self.weights = torch.as_tensor(weights, dtype=torch.double)
+        self.num_samples = num_samples
+        self.replacement = replacement
+
+    def __iter__(self):
+        return iter(list(np.random.choice(list(range(len(self.weights))), self.num_samples, replace=self.replacement, p=self.weights)))
+
+    def __len__(self):
+        return self.num_samples
+
+
 def train(model, optimizer, scheduler_init_fn,
           batch_size, epochs, dataset,
           model_call_back=None, accumulation_steps=1,
@@ -383,25 +419,25 @@ def train(model, optimizer, scheduler_init_fn,
         shuffle = False
     elif sampling_policy == "uda_with_replacement":
         weights = make_weights_for_uda(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
-        sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
+        sampler = CustomSampler(weights, len(weights), replacement=True)
         shuffle = False
         examples = len(training_fold_labels)
         divisor = 1
     elif sampling_policy == "uda_without_replacement":
         weights = make_weights_for_uda(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
-        sampler = WeightedRandomSampler(weights, int(len(weights) / 2), replacement=False)
+        sampler = CustomSampler(weights, int(len(weights) / 2), replacement=False)
         divisor = 2
         examples = int(len(weights) / 2)
         shuffle = False
     elif sampling_policy == "sqrt_uda_with_replacement":
         weights = make_sqrt_weights_for_uda(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
-        sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
+        sampler = CustomSampler(weights, len(weights), replacement=True)
         shuffle = False
         examples = len(training_fold_labels)
         divisor = 1
     elif sampling_policy == "sqrt_uda_without_replacement":
         weights = make_sqrt_weights_for_uda(training_fold_labels, class_weights)  # {0: 1, 1: 1.81} -> 0.814	0.705 || {0: 1, 1: 1.5}->0.796	0.702
-        sampler = WeightedRandomSampler(weights, int(len(weights) / 2), replacement=False)
+        sampler = CustomSampler(weights, int(len(weights) / 2), replacement=False)
         divisor = 2
         examples = int(len(weights) / 2)
         shuffle = False
