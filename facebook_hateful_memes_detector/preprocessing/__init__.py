@@ -18,6 +18,7 @@ from albumentations import augmentations as alb
 from torch.utils.data import Dataset
 from torchvision import transforms
 import random
+import math
 
 from ..utils import read_json_lines_into_df, isNan
 from ..utils.sample import Sample
@@ -1020,6 +1021,35 @@ def make_weights_for_uda(labels, weight_per_class: Dict = None):
     last_excluded_ratio = last_excluded_count / N
     if weight_per_class is None:
         weight_per_class = {clas: last_excluded_count / float(occ) for clas, occ in count.items() if clas != last_label}
+        tot_weights = sum(list(weight_per_class.values()))
+        weight_per_class = {clas: (w / tot_weights) * last_excluded_ratio for clas, w in weight_per_class.items()}
+        weight_per_class[last_label] = 1.0 - last_excluded_ratio
+    weight = [weight_per_class[label] for label in labels]
+    return torch.DoubleTensor(weight)
+
+
+def make_sqrt_weights_for_balanced_classes(labels, weight_per_class: Dict = None):
+    labels = labels.numpy()
+    from collections import Counter
+    count = Counter(labels)
+    N = len(labels)
+    if weight_per_class is None:
+        weight_per_class = {clas: math.sqrt(N / float(occ)) for clas, occ in count.items()}
+    weight = [weight_per_class[label] for label in labels]
+    return torch.DoubleTensor(weight)
+
+
+def make_sqrt_weights_for_uda(labels, weight_per_class: Dict = None):
+    labels = labels.numpy()
+    from collections import Counter
+    count = Counter(labels)
+    N = len(labels)
+    last_label = max(labels)
+    last_label_occ = count[last_label]
+    last_excluded_count = N - last_label_occ
+    last_excluded_ratio = last_excluded_count / N
+    if weight_per_class is None:
+        weight_per_class = {clas: math.sqrt(last_excluded_count / float(occ)) for clas, occ in count.items() if clas != last_label}
         tot_weights = sum(list(weight_per_class.values()))
         weight_per_class = {clas: (w / tot_weights) * last_excluded_ratio for clas, w in weight_per_class.items()}
         weight_per_class[last_label] = 1.0 - last_excluded_ratio
