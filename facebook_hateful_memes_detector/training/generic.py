@@ -682,13 +682,18 @@ class ModelWrapperForConsistency:
 
     def __call__(self, batch):
         s1, s2 = batch
-        res1 = self.model(s1)
-        res2 = self.model(s2)
-        loss1 = res1[-1]
-        loss2 = res2[-1]
-        loss = (loss1 + loss2) / 2
-        logits = (res1[0] + res2[0])/2
-        loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(res1[0], res2[0])
+        if self.model.training:
+            res1 = self.model(s1)
+            res2 = self.model(s2)
+            loss1 = res1[-1]
+            loss2 = res2[-1]
+            loss = (loss1 + loss2) / 2
+            logits = (res1[0] + res2[0])/2
+            loss = loss + self.consistency_loss_weight * self.num_classes * F.mse_loss(res1[0], res2[0])
+        else:
+            res1 = self.model(s1)
+            loss = res1[-1]
+            logits = res1[0]
         return logits, res1[1], res1[2], loss
 
     def train(self):
