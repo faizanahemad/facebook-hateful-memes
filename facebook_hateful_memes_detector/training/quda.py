@@ -68,7 +68,7 @@ class ModelWrapperForConsistency:
     def __call__(self, batch):
         samples = batch
         if self.model.training:
-            results = [checkpoint(self.model, s) for s in samples]
+            results = [self.model(s) for s in samples]
             rmse_loss = 0.0
             loss = 0.0
             logits = None
