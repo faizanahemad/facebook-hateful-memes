@@ -2,6 +2,7 @@
 
 from .file_utils import cached_path
 from .entry import LXRTEncoder
+import torch
 
 
 def model_name_to_url(name):
@@ -25,6 +26,7 @@ def get_lxrt_model(name, pretokenized, max_seq_len=64):
     args.from_scratch = False
     assert type(pretokenized) == bool
     model = LXRTEncoder(args, max_seq_len, pretokenized)
-    model.load(cached_path(model_name_to_url(name)))
+    st = torch.load(cached_path(model_name_to_url(name)), map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    model.load_state_dict(st, strict=False)
     return model
 

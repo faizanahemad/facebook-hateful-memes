@@ -18,7 +18,7 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, check_cache_exists=True, cache_dir=None, cache_allow_writes=True, retries=5) -> Callable:
+def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, cache_allow_writes=True, retries=5) -> Callable:
     cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
     try:
         cache_allow_writes = get_global("cache_allow_writes")

@@ -1313,7 +1313,7 @@ class BertPredictionHeadTransform(nn.Module):
         self.dense = nn.Linear(hidden_size, (hidden_size // 8) if low_memory else hidden_size)
         init_fc(self.dense, hidden_act)
         if isinstance(hidden_act, str):
-            from transformers.modeling_bert import ACT2FN
+            from transformers.activations import ACT2FN
             self.transform_act_fn = ACT2FN[hidden_act]
         else:
             self.transform_act_fn = hidden_act

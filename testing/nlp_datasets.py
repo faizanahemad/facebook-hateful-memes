@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from nlp import load_dataset
+from datasets import list_datasets, load_dataset
 
 dataset = load_dataset("social_bias_frames") # 2020
 dataset = load_dataset("hyperpartisan_news_detection") # 2019
@@ -24,6 +24,7 @@ dataset = load_dataset("civil_comments") # 2017
 
 # Maybe
 dataset = load_dataset("social_i_qa")
+dataset = load_dataset("cornell_movie_dialog") # 2011
 dataset = load_dataset("sogou_news")
 dataset = load_dataset("super_glue") # 2019
 dataset = load_dataset("rotten_tomatoes") # 2005
