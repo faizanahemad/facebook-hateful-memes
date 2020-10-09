@@ -27,6 +27,7 @@ from ...utils import init_fc, GaussianNoise, stack_and_pad_tensors, get_torchvis
     WordMasking, FeatureDropout, MLMPretraining, BertLMPredictionHead
 from ..classifiers import CNN1DFeaturizer, GRUFeaturizer, TransformerFeaturizer
 from ..text_models import Fasttext1DCNNModel, LangFeaturesModel
+from torch.utils.checkpoint import checkpoint
 
 from ..external.lxrt import get_lxrt_model
 import GPUtil
@@ -148,7 +149,7 @@ class VilBertVisualBertModelV2(nn.Module):
         samples = [Sample(dict(feats=pad_tensor(feats, 36),
                                boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
                                masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
-        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_gaussian_noise, "lxmert") for s in samples]
+        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_deletes, self.bbox_gaussian_noise, "lxmert") for s in samples]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
@@ -599,8 +600,8 @@ class MLMSimCLR(MLMPretraining):
         self.target_loss_hist = defaultdict(list)
 
     def simclr_one_sequence(self, pool1, pool2, midx):
-        x1 = self.final_layer[midx](pool1)
-        x2 = self.final_layer[midx](pool2)
+        x1 = self.simclr_layer[midx](pool1)
+        x2 = self.simclr_layer[midx](pool2)
 
         x1 = x1 / x1.norm(dim=1, keepdim=True).clamp(min=1e-5)
         x2 = x2 / x2.norm(dim=1, keepdim=True).clamp(min=1e-5)
@@ -628,11 +629,13 @@ class MLMSimCLR(MLMPretraining):
                              input_ids_2, attention_mask_2,
                              midx):
         mlm = self.mlms[midx]
-
+        batch_size = input_ids_1.size(0)
         loss_1, accuracy_1, input_ids_1, predictions_1 = mlm(seq1, input_ids_1, attention_mask_1)
         loss_2, accuracy_2, input_ids_2, predictions_2 = mlm(seq2, input_ids_2, attention_mask_2)
         accuracy = (accuracy_1 + accuracy_2)/2
         loss = (loss_1 + loss_2)/2
+        predictions_1 = predictions_1.view(batch_size, -1)
+        predictions_2 = predictions_2.view(batch_size, -1)
 
         predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
         predictions_2 = self.tokenizer.batch_decode(predictions_2.tolist(), skip_special_tokens=True)
@@ -669,7 +672,6 @@ class MLMSimCLR(MLMPretraining):
     def add_label(self, sampleList):
         texts = []
         for text, label in zip(sampleList["text"], sampleList["label"]):
-            print(type(text), text)
             if label != self.label_not_present:
                 lt = random.sample(self.label_to_word[label], k=1)[0]
             else:
@@ -689,6 +691,9 @@ class MLMSimCLR(MLMPretraining):
         input_ids_1, attention_mask_1 = self.tokenise(x1["text"])
         input_ids_2, attention_mask_2 = self.tokenise(x2["text"])
 
+        x1 = self.model(x1)
+        x2 = self.model(x2)
+
         seq1 = x1[2]
         seq2 = x2[2]
         pool1 = x1[1]
@@ -697,30 +702,30 @@ class MLMSimCLR(MLMPretraining):
         logits2 = x2[0]
         loss = (x1[3] + x2[3]) / 2
 
-        mlm_losses = []
-        simclr_losses = []
+        mlm_losses = 0.0
+        simclr_losses = 0.0
 
         predicted_labels = []
         for midx, (seq1, seq2) in enumerate(zip(list(seq1), list(seq2))):
             p1s, p2s, mlm_loss = self.mlm_one_sequence(seq1, seq2, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2, midx)
             predicted_labels.extend([p1s, p2s])
-            mlm_losses.append(0.2 * mlm_loss)
+            mlm_losses += (0.2 * mlm_loss)
             smloss = self.simclr_one_sequence(seq1[:, :1].squeeze(), seq2[:, :1].squeeze(), midx)
-            simclr_losses.append(0.2 * smloss)
+            simclr_losses += (0.2 * smloss)
 
-        predicted_labels = torch.stack(predicted_labels).mean(0)
+        predicted_labels = torch.stack(predicted_labels).type(torch.float).mean(0)
         seq1 = torch.stack(x1[2]).mean(0)
         seq2 = torch.stack(x2[2]).mean(0)
         p1s, p2s, mlm_loss = self.mlm_one_sequence(seq1, seq2, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2, midx+1)
-        mlm_losses.append(mlm_loss)
+        mlm_losses += mlm_loss
         smloss = self.simclr_one_sequence(seq1[:, :1].squeeze(), seq2[:, :1].squeeze(), midx+1)
-        simclr_losses.append(smloss)
+        simclr_losses += smloss
 
         smloss = self.simclr_one_sequence(pool1, pool2, midx+2)
-        simclr_losses.append(smloss)
+        simclr_losses += smloss
 
-        loss = loss + torch.sum(mlm_losses) + torch.sum(simclr_losses) + ((logits1 - logits2)**2).mean()
-        predicted_labels = torch.stack([p1s, p2s, predicted_labels]).mean(0)
+        loss = loss + mlm_losses + simclr_losses + ((logits1 - logits2)**2).mean()
+        predicted_labels = torch.stack([p1s.type(torch.float), p2s.type(torch.float), predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
         logits = (logits1 + logits2 + predicted_labels) / 3
 

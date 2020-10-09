@@ -279,9 +279,14 @@ class GaussianNoise(nn.Module):
     def forward(self, x):
         if self.training and self.sigma != 0:
             sigma = self.sigma  # * 1.0/np.sqrt(x.size(-1))
-            scale = sigma * x.detach()
-            sampled_noise = self.noise.to(x.device).repeat(*x.size()).normal_() * scale
-            x = x + sampled_noise
+            if isinstance(x, torch.Tensor):
+                scale = sigma * x.detach()
+                sampled_noise = self.noise.to(x.device).repeat(*x.size()).normal_() * scale
+                x = x + sampled_noise
+            else:
+                scale = sigma * x
+                sampled_noise = np.random.randn(*x.shape) * scale
+                x = x + sampled_noise
         return x
 
 
@@ -619,6 +624,9 @@ class FocalLoss(nn.Module):
             mult = targets != self.sentinel_class
             inputs = inputs[mult]
             targets = targets[mult]
+        mult = targets != -1
+        inputs = inputs[mult]
+        targets = targets[mult]
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
         pt = torch.exp(-BCE_loss)
         F_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
@@ -639,6 +647,9 @@ class CELoss(nn.Module):
             mult = targets != self.sentinel_class
             inputs = inputs[mult]
             targets = targets[mult]
+        mult = targets != -1
+        inputs = inputs[mult]
+        targets = targets[mult]
         BCE_loss = F.cross_entropy(inputs, targets, reduce=False)
         if self.reduce:
             return torch.mean(BCE_loss)
