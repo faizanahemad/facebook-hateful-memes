@@ -78,27 +78,35 @@ class VilBertVisualBertModelV2(nn.Module):
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
         for p in self.vilbert.parameters():
             p.requires_grad = False
-        self.model_heads["vilbert"] = LinearHead(1024, 1, num_classes, dropout, self.task, **kwargs)
+        lin = nn.Linear(1024, num_classes)
+        init_fc(lin, "linear")
+        self.model_heads["vilbert"] = lin
 
         self.visual_bert = get_visual_bert(get_device())
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
         for p in self.visual_bert.parameters():
             p.requires_grad = False
-        self.model_heads["visual_bert"] = LinearHead(768, 1, num_classes, dropout, self.task, **kwargs)
+        lin = nn.Linear(768, num_classes)
+        init_fc(lin, "linear")
+        self.model_heads["visual_bert"] = lin
 
         self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
         self.lxmert.to(get_device())
         for p in self.lxmert.parameters():
             p.requires_grad = False
-        self.model_heads["lxmert"] = LinearHead(768, 1, num_classes, dropout, self.task, **kwargs)
+        lin = nn.Linear(768, num_classes)
+        init_fc(lin, "linear")
+        self.model_heads["lxmert"] = lin
 
 
         self.mmbt_region = get_mmbt_region(get_device())
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
         for p in self.mmbt_region.parameters():
             p.requires_grad = False
-        self.model_heads["mmbt_region"] = LinearHead(768, 1, num_classes, dropout, self.task, **kwargs)
+        lin = nn.Linear(768, num_classes)
+        init_fc(lin, "linear")
+        self.model_heads["mmbt_region"] = lin
 
         if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
             raise NotImplementedError()
@@ -123,7 +131,7 @@ class VilBertVisualBertModelV2(nn.Module):
         dp = nn.Dropout(dropout)
         self.final_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
                                          lin01, nn.LeakyReLU(), dp,
-                                         lin1, nn.LeakyReLU(), dp, lin)
+                                         lin1, nn.LeakyReLU(), lin)
         uda = kwargs.pop("uda", False)
         self.loss = get_loss_by_task(loss, num_classes if uda else None)
         if "stored_model" in kwargs:
@@ -314,13 +322,14 @@ class VilBertVisualBertModelV2(nn.Module):
         else:
             raise AssertionError
 
-        logits, loss = self.model_heads["vilbert"](pooled_output, labels)
+        logits = self.model_heads["vilbert"](pooled_output)
+        logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         output = dict(sequence_output_t=sequence_output_t,
                       sequence_output_v=sequence_output_v,
                       pooled_output_t=pooled_output_t,
                       pooled_output_v=pooled_output_v,
                       pooled_output=pooled_output,
-                      logits=logits, loss=loss)
+                      logits=logits)
         return output
 
     def __visual_bert_preprocessing__(self, sample_list: SampleList):
@@ -398,9 +407,9 @@ class VilBertVisualBertModelV2(nn.Module):
         del sl
         clean_memory()
         out = self.visual_bert_processor(params)
-        logits, loss = self.model_heads["visual_bert"](out["pooled_output"], labels)
+        logits = self.model_heads["visual_bert"](out["pooled_output"])
+        logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         out["logits"] = logits
-        out["loss"] = loss
         return out
 
     def lxmert_forward(self, orig_image, textSampleList, labels, mixup: List[bool]):
@@ -412,8 +421,9 @@ class VilBertVisualBertModelV2(nn.Module):
 
         del lx_sl
         clean_memory()
-        logits, loss = self.model_heads["lxmert"](pooled, labels)
-        return dict(seq=torch.cat(feat_seq, 1), pooled=pooled, logits=logits, loss=loss)
+        logits = self.model_heads["lxmert"](pooled)
+        logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        return dict(seq=torch.cat(feat_seq, 1), pooled=pooled, logits=logits)
 
     def mmbt_region_forward(self, sl: SampleList, labels):
         sl = sl.to(get_device())
@@ -423,9 +433,9 @@ class VilBertVisualBertModelV2(nn.Module):
         output = {}
         output["sequence_output"] = module_output[0]
         output["pooled_output"] = pooled_output
-        logits, loss = self.model_heads["mmbt_region"](pooled_output, labels)
+        logits = self.model_heads["mmbt_region"](pooled_output)
+        logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         output["logits"] = logits
-        output["loss"] = loss
         del sl
         clean_memory()
         return output
@@ -444,8 +454,6 @@ class VilBertVisualBertModelV2(nn.Module):
         # GPUtil.showUtilization()
         pooled_output = []
         sequence_output = []
-        loss = 0.0
-        loss_counts = 0
         logit = []
 
         sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList, mixup)
@@ -459,8 +467,6 @@ class VilBertVisualBertModelV2(nn.Module):
         pool = self.model_regularizers["vilbert"](pool) if "vilbert" in self.model_regularizers else pool
         pooled_output.append(pool)
         logit.append(out["logits"])
-        loss+=out["loss"]
-        loss_counts+=1
         del out
         clean_memory()
 
@@ -469,8 +475,6 @@ class VilBertVisualBertModelV2(nn.Module):
         seq = self.model_regularizers["mmbt_region"](seq) if "mmbt_region" in self.model_regularizers else seq
         pool = self.model_regularizers["mmbt_region"](pool) if "mmbt_region" in self.model_regularizers else pool
         logit.append(out["logits"])
-        loss += out["loss"]
-        loss_counts += 1
         del out
         sequence_output.append(seq)
         pooled_output.append(pool)
@@ -481,8 +485,6 @@ class VilBertVisualBertModelV2(nn.Module):
         seq = self.model_regularizers["visual_bert"](seq) if "visual_bert" in self.model_regularizers else seq
         pool = self.model_regularizers["visual_bert"](pool) if "visual_bert" in self.model_regularizers else pool
         logit.append(out["logits"])
-        loss += out["loss"]
-        loss_counts += 1
         del out
         sequence_output.append(seq)
         pooled_output.append(pool)
@@ -495,8 +497,6 @@ class VilBertVisualBertModelV2(nn.Module):
         logit.append(out["logits"])
         pooled_output.append(pool)
         sequence_output.append(seq)
-        loss += out["loss"]
-        loss_counts += 1
         del out
         logits = torch.stack(logit).mean(0)
 
@@ -527,6 +527,7 @@ class VilBertVisualBertModelV2(nn.Module):
         pre_logits = torch.stack(pre_logits).mean(0)
 
         logits = self.final_layer(pooled_outputs)
+        logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         logits = (0.75 * logits + 0.25 * pre_logits)
         logits, loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
         if self.training:
