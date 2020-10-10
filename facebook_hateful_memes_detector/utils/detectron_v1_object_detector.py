@@ -74,7 +74,8 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
             except Exception as e:
                 sleep(wait_time + random() * random_time)
                 cache_stats[name]["read_exception"] += 1
-            cache_stats[name]["read_retries"] += 1
+                cache_stats[name]["read_retries"] += 1
+        cache_stats[name]["read-return-none"] += 1
         return None
 
 
@@ -85,7 +86,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
             return r
         hsh = build_hash(*args, **kwargs)
 
-        cache_stats[name]["tried"] += 1
+        cache_stats[name]["called"] += 1
 
         r = read_hash(hsh)
         if r is not None and r != "ke":
@@ -93,20 +94,22 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
 
         if r is None:
             r = fn(*args, **kwargs)
+            cache_stats[name]["re-compute"] += 1
+            cache_stats[name]["re-compute-cache-busy-no-write"] += 1
             return r
 
         r = fn(*args, **kwargs)  # r is not None and there was key-error so we need to calculate the key and put in cache
+        cache_stats[name]["re-compute"] += 1
         if cache_allow_writes:
             for retry in range(retries):
                 try:
                     cache[hsh] = r
                     cache_stats[name]["writes"] += 1
-                    break
+                    return r
                 except:
                     cache_stats[name]["write_exception"] += 1
                     sleep(wait_time + random() * random_time)
-                cache_stats[name]["write_retries"] += 1
-        cache_stats[name]["miss"] += 1
+                    cache_stats[name]["write_retries"] += 1
         return r
 
     return cfn
