@@ -101,8 +101,9 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
         r = fn(*args, **kwargs)  # r is not None and there was key-error so we need to calculate the key and put in cache
         cache_stats[name]["re-compute"] += 1
         if cache_allow_writes:
-            for retry in range(retries):
+            for retry in range(retries * 2):
                 try:
+                    sleep(wait_time + random() * random_time)
                     cache[hsh] = r
                     cache_stats[name]["writes"] += 1
                     return r
