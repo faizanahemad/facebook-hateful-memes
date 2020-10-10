@@ -53,17 +53,13 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
         except Exception as e:
             fnh = joblib.hashing.hash(name, 'sha1')
 
-    def cfn(*args, **kwargs):
-        ignore_cache = kwargs.pop("ignore_cache", False)
-        if ignore_cache:
-            r = fn(*args, **kwargs)
-            return r
+    def build_hash(*args, **kwargs):
         hsh = fnh + joblib.hashing.hash(args, 'sha1')
         if len(kwargs) > 0:
             hsh = hsh + joblib.hashing.hash(kwargs, 'sha1')
+        return hsh
 
-        cache_stats[name]["tried"] += 1
-
+    def read_hash(hsh):
         for retry in range(retries):
             try:
                 if hsh in cache:
@@ -72,12 +68,31 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
                         cache_stats[name]["hit"] += 1
                         return r
                     except KeyError as ke:
-                        break
+                        return "ke"
             except Exception as e:
-                sleep(0.01 + random() * 0.1)
+                sleep(0.05 + random() * 0.1)
             cache_stats[name]["retries"] += 1
+        return None
 
-        r = fn(*args, **kwargs)
+
+    def cfn(*args, **kwargs):
+        ignore_cache = kwargs.pop("ignore_cache", False)
+        if ignore_cache:
+            r = fn(*args, **kwargs)
+            return r
+        hsh = build_hash(*args, **kwargs)
+
+        cache_stats[name]["tried"] += 1
+
+        r = read_hash(hsh)
+        if r is not None and r != "ke":
+            return r
+
+        if r is None:
+            r = fn(*args, **kwargs)
+            return r
+
+        r = fn(*args, **kwargs)  # r is not None and there was key-error so we need to calculate the key and put in cache
         if cache_allow_writes:
             for retry in range(retries):
                 try:
@@ -85,7 +100,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
                     cache_stats[name]["writes"] += 1
                     break
                 except:
-                    sleep(0.01 + random() * 0.1)
+                    sleep(0.05 + random() * 0.1)
                 cache_stats[name]["write_retries"] += 1
         cache_stats[name]["miss"] += 1
         return r
