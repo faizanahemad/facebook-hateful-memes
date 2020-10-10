@@ -64,19 +64,17 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
     def read_hash(hsh):
         for retry in range(retries):
             try:
-                if hsh in cache:
-                    try:
-                        r = cache[hsh]
-                        cache_stats[name]["hit"] += 1
-                        return r
-                    except KeyError as ke:
-                        cache_stats[name]["miss"] += 1
-                        sleep(wait_time + random() * random_time)
-                        return "ke"
+                r = cache[hsh]
+                cache_stats[name]["hit"] += 1
+                return r
+            except KeyError as ke:
+                cache_stats[name]["key_error"] += 1
+                sleep(wait_time + random() * random_time)
+                return "ke"
             except Exception as e:
                 sleep(wait_time + random() * random_time)
-                cache_stats[name]["read_error"] += 1
-            cache_stats[name]["retries"] += 1
+                cache_stats[name]["read_exception"] += 1
+            cache_stats[name]["read_retries"] += 1
         return None
 
 
@@ -105,7 +103,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
                     cache_stats[name]["writes"] += 1
                     break
                 except:
-                    cache_stats[name]["write_error"] += 1
+                    cache_stats[name]["write_exception"] += 1
                     sleep(wait_time + random() * random_time)
                 cache_stats[name]["write_retries"] += 1
         cache_stats[name]["miss"] += 1
