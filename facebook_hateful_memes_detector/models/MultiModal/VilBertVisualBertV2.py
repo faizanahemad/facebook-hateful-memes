@@ -727,7 +727,7 @@ class MLMSimCLR(MLMPretraining):
         loss = loss + mlm_losses + simclr_losses + ((logits1 - logits2)**2).mean()
         predicted_labels = torch.stack([p1s.type(torch.float), p2s.type(torch.float), predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
-        logits = (logits1 + logits2 + predicted_labels) / 3
+        logits = (logits1 + logits2 + predicted_labels.to(get_device())) / 3
 
         return logits, (pool1 + pool2)/2, (seq1+seq2)/2, loss
 
