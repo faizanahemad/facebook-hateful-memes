@@ -893,9 +893,9 @@ class MLMOnlyV2(MLMPretraining):
         self.mlms = nn.ModuleList()
         self.num_seqs = 4 * ((len(model.view_transforms) + 1)) + 1
         for i in range(self.num_seqs):
-            mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
+            mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=True)
             if i == self.num_seqs - 1:
-                mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
+                mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=True)
             self.mlms.append(mlm)
 
         self.loss = nn.CrossEntropyLoss()
