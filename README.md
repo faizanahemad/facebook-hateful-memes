@@ -23,7 +23,7 @@ pip install fasttext
 # pip install https://download.pytorch.org/whl/nightly/cu101/torch-1.6.0.dev20200625%2Bcu101-cp37-cp37m-linux_x86_64.whl
 
 
-pip install transformers==2.11  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git@old' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git' nlp imgaug albumentations timm imagecorruptions
+pip install transformers==3.0.2  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git@old' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git' nlp imgaug albumentations timm imagecorruptions langdetect datasets
 
 
 
@@ -50,6 +50,7 @@ cd ~
 # MACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build develop
 
 git clone git@github.com:faizanahemad/facebook-hateful-memes.git && cd facebook-hateful-memes && pip install --no-dependencies --editable .
+mkdir mygit && cd mygit && git clone https://github.com/faizanahemad/facebook-hateful-memes.git && cd facebook-hateful-memes && pip install --no-dependencies --editable .
 
 
 ```

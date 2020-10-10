@@ -19,6 +19,8 @@ sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
 def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, cache_allow_writes=True, retries=5) -> Callable:
+    wait_time = 0.1
+    random_time = 0.1
     cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
     try:
         cache_allow_writes = get_global("cache_allow_writes")
@@ -68,9 +70,12 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
                         cache_stats[name]["hit"] += 1
                         return r
                     except KeyError as ke:
+                        cache_stats[name]["miss"] += 1
+                        sleep(wait_time + random() * random_time)
                         return "ke"
             except Exception as e:
-                sleep(0.05 + random() * 0.1)
+                sleep(wait_time + random() * random_time)
+                cache_stats[name]["read_error"] += 1
             cache_stats[name]["retries"] += 1
         return None
 
@@ -100,7 +105,8 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
                     cache_stats[name]["writes"] += 1
                     break
                 except:
-                    sleep(0.05 + random() * 0.1)
+                    cache_stats[name]["write_error"] += 1
+                    sleep(wait_time + random() * random_time)
                 cache_stats[name]["write_retries"] += 1
         cache_stats[name]["miss"] += 1
         return r

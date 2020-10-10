@@ -12,7 +12,7 @@ wget https://raw.githubusercontent.com/huggingface/transformers/v2.11.0/examples
 **Step 3** Run MLM command
 
 ```bash
-python run_language_modeling.py --output_dir='./model' --model_type=distilroberta-base --model_name_or_path=distilroberta-base --tokenizer_name=distilroberta-base --do_train --train_data_file=text.csv --mlm --learning_rate 1e-4 --num_train_epochs 5 --block_size=128 --line_by_line --overwrite_output_dir --per_device_train_batch_size=16 --gradient_accumulation_steps=1
+python run_language_modeling.py --output_dir='./model' --model_type=distilroberta-base --model_name_or_path=distilroberta-base --tokenizer_name=distilroberta-base --do_train --train_data_file=text.csv --mlm --learning_rate 1e-4 --num_train_epochs 5 --block_size=128 --line_by_line --overwrite_output_dir --per_device_train_batch_size=16 --gradient_accumulation_steps=1 --save_total_limit 1 --save_steps 2000 --warmup_steps 100
 ```
 
 ## Finding Right Block Size (Max Tokens)
