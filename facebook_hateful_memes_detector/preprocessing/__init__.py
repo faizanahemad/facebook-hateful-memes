@@ -721,11 +721,11 @@ def get_transforms_for_multiview():
         def augment(image):
             return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
         return augment
-    trans = [transforms.Grayscale(num_output_channels=3),
+    trans = [transforms.RandomHorizontalFlip(p=1.0),
+             transforms.Grayscale(num_output_channels=3),
              get_alb(alb.transforms.GridDropout(ratio=0.35,
                                                 holes_number_x=32, holes_number_y=32,
-                                                random_offset=False, p=1.0)),
-             transforms.RandomHorizontalFlip(p=1.0)]
+                                                random_offset=False, p=1.0))]
     return trans
 
 
