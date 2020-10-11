@@ -724,14 +724,12 @@ def get_transforms_for_bbox_methods():
     transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(15),  # 2
                                                            # HalfSwap(),
                                                            # QuadrantCut(),  # 8
-                                                           DefinedAffine(0, scale=(0.75, 0.75)),  # 2
-                                                           DefinedAffine(0, translate=(0.2, 0.2)),  # 8
+                                                           transforms.RandomAffine(0, scale=(0.75, 0.75)),  # 2
+                                                           DefinedAffine(0, translate=(0.1, 0.1)),  # 8
                                                            transforms.RandomAffine(0, scale=(1.25, 1.25)),  # 1
                                                            transforms.Grayscale(num_output_channels=3),  # 1
                                                            # transforms.RandomHorizontalFlip(p=1.0),
                                                            identity,
-                                                           get_alb(alb.transforms.GridDropout(ratio=0.15, holes_number_x=10, holes_number_y=10,
-                                                                                              random_offset=False, p=1.0)),
                                                            get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=16, holes_number_y=16,
                                                                                               random_offset=False, p=1.0)),
                                                            get_alb(alb.transforms.GridDropout(ratio=0.35, holes_number_x=32, holes_number_y=32,
