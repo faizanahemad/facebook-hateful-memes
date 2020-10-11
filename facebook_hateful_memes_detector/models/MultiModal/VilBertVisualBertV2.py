@@ -119,22 +119,19 @@ class VilBertVisualBertModelV2(nn.Module):
         self.featurizer_type = featurizer
 
         self.num_classes = num_classes
-        lin0 = nn.Linear(pooled_dims, pooled_dims * 2)
+        lin0 = nn.Linear(pooled_dims, 512)
         init_fc(lin0, "leaky_relu")
-        lin1 = nn.Linear(pooled_dims * 2, 512)
-        init_fc(lin1, "leaky_relu")
         lin = nn.Linear(512, num_classes)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.one_view_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                            lin1, nn.LeakyReLU(), lin)
+        self.one_view_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
 
         self.pooled_dims = pooled_dims * (len(self.view_transforms) + 1)
-        lin0 = nn.Linear(self.pooled_dims, pooled_dims * 2)
+        lin0 = nn.Linear(self.pooled_dims, pooled_dims)
         init_fc(lin0, "leaky_relu")
-        lin01 = nn.Linear(pooled_dims * 2, pooled_dims * 2)
+        lin01 = nn.Linear(pooled_dims, pooled_dims)
         init_fc(lin01, "leaky_relu")
-        lin1 = nn.Linear(pooled_dims * 2, 512)
+        lin1 = nn.Linear(pooled_dims, 512)
         init_fc(lin1, "leaky_relu")
         lin = nn.Linear(512, num_classes)
         init_fc(lin, "linear")
