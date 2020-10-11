@@ -730,8 +730,6 @@ def get_transforms_for_bbox_methods():
                                                            transforms.Grayscale(num_output_channels=3),  # 1
                                                            # transforms.RandomHorizontalFlip(p=1.0),
                                                            identity,
-                                                           get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=16, holes_number_y=16,
-                                                                                              random_offset=False, p=1.0)),
                                                            get_alb(alb.transforms.GridDropout(ratio=0.35, holes_number_x=32, holes_number_y=32,
                                                                                               random_offset=False, p=1.0)),
 
