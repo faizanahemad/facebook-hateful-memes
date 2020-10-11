@@ -739,7 +739,8 @@ def get_transforms_for_bbox_methods():
                                                            # HalfSwap(),
                                                            # QuadrantCut(),  # 8
                                                            transforms.RandomAffine(0, scale=(0.75, 0.75)),  # 2
-                                                           DefinedAffine(0, translate=(0.1, 0.1)),  # 8
+                                                           DefinedAffine(0, translate=(0.1, 0.0)),  # 8
+                                                           DefinedAffine(0, translate=(0.0, 0.1)),
                                                            transforms.RandomAffine(0, scale=(1.25, 1.25)),  # 1
                                                            # transforms.RandomHorizontalFlip(p=1.0),
                                                            identity,
