@@ -72,7 +72,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
                 sleep(wait_time + random() * random_time)
                 return "ke"
             except Exception as e:
-                sleep(wait_time + random() * random_time)
+                sleep(wait_time * (retry + 1) + random() * random_time)
                 cache_stats[name]["read_exception"] += 1
                 cache_stats[name]["read_retries"] += 1
         cache_stats[name]["read-return-none"] += 1
@@ -109,7 +109,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
                     return r
                 except:
                     cache_stats[name]["write_exception"] += 1
-                    sleep(wait_time + random() * random_time)
+                    sleep(wait_time * (retry + 1) + random() * random_time)
                     cache_stats[name]["write_retries"] += 1
         return r
 
