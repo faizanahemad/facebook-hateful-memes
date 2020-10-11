@@ -478,7 +478,6 @@ class ImageCaptionFeatures:
 
 def get_image_info_fn(enable_encoder_feats=False,
                       enable_image_captions=False,
-                      cachedir=None,
                       device=None,
                       **kwargs):
     import gc
@@ -497,11 +496,6 @@ def get_image_info_fn(enable_encoder_feats=False,
 
     feature_extractor = FeatureExtractor(**kwargs)
     lxmert_feature_extractor = LXMERTFeatureExtractor(device)
-
-    if cachedir is None:
-        global memory
-    else:
-        memory = build_cache(cachedir)
 
     def get_img_details(impath):
         feats = feature_extractor(impath)

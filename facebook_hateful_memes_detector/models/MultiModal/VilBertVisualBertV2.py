@@ -119,6 +119,16 @@ class VilBertVisualBertModelV2(nn.Module):
         self.featurizer_type = featurizer
 
         self.num_classes = num_classes
+        lin0 = nn.Linear(pooled_dims, pooled_dims * 2)
+        init_fc(lin0, "leaky_relu")
+        lin1 = nn.Linear(pooled_dims * 2, 512)
+        init_fc(lin1, "leaky_relu")
+        lin = nn.Linear(512, num_classes)
+        init_fc(lin, "linear")
+        dp = nn.Dropout(dropout)
+        self.one_view_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
+                                            lin1, nn.LeakyReLU(), lin)
+
         self.pooled_dims = pooled_dims * (len(self.view_transforms) + 1)
         lin0 = nn.Linear(self.pooled_dims, pooled_dims * 2)
         init_fc(lin0, "leaky_relu")
@@ -505,19 +515,22 @@ class VilBertVisualBertModelV2(nn.Module):
 
         pooled_output = torch.cat(pooled_output, 1)
         # sequence_output = torch.stack(sequence_output).mean(0)
+        pooled_logits = self.one_view_layer(pooled_output)
+        pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         clean_memory()
-        return logits, pooled_output, sequence_output
+        return logits, pooled_logits, pooled_output, sequence_output
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         sample_weights = sampleList.sample_weight
         views = [sampleList] + [t(sampleList) for t in self.view_transforms]
-        pre_logits, pooled_outputs, sequence_outputs = [], [], []
+        pre_logits, pooled_logits, pooled_outputs, sequence_outputs = [], [], [], []
         for view in views:
-            pre_logit, pooled_output, sequence_output = self.get_vectors(view)
+            pre_logit, pooled_logit, pooled_output, sequence_output = self.get_vectors(view)
             pre_logits.append(pre_logit)
             pooled_outputs.append(pooled_output)
+            pooled_logits.append(pooled_logit)
             sequence_outputs.extend([seq[:, :self.n_tokens_out] for seq in sequence_output])
         del sampleList
         clean_memory()
@@ -528,8 +541,19 @@ class VilBertVisualBertModelV2(nn.Module):
 
         logits = self.final_layer(pooled_outputs)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
-        logits = (0.75 * logits + 0.25 * pre_logits)
-        logits, loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+        view_loss = 0.0
+        for pl in pooled_logits:
+            view_loss += (((logits - pl)**2).mean())
+        pooled_logits = torch.stack(pooled_logits).mean(0)
+        view_loss += (((logits - pre_logits)**2).mean())
+
+        _, loss1 = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+        _, loss2 = loss_calculator(pooled_logits, labels if self.training else None, self.task, self.loss)
+        _, loss3 = loss_calculator(pre_logits, labels if self.training else None, self.task, self.loss)
+
+        logits = (0.8 * logits + 0.4 * pooled_logits + 0.2 * pre_logits)
+        logits, full_loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+        loss = full_loss + 0.8 * loss1 + 0.4 * loss2 + 0.2 * loss3
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
         return logits, pooled_outputs, sequence_outputs, loss

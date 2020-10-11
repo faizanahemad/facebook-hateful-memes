@@ -721,14 +721,16 @@ def get_transforms_for_bbox_methods():
             return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
         return augment
 
-    transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(90), DefinedRotation(15), HalfSwap(), QuadrantCut(),
-                                                           DefinedAffine(0, scale=(0.6, 0.6)), DefinedAffine(0, translate=(0.25, 0.25)),
-                                                           DefinedAffine(0, translate=(0.1, 0.1)), transforms.RandomAffine(0, scale=(0.5, 0.5)),
-                                                           transforms.RandomAffine(0, scale=(0.75, 0.75)), transforms.RandomAffine(0, scale=(1.25, 1.25)),
-                                                           transforms.RandomAffine(0, scale=(1.5, 1.5)),
-                                                           transforms.Compose([transforms.Resize(480), transforms.CenterCrop(400)]),
+    transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(15),
+                                                           # HalfSwap(),
+                                                           QuadrantCut(),
+                                                           DefinedAffine(0, scale=(0.6, 0.6)),
+                                                           DefinedAffine(0, translate=(0.25, 0.25)),
+                                                           DefinedAffine(0, translate=(0.1, 0.1)),
+                                                           transforms.RandomAffine(0, scale=(1.25, 1.25)),
                                                            transforms.Grayscale(num_output_channels=3),
-                                                           transforms.RandomHorizontalFlip(p=1.0), transforms.RandomVerticalFlip(p=1.0), identity,
+                                                           # transforms.RandomHorizontalFlip(p=1.0),
+                                                           identity,
                                                            get_alb(alb.transforms.GridDropout(ratio=0.15, holes_number_x=10, holes_number_y=10,
                                                                                               random_offset=False, p=1.0)),
                                                            get_alb(alb.transforms.GridDropout(ratio=0.25, holes_number_x=16, holes_number_y=16,
