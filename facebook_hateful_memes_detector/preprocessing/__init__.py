@@ -26,6 +26,7 @@ from ..utils.sample import Sample
 
 def identity(x): return x
 
+
 def return_first_arg(x, **kwargs): return x
 
 
@@ -715,6 +716,19 @@ def get_image2torchvision_transforms():
     return preprocess
 
 
+def get_transforms_for_multiview():
+    def get_alb(aug):
+        def augment(image):
+            return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
+        return augment
+    trans = [transforms.Grayscale(num_output_channels=3),
+             get_alb(alb.transforms.GridDropout(ratio=0.35,
+                                                holes_number_x=32, holes_number_y=32,
+                                                random_offset=False, p=1.0)),
+             transforms.RandomHorizontalFlip(p=1.0)]
+    return trans
+
+
 def get_transforms_for_bbox_methods():
     def get_alb(aug):
         def augment(image):
@@ -727,13 +741,8 @@ def get_transforms_for_bbox_methods():
                                                            transforms.RandomAffine(0, scale=(0.75, 0.75)),  # 2
                                                            DefinedAffine(0, translate=(0.1, 0.1)),  # 8
                                                            transforms.RandomAffine(0, scale=(1.25, 1.25)),  # 1
-                                                           transforms.Grayscale(num_output_channels=3),  # 1
                                                            # transforms.RandomHorizontalFlip(p=1.0),
                                                            identity,
-                                                           get_alb(alb.transforms.GridDropout(ratio=0.35, holes_number_x=32, holes_number_y=32,
-                                                                                              random_offset=False, p=1.0)),
-
-
                                                            ])
     return transforms_for_bbox_methods
 

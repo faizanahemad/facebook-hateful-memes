@@ -544,6 +544,10 @@ class VilBertVisualBertModelV2(nn.Module):
         view_loss = 0.0
         for pl in pooled_logits:
             view_loss += (((logits - pl)**2).mean())
+        if len(pooled_logits) > 1:
+            for pl1 in pooled_logits:
+                for pl2 in pooled_logits:
+                    view_loss += (((pl1 - pl2) ** 2).mean())
         pooled_logits = torch.stack(pooled_logits).mean(0)
         view_loss += (((logits - pre_logits)**2).mean())
 
@@ -553,7 +557,7 @@ class VilBertVisualBertModelV2(nn.Module):
 
         logits = (0.8 * logits + 0.4 * pooled_logits + 0.2 * pre_logits)
         logits, full_loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
-        loss = full_loss + 0.8 * loss1 + 0.4 * loss2 + 0.2 * loss3
+        loss = full_loss + 0.8 * loss1 + 0.4 * loss2 + 0.2 * loss3 + 0.5 * view_loss
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
         return logits, pooled_outputs, sequence_outputs, loss
