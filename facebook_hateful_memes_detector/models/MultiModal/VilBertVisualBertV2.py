@@ -200,9 +200,9 @@ class VilBertVisualBertModelV2(nn.Module):
                     v[copi[0]] = v[copi[1]]
 
             for i in range(deletes):
-                copi = random.sample(range(99), 1)
+                copi = random.sample(range(99), 2)
                 for v in changes:
-                    v[copi[0]] = v[-1]
+                    v[copi[0]] = v[copi[1]]
 
         elif extractor_type == "lxmert":
             for i in range(swaps):
@@ -215,6 +215,11 @@ class VilBertVisualBertModelV2(nn.Module):
                     sample[k] = v
 
             for i in range(copies):
+                copi = random.sample(range(36), 2)
+                for k, v in sample.items():
+                    v[copi[0]] = v[copi[1]]
+
+            for i in range(deletes):
                 copi = random.sample(range(36), 2)
                 for k, v in sample.items():
                     v[copi[0]] = v[copi[1]]
