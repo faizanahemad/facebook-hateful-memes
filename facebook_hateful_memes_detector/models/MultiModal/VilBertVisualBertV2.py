@@ -998,8 +998,14 @@ class MLMOnlyV2(MLMPretraining):
         mlm_losses = 0.0
 
         predicted_labels = []
+        bad_mlm_indices = None
         for midx, seq1 in enumerate(list(seq1)):
             p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, midx)
+            bad_mlm_index = p1s == self.label_not_present
+            if bad_mlm_indices is not None:
+                bad_mlm_indices = torch.logical_or(bad_mlm_indices, bad_mlm_index)
+            else:
+                bad_mlm_indices = bad_mlm_index
             predicted_labels.extend([p1s])
             mlm_losses += (0.2 * mlm_loss)
 
@@ -1007,12 +1013,15 @@ class MLMOnlyV2(MLMPretraining):
         seq1 = torch.stack(x1[2]).mean(0)
         p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, midx+1)
         mlm_losses += mlm_loss
-
+        bad_mlm_indices = torch.logical_or(bad_mlm_indices, p1s == self.label_not_present)
         loss = loss + mlm_losses
+
         predicted_labels = torch.stack([p1s.type(torch.float), predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
-        #TODO: Handle for cases where label was not predicted at all as one of the classes
-        logits = (logits1 + predicted_labels.to(get_device())) / 2
+        predicted_labels = predicted_labels.to(get_device())
+        predicted_indices = torch.logical_not(bad_mlm_indices).to(get_device())
+        logits = logits1
+        logits[predicted_indices] = (logits1[predicted_indices] + predicted_labels[predicted_indices]) / 2
 
         actual_labels = np.array(x["label"])
         predicted_labels = np.array(logits.max(dim=1).indices.tolist())
