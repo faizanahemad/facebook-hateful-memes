@@ -1012,7 +1012,7 @@ class MLMOnlyV2(MLMPretraining):
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
         logits = (logits1 + predicted_labels.to(get_device())) / 2
 
-        actual_labels = np.array(x["label"].tolist())
+        actual_labels = np.array(x["label"])
         predicted_labels = np.array(logits.max(dim=1).indices.tolist())
         indices = actual_labels != self.label_not_present
         actual_labels = actual_labels[indices]
