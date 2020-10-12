@@ -56,6 +56,7 @@ class VilBertVisualBertModelV2(nn.Module):
         assert type(loss) == str and loss in ["classification", "focal", "regression", "k-classification"]
         self.task = loss
         assert max_seq_length >= 64
+        self.label_not_present = -1
         self.max_seq_length = max_seq_length
         self.text_processor = get_tokenizer(max_seq_length)
         n_tokens_in, pooled_dims = 0, 0
@@ -67,6 +68,8 @@ class VilBertVisualBertModelV2(nn.Module):
         self.bbox_deletes = kwargs.pop("bbox_deletes", 0)
         self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
         self.view_transforms = kwargs.pop("view_transforms", list())
+        self.target_loss_hist = list()
+        self.target_accuracy_hist = list()
         assert type(model_name) == dict
         for k, v in model_name.items():
             dp = FeatureDropout(v["dropout"] if "dropout" in v else 0.0)
@@ -548,13 +551,23 @@ class VilBertVisualBertModelV2(nn.Module):
         pooled_logits = torch.stack(pooled_logits).mean(0)
         view_loss += (((logits - pre_logits)**2).mean())
 
-        _, loss1 = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
-        _, loss2 = loss_calculator(pooled_logits, labels if self.training else None, self.task, self.loss)
-        _, loss3 = loss_calculator(pre_logits, labels if self.training else None, self.task, self.loss)
+        logits, loss1 = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+        pooled_logits, loss2 = loss_calculator(pooled_logits, labels if self.training else None, self.task, self.loss)
+        pre_logits, loss3 = loss_calculator(pre_logits, labels if self.training else None, self.task, self.loss)
 
-        logits = (0.8 * logits + 0.4 * pooled_logits + 0.2 * pre_logits)
+        logits = (0.7 * logits + 0.2 * pooled_logits + 0.1 * pre_logits)
         logits, full_loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
-        loss = full_loss + 0.8 * loss1 + 0.4 * loss2 + 0.2 * loss3 + 0.5 * view_loss
+
+        self.target_loss_hist.append(full_loss)
+        actual_labels = np.array(labels.tolist())
+        predicted_labels = np.array(logits.max(dim=1).indices.tolist())
+        indices = actual_labels != self.label_not_present
+        actual_labels = actual_labels[indices]
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.target_accuracy_hist.append(accuracy)
+
+        loss = full_loss + 0.5 * view_loss
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
         return logits, pooled_outputs, sequence_outputs, loss
@@ -926,8 +939,7 @@ class MLMOnlyV2(MLMPretraining):
         self.loss = nn.CrossEntropyLoss()
         self.mlm_accuracy_hist = defaultdict(list)
         self.mlm_loss_hist = defaultdict(list)
-        self.target_accuracy_hist = defaultdict(list)
-        self.target_loss_hist = defaultdict(list)
+        self.target_accuracy_hist = list()
 
     def mlm_one_sequence(self, seq1, input_ids_1, attention_mask_1, midx):
         mlm = self.mlms[midx]
@@ -993,8 +1005,15 @@ class MLMOnlyV2(MLMPretraining):
         loss = loss + mlm_losses
         predicted_labels = torch.stack([p1s.type(torch.float), predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
-        logits = (logits1 + predicted_labels.to(get_device())) / 3
+        logits = (logits1 + predicted_labels.to(get_device())) / 2
 
+        actual_labels = np.array(x["label"].tolist())
+        predicted_labels = np.array(logits.max(dim=1).indices.tolist())
+        indices = actual_labels != self.label_not_present
+        actual_labels = actual_labels[indices]
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.target_accuracy_hist.append(accuracy)
         return logits, pool1, seq1, loss
 
 
