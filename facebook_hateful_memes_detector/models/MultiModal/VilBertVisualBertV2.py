@@ -952,7 +952,8 @@ class MLMOnlyV2(MLMPretraining):
         loss, accuracy, input_ids_1, predictions_1 = mlm(seq1, input_ids_1, attention_mask_1)
         predictions_1 = predictions_1.view(batch_size, -1)
         predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
-        predictions_1 = [p.split()[0] for p in predictions_1]
+        predictions_1 = [p.split() for p in predictions_1]
+        predictions_1 = [p[0] if len(p) != 0 else self.mask_token for p in predictions_1]
 
         p1s = []
         for p in predictions_1:
@@ -1010,6 +1011,7 @@ class MLMOnlyV2(MLMPretraining):
         loss = loss + mlm_losses
         predicted_labels = torch.stack([p1s.type(torch.float), predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
+        #TODO: Handle for cases where label was not predicted at all as one of the classes
         logits = (logits1 + predicted_labels.to(get_device())) / 2
 
         actual_labels = np.array(x["label"])
