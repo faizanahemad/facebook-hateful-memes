@@ -721,11 +721,11 @@ def get_transforms_for_multiview():
         def augment(image):
             return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
         return augment
-    trans = [transforms.Grayscale(num_output_channels=3),
+    trans = [transforms.RandomHorizontalFlip(p=1.0),
+             transforms.Grayscale(num_output_channels=3),
              get_alb(alb.transforms.GridDropout(ratio=0.35,
                                                 holes_number_x=32, holes_number_y=32,
-                                                random_offset=False, p=1.0)),
-             transforms.RandomHorizontalFlip(p=1.0)]
+                                                random_offset=False, p=1.0))]
     return trans
 
 
@@ -739,8 +739,8 @@ def get_transforms_for_bbox_methods():
                                                            # HalfSwap(),
                                                            # QuadrantCut(),  # 8
                                                            transforms.RandomAffine(0, scale=(0.75, 0.75)),  # 2
-                                                           DefinedAffine(0, translate=(0.1, 0.0)),  # 8
-                                                           DefinedAffine(0, translate=(0.0, 0.1)),
+                                                           # DefinedAffine(0, translate=(0.1, 0.0)),  # 8
+                                                           # DefinedAffine(0, translate=(0.0, 0.1)),
                                                            transforms.RandomAffine(0, scale=(1.25, 1.25)),  # 1
                                                            # transforms.RandomHorizontalFlip(p=1.0),
                                                            identity,
@@ -975,26 +975,40 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     use_dev = dev
     from functools import partial
     joiner = partial(os.path.join, data_dir)
-    dev = read_json_lines_into_df(joiner('dev.jsonl'))
+    if os.path.exists(os.path.join(data_dir, "dev_seen.jsonl")):
+        dev = read_json_lines_into_df(joiner('dev_seen.jsonl'))
+    else:
+        dev = read_json_lines_into_df(joiner('dev.jsonl'))
+
     train = read_json_lines_into_df(joiner('train.jsonl'))
-    test = read_json_lines_into_df(joiner('test.jsonl'))
+
+    if os.path.exists(os.path.join(data_dir, "test_seen.jsonl")):
+        test = read_json_lines_into_df(joiner('test_seen.jsonl'))
+    else:
+        test = read_json_lines_into_df(joiner('test.jsonl'))
+
+    dev_unseen = read_json_lines_into_df(joiner('dev_unseen.jsonl'))
+    test_unseen = read_json_lines_into_df(joiner('test_unseen.jsonl'))
 
     dev["img"] = list(map(joiner, dev.img))
     train["img"] = list(map(joiner, train.img))
     test["img"] = list(map(joiner, test.img))
+    dev_unseen["img"] = list(map(joiner, dev_unseen.img))
+    test_unseen["img"] = list(map(joiner, test_unseen.img))
 
     submission_format = pd.read_csv(joiner("submission_format.csv"))
-    # TODO: Fold in dev into train
+    submission_format_phase_2 = pd.read_csv(joiner("submission_format_phase_2.csv"))
+    train = pd.concat((train, dev))
     if not test_dev:
-        train = pd.concat((train, dev))
+        train = pd.concat((train, dev_unseen))
     if use_dev:
         train = dev
 
-    rd = dict(train=train, test=test, dev=dev,
+    rd = dict(train=train, test=test, dev=dev, test_unseen=test_unseen, dev_unseen=dev_unseen,
               numeric_train=None, numeric_dev=None, numeric_test=None,
               embed1_train=None, embed1_test=None, embed1_dev=None,
               embed2_train=None, embed2_test=None, embed2_dev=None,
-              submission_format=submission_format,
+              submission_format=submission_format, submission_format_phase_2=submission_format_phase_2,
               metadata=dict(cache_images=cache_images, use_images=use_images, dev=use_dev, test_dev=test_dev,
                             numeric_regularizer=None,
                             keep_original_text=keep_original_text, keep_original_image=keep_original_image,

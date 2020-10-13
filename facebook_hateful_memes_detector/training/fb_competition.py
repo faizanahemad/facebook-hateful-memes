@@ -74,9 +74,9 @@ def train_and_predict(model_fn: Union[Callable, Tuple], datadict, batch_size, ep
     return predict(model, datadict, batch_size, prediction_iters=prediction_iters, evaluate_in_train_mode=evaluate_in_train_mode, give_probas=give_probas), model, validation_stats
 
 
-def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_mode=False, give_probas=True):
+def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_mode=False, give_probas=True, competition_phase=None):
     metadata = datadict["metadata"]
-    test = datadict["test"]
+    test = datadict["test"] if competition_phase is None or competition_phase == 1 else datadict["test_unseen"]
     ids = test["id"] if "id" in test.columns else test["ID"]
     id_name = "id" if "id" in test.columns else "ID"
     test_dataset = convert_dataframe_to_dataset(test, metadata, False,
@@ -85,8 +85,9 @@ def predict(model, datadict, batch_size, prediction_iters=1, evaluate_in_train_m
                                                                                       prediction_iters=prediction_iters,
                                                                                       evaluate_in_train_mode=evaluate_in_train_mode,)
     probas = pd.DataFrame({id_name: ids, "proba": proba_list, "label": predictions_list})
-    if "submission_format" in datadict and type(datadict["submission_format"]) == pd.DataFrame and len(datadict["submission_format"]) == len(probas):
-        submission_format = datadict["submission_format"]
+    smkey = "submission_format" if competition_phase is None or competition_phase == 1 else "submission_format_phase_2"
+    if smkey in datadict and type(datadict[smkey]) == pd.DataFrame and len(datadict[smkey]) == len(probas):
+        submission_format = datadict[smkey]
         assert set(submission_format.id) == set(probas.id)
         sf = submission_format.merge(probas.rename(columns={"proba": "p", "label": "l"}), how="inner", on="id")
         sf["proba"] = sf["p"]

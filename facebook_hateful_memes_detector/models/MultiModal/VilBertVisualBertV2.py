@@ -56,6 +56,7 @@ class VilBertVisualBertModelV2(nn.Module):
         assert type(loss) == str and loss in ["classification", "focal", "regression", "k-classification"]
         self.task = loss
         assert max_seq_length >= 64
+        self.label_not_present = -1
         self.max_seq_length = max_seq_length
         self.text_processor = get_tokenizer(max_seq_length)
         n_tokens_in, pooled_dims = 0, 0
@@ -67,6 +68,8 @@ class VilBertVisualBertModelV2(nn.Module):
         self.bbox_deletes = kwargs.pop("bbox_deletes", 0)
         self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
         self.view_transforms = kwargs.pop("view_transforms", list())
+        self.target_loss_hist = list()
+        self.target_accuracy_hist = list()
         assert type(model_name) == dict
         for k, v in model_name.items():
             dp = FeatureDropout(v["dropout"] if "dropout" in v else 0.0)
@@ -119,22 +122,19 @@ class VilBertVisualBertModelV2(nn.Module):
         self.featurizer_type = featurizer
 
         self.num_classes = num_classes
-        lin0 = nn.Linear(pooled_dims, pooled_dims * 2)
+        lin0 = nn.Linear(pooled_dims, 512)
         init_fc(lin0, "leaky_relu")
-        lin1 = nn.Linear(pooled_dims * 2, 512)
-        init_fc(lin1, "leaky_relu")
         lin = nn.Linear(512, num_classes)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.one_view_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                            lin1, nn.LeakyReLU(), lin)
+        self.one_view_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
 
         self.pooled_dims = pooled_dims * (len(self.view_transforms) + 1)
-        lin0 = nn.Linear(self.pooled_dims, pooled_dims * 2)
+        lin0 = nn.Linear(self.pooled_dims, pooled_dims)
         init_fc(lin0, "leaky_relu")
-        lin01 = nn.Linear(pooled_dims * 2, pooled_dims * 2)
+        lin01 = nn.Linear(pooled_dims, pooled_dims)
         init_fc(lin01, "leaky_relu")
-        lin1 = nn.Linear(pooled_dims * 2, 512)
+        lin1 = nn.Linear(pooled_dims, 512)
         init_fc(lin1, "leaky_relu")
         lin = nn.Linear(512, num_classes)
         init_fc(lin, "linear")
@@ -200,9 +200,9 @@ class VilBertVisualBertModelV2(nn.Module):
                     v[copi[0]] = v[copi[1]]
 
             for i in range(deletes):
-                copi = random.sample(range(99), 1)
+                copi = random.sample(range(99), 2)
                 for v in changes:
-                    v[copi[0]] = v[-1]
+                    v[copi[0]] = v[copi[1]]
 
         elif extractor_type == "lxmert":
             for i in range(swaps):
@@ -215,6 +215,11 @@ class VilBertVisualBertModelV2(nn.Module):
                     sample[k] = v
 
             for i in range(copies):
+                copi = random.sample(range(36), 2)
+                for k, v in sample.items():
+                    v[copi[0]] = v[copi[1]]
+
+            for i in range(deletes):
                 copi = random.sample(range(36), 2)
                 for k, v in sample.items():
                     v[copi[0]] = v[copi[1]]
@@ -551,13 +556,23 @@ class VilBertVisualBertModelV2(nn.Module):
         pooled_logits = torch.stack(pooled_logits).mean(0)
         view_loss += (((logits - pre_logits)**2).mean())
 
-        _, loss1 = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
-        _, loss2 = loss_calculator(pooled_logits, labels if self.training else None, self.task, self.loss)
-        _, loss3 = loss_calculator(pre_logits, labels if self.training else None, self.task, self.loss)
+        logits, loss1 = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+        pooled_logits, loss2 = loss_calculator(pooled_logits, labels if self.training else None, self.task, self.loss)
+        pre_logits, loss3 = loss_calculator(pre_logits, labels if self.training else None, self.task, self.loss)
 
-        logits = (0.8 * logits + 0.4 * pooled_logits + 0.2 * pre_logits)
+        logits = (0.7 * logits + 0.2 * pooled_logits + 0.1 * pre_logits)
         logits, full_loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
-        loss = full_loss + 0.8 * loss1 + 0.4 * loss2 + 0.2 * loss3 + 0.5 * view_loss
+
+        self.target_loss_hist.append(full_loss)
+        actual_labels = np.array(labels.tolist())
+        predicted_labels = np.array(logits.max(dim=1).indices.tolist())
+        indices = actual_labels != self.label_not_present
+        actual_labels = actual_labels[indices]
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.target_accuracy_hist.append(accuracy)
+
+        loss = full_loss + 0.5 * view_loss
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
         return logits, pooled_outputs, sequence_outputs, loss
@@ -929,8 +944,7 @@ class MLMOnlyV2(MLMPretraining):
         self.loss = nn.CrossEntropyLoss()
         self.mlm_accuracy_hist = defaultdict(list)
         self.mlm_loss_hist = defaultdict(list)
-        self.target_accuracy_hist = defaultdict(list)
-        self.target_loss_hist = defaultdict(list)
+        self.target_accuracy_hist = list()
 
     def mlm_one_sequence(self, seq1, input_ids_1, attention_mask_1, midx):
         mlm = self.mlms[midx]
@@ -938,7 +952,8 @@ class MLMOnlyV2(MLMPretraining):
         loss, accuracy, input_ids_1, predictions_1 = mlm(seq1, input_ids_1, attention_mask_1)
         predictions_1 = predictions_1.view(batch_size, -1)
         predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
-        predictions_1 = [p.split()[0] for p in predictions_1]
+        predictions_1 = [p.split() for p in predictions_1]
+        predictions_1 = [p[0] if len(p) != 0 else self.mask_token for p in predictions_1]
 
         p1s = []
         for p in predictions_1:
@@ -983,8 +998,14 @@ class MLMOnlyV2(MLMPretraining):
         mlm_losses = 0.0
 
         predicted_labels = []
+        bad_mlm_indices = None
         for midx, seq1 in enumerate(list(seq1)):
             p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, midx)
+            bad_mlm_index = p1s == self.label_not_present
+            if bad_mlm_indices is not None:
+                bad_mlm_indices = torch.logical_or(bad_mlm_indices, bad_mlm_index)
+            else:
+                bad_mlm_indices = bad_mlm_index
             predicted_labels.extend([p1s])
             mlm_losses += (0.2 * mlm_loss)
 
@@ -992,12 +1013,23 @@ class MLMOnlyV2(MLMPretraining):
         seq1 = torch.stack(x1[2]).mean(0)
         p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, midx+1)
         mlm_losses += mlm_loss
-
+        bad_mlm_indices = torch.logical_or(bad_mlm_indices, p1s == self.label_not_present)
         loss = loss + mlm_losses
+
         predicted_labels = torch.stack([p1s.type(torch.float), predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
-        logits = (logits1 + predicted_labels.to(get_device())) / 3
+        predicted_labels = predicted_labels.to(get_device())
+        predicted_indices = torch.logical_not(bad_mlm_indices).to(get_device())
+        logits = logits1
+        logits[predicted_indices] = (logits1[predicted_indices] + predicted_labels[predicted_indices]) / 2
 
+        actual_labels = np.array(x["label"])
+        predicted_labels = np.array(logits.max(dim=1).indices.tolist())
+        indices = actual_labels != self.label_not_present
+        actual_labels = actual_labels[indices]
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.target_accuracy_hist.append(accuracy)
         return logits, pool1, seq1, loss
 
 
