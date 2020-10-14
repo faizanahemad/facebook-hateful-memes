@@ -945,7 +945,7 @@ class MLMOnlyV2(MLMPretraining):
         self.mlm_accuracy_hist = defaultdict(list)
         self.mlm_loss_hist = defaultdict(list)
 
-        self.mlm_accuracy_hist = list()
+        self.mlm_overall_accuracy_hist = list()
         self.target_accuracy_hist = list()
         self.model_accuracy_hist = list()
 
@@ -1030,7 +1030,7 @@ class MLMOnlyV2(MLMPretraining):
         actual_labels = np.array(x["label"])
         indices = actual_labels != self.label_not_present
         accuracy = accuracy_score(actual_labels[indices], predicted_labels[indices])
-        self.mlm_accuracy_hist.append(accuracy)
+        self.mlm_overall_accuracy_hist.append(accuracy)
 
         predicted_labels = np.array(logits1.max(dim=1).indices.tolist())
         accuracy = accuracy_score(actual_labels[indices], predicted_labels[indices])
