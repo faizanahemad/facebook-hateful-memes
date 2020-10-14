@@ -944,7 +944,10 @@ class MLMOnlyV2(MLMPretraining):
         self.loss = nn.CrossEntropyLoss()
         self.mlm_accuracy_hist = defaultdict(list)
         self.mlm_loss_hist = defaultdict(list)
+
+        self.mlm_accuracy_hist = list()
         self.target_accuracy_hist = list()
+        self.model_accuracy_hist = list()
 
     def mlm_one_sequence(self, seq1, input_ids_1, attention_mask_1, midx):
         mlm = self.mlms[midx]
@@ -968,7 +971,7 @@ class MLMOnlyV2(MLMPretraining):
         p1s = torch.tensor(p1s, dtype=torch.long)
 
         self.mlm_accuracy_hist[midx].append(accuracy)
-        self.mlm_loss_hist[midx].append(float(loss.cpu().detach()))
+        self.mlm_loss_hist[midx].append(float(loss))
         return [p1s, loss]
 
     def add_label(self, sampleList):
@@ -987,6 +990,7 @@ class MLMOnlyV2(MLMPretraining):
         x1 = self.aug_1(x.copy()) if self.aug_1 is not None else x
         x1 = self.add_label(x1)
         input_ids_1, attention_mask_1 = self.tokenise(x1["text"])
+        # "[SEP]"
 
         x1 = self.model(x1)
 
@@ -1024,11 +1028,16 @@ class MLMOnlyV2(MLMPretraining):
         logits[predicted_indices] = (logits1[predicted_indices] + predicted_labels[predicted_indices]) / 2
 
         actual_labels = np.array(x["label"])
-        predicted_labels = np.array(logits.max(dim=1).indices.tolist())
         indices = actual_labels != self.label_not_present
-        actual_labels = actual_labels[indices]
-        predicted_labels = predicted_labels[indices]
-        accuracy = accuracy_score(actual_labels, predicted_labels)
+        accuracy = accuracy_score(actual_labels[indices], predicted_labels[indices])
+        self.mlm_accuracy_hist.append(accuracy)
+
+        predicted_labels = np.array(logits1.max(dim=1).indices.tolist())
+        accuracy = accuracy_score(actual_labels[indices], predicted_labels[indices])
+        self.model_accuracy_hist.append(accuracy)
+
+        predicted_labels = np.array(logits.max(dim=1).indices.tolist())
+        accuracy = accuracy_score(actual_labels[indices], predicted_labels[indices])
         self.target_accuracy_hist.append(accuracy)
         return logits, pool1, seq1, loss
 
