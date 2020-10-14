@@ -1028,6 +1028,7 @@ class MLMOnlyV2(MLMPretraining):
         logits[predicted_indices] = (logits1[predicted_indices] + predicted_labels[predicted_indices]) / 2
 
         actual_labels = np.array(x["label"])
+        predicted_labels = predicted_labels.cpu().numpy()
         indices = actual_labels != self.label_not_present
         accuracy = accuracy_score(actual_labels[indices], predicted_labels[indices])
         self.mlm_overall_accuracy_hist.append(accuracy)
