@@ -578,19 +578,19 @@ class VilBertVisualBertModelV2(nn.Module):
         return logits, pooled_outputs, sequence_outputs, loss
 
 
-positive = ["positive", "practical", "useful", "awesome",
-            "optimistic", "effective", "hopeful", "great", "fortunate",
-            "helpful", "beneficial", "nice", "enjoyable", "welcome", "kind",
-            "pleasant", "agreeable", "delightful", "acceptable", "accurate",
-            "good", "neutral", "impartial"]
+positive = ["positive", "great", "nice",
+            # "practical", "useful", "awesome", "accurate", "impartial",
+            # "optimistic", "effective", "hopeful",  "fortunate",
+            # "helpful", "beneficial", "enjoyable", "welcome", "kind",
+            # "pleasant", "agreeable", "delightful", "acceptable",
+            "good", "neutral"]
 
-negative = ["bad", "inferior", "nasty", "terrible", "awful",
-            "adverse", "hate", "hateful", "hurtful",
-            "grim", "disagreeable", "unpleasant", "unwelcome",
-            "unacceptable", "upsetting", "unkind",
-            "cruel", "hostility", "dislike", "resentment",
-            "vile", "vicious", "repulsive", "disgusting",
-            "bad", "bias", "prejudice", "offensive"]
+negative = ["bad", "nasty", "terrible", "offensive",
+            #"grim", "disagreeable", "unpleasant", "unwelcome",
+            #"unacceptable", "upsetting", "unkind", "inferior",  "hateful", "hurtful",
+            #"cruel", "hostility", "dislike", "resentment", "adverse", "awful",
+            #"vile", "vicious", "repulsive", "disgusting", "prejudice",
+            "hate", "bias", "hostile"]
 
 
 class MLMSimCLR(MLMPretraining):
@@ -1028,7 +1028,7 @@ class MLMOnlyV2(MLMPretraining):
         logits[predicted_indices] = (logits1[predicted_indices] + predicted_labels[predicted_indices]) / 2
 
         actual_labels = np.array(x["label"])
-        predicted_labels = predicted_labels.cpu().numpy()
+        predicted_labels = predicted_labels.max(dim=1).indices.cpu().numpy()
         indices = actual_labels != self.label_not_present
         accuracy = accuracy_score(actual_labels[indices], predicted_labels[indices])
         self.mlm_overall_accuracy_hist.append(accuracy)
