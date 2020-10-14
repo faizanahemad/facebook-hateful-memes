@@ -16,71 +16,8 @@ import random
 import math
 
 
-class DETRTransferBase(nn.Module):
-    def __init__(self, model_name,  device, im_size=360):
-        super().__init__()
-        self.to_tensor = T.Compose([
-            T.Resize((im_size, im_size)),
-            T.ToTensor(),
-            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-        self.model_name = model_name
-        self.device = device
-
-    @classmethod
-    def set_seeds(cls, seed=0):
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        random.seed(seed)
-
-    @classmethod
-    def read_image(cls, image_path):
-        if "PIL" in str(type(image_path)):
-            return image_path.convert('RGB')
-        elif type(image_path) == str:
-            if image_path.startswith('http'):
-                image_path = requests.get(image_path, stream=True).raw
-            return Image.open(image_path).convert('RGB')
-        else:
-            raise NotImplementedError
-
-    def get_pil_image(self, image_path):
-        if type(image_path) == torch.Tensor:
-            assert len(image_path.size()) == 3
-            return image_path.unsqueeze(0).to(self.device)
-        elif "PIL" in str(type(image_path)) or type(image_path) == str:
-            return self.to_tensor(self.read_image(image_path)).unsqueeze(0).to(self.device)
-        else:
-            raise NotImplementedError()
-
-    @classmethod
-    def box_cxcywh_to_xyxy(cls, x):
-        x_c, y_c, w, h = x.unbind(1)
-        b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
-             (x_c + 0.5 * w), (y_c + 0.5 * h)]
-        return torch.stack(b, dim=1)
-
-    @classmethod
-    def rescale_bboxes(cls, out_bbox, size):
-        img_w, img_h = size
-        b = cls.box_cxcywh_to_xyxy(out_bbox)
-        b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32)
-        return b
-
-    def plot_objects(self, image, conf=0.7):
-        image = self.read_image(image)
-        outputs = self.forward(image)
-
-        pred_logits = outputs['pred_logits'].softmax(-1)
-        pred_boxes = outputs['pred_boxes']
-
-        probas = pred_logits[0, :, :-1]
-        keep = probas.max(-1).values > conf
-        boxes = self.rescale_bboxes(pred_boxes[0, keep], image.size)
-        prob = probas[keep]
-
-        # COCO classes
-        CLASSES = [
+class ObjectDETPlotting:
+    mscoco_80_classes = [
             'N/A', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
             'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A',
             'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse',
@@ -96,6 +33,39 @@ class DETRTransferBase(nn.Module):
             'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier',
             'toothbrush'
         ]
+
+    @classmethod
+    def read_image(cls, image_path):
+        if "PIL" in str(type(image_path)):
+            return image_path.convert('RGB')
+        elif type(image_path) == str:
+            if image_path.startswith('http'):
+                image_path = requests.get(image_path, stream=True).raw
+            return Image.open(image_path).convert('RGB')
+        else:
+            raise NotImplementedError
+
+    @classmethod
+    def box_cxcywh_to_xyxy(cls, x):
+        x = torch.tensor(x)
+        x_c, y_c, w, h = x.unbind(1)
+        b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
+             (x_c + 0.5 * w), (y_c + 0.5 * h)]
+        return torch.stack(b, dim=1)
+
+    @classmethod
+    def rescale_bboxes(cls, out_bbox, size):
+        img_w, img_h = size
+        b = cls.box_cxcywh_to_xyxy(out_bbox)
+        b = b * torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32)
+        return b
+
+    @classmethod
+    def plot(cls, image, prob, boxes, CLASSES=None):
+        # COCO classes
+        if CLASSES is None:
+            CLASSES=cls.mscoco_80_classes
+            boxes = cls.rescale_bboxes(boxes, image.size)
 
         # colors for visualization
         COLORS = [[0.000, 0.447, 0.741], [0.850, 0.325, 0.098], [0.929, 0.694, 0.125],
@@ -114,6 +84,46 @@ class DETRTransferBase(nn.Module):
                     bbox=dict(facecolor='yellow', alpha=0.5))
         plt.axis('off')
         plt.show()
+
+
+class DETRTransferBase(nn.Module, ObjectDETPlotting):
+    def __init__(self, model_name,  device, im_size=360):
+        super().__init__()
+        self.to_tensor = T.Compose([
+            T.Resize((im_size, im_size)),
+            T.ToTensor(),
+            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        self.model_name = model_name
+        self.device = device
+
+    @classmethod
+    def set_seeds(cls, seed=0):
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+
+    def get_pil_image(self, image_path):
+        if type(image_path) == torch.Tensor:
+            assert len(image_path.size()) == 3
+            return image_path.unsqueeze(0).to(self.device)
+        elif "PIL" in str(type(image_path)) or type(image_path) == str:
+            return self.to_tensor(self.read_image(image_path)).unsqueeze(0).to(self.device)
+        else:
+            raise NotImplementedError()
+
+    def plot_objects(self, image, conf=0.7):
+        image = self.read_image(image)
+        outputs = self.forward(image)
+
+        pred_logits = outputs['pred_logits'].softmax(-1)
+        pred_boxes = outputs['pred_boxes']
+        probas = pred_logits[0, :, :-1]
+        keep = probas.max(-1).values > conf
+        boxes = pred_boxes[0, keep]
+        prob = probas[keep]
+        self.plot(image, prob, boxes)
+
 
     def plot_panoptic(self, image, conf=0.85):
         image = self.read_image(image)

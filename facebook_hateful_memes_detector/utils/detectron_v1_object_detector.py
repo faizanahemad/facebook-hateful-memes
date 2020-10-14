@@ -12,7 +12,10 @@ import requests
 import torch
 from PIL import Image
 
-from .globals import get_device, build_cache, set_global, get_global
+try:
+    from .globals import get_device, build_cache, set_global, get_global
+except:
+    from globals import get_device, build_cache, set_global, get_global
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
@@ -544,6 +547,28 @@ def get_image_info_fn(enable_encoder_feats=False,
             "feature_extractor": feature_extractor,
             "get_batch_encoder_feats": get_batch_encoder_feats, "get_lxmert_details": get_lxmert_details,
             "get_batch_img_roi_features": get_batch_img_roi_features, "get_batch_lxmert_roi_features": get_batch_lxmert_roi_features}
+
+
+if __name__ == "__main__":
+    image_url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
+    # "http://images.cocodataset.org/val2017/000000281759.jpg"
+    # 'http://images.cocodataset.org/val2017/000000039769.jpg'
+    from facebook_hateful_memes_detector.models.external.detr import ObjectDETPlotting
+    import pandas as pd
+    feature_extractor = FeatureExtractor()
+    feats, info = feature_extractor(image_url)
+    print(info["cls_prob"].shape, info["bbox"].shape)
+    vg_classes = pd.read_csv("https://raw.githubusercontent.com/peteanderson80/bottom-up-attention/master/data/genome/1600-400-20/objects_vocab.txt", engine="python", header=None, sep="\t", names=["classes"])
+    vg_classes = np.array(["N/A"] + list(vg_classes.classes))
+    ObjectDETPlotting.plot(ObjectDETPlotting.read_image(image_url),
+                           info["cls_prob"], info["bbox"], CLASSES=vg_classes)
+
+    cls = info["cls_prob"].argmax(axis=1)
+    detected_classes = vg_classes[cls]
+    from collections import OrderedDict
+    detected_classes = list(OrderedDict((i, 0) for i in detected_classes).keys())
+    print(len(detected_classes))
+    print(detected_classes)
 
 
 
