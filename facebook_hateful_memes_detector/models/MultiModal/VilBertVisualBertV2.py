@@ -970,7 +970,7 @@ class MLMOnlyV2(MLMPretraining):
     def __init__(self, model: VilBertVisualBertModelV2, dropout,
                  label_to_word: dict,
                  augment_1: Callable,
-                 mlm_loss_weight=0.05, low_memory=False):
+                 mlm_loss_weight=0.01, low_memory=False):
         super(MLMOnlyV2, self).__init__(model, None, 768, "relu", 0, True)
         hidden_size = 768
         mlm_hidden_size = 128
