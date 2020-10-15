@@ -68,7 +68,7 @@ class VilBertVisualBertModelV2(nn.Module):
         self.bbox_deletes = kwargs.pop("bbox_deletes", 0)
         self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
         self.view_transforms = kwargs.pop("view_transforms", list())
-        self.view_loss_weight = kwargs.pop("view_loss_weight", 0.5)
+        self.view_loss_weight = kwargs.pop("view_loss_weight", 0.1)
 
         self.logit_loss_hist = list()
         self.pre_logit_loss_hist = list()
@@ -970,7 +970,7 @@ class MLMOnlyV2(MLMPretraining):
     def __init__(self, model: VilBertVisualBertModelV2, dropout,
                  label_to_word: dict,
                  augment_1: Callable,
-                 mlm_loss_weight=0.1, low_memory=False):
+                 mlm_loss_weight=0.05, low_memory=False):
         super(MLMOnlyV2, self).__init__(model, None, 768, "relu", 0, True)
         hidden_size = 768
         mlm_hidden_size = 128
@@ -1079,10 +1079,10 @@ class MLMOnlyV2(MLMPretraining):
         mlm_losses += mlm_loss
         mlm_losses = self.mlm_loss_weight * mlm_losses
 
-        self.mlm_overall_loss_hist.append(mlm_losses.detach().cpu().item())
-        self.model_loss_hist.append(loss.detach().cpu().item())
+        self.mlm_overall_loss_hist.append(float(mlm_losses))
+        self.model_loss_hist.append(float(loss))
         loss = loss + mlm_losses
-        self.overall_loss_hist.append(loss.detach().cpu().item())
+        self.overall_loss_hist.append(float(loss))
 
         predicted_labels = torch.stack([p1s.type(torch.float)]+[pl.type(torch.float) for pl in predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
@@ -1157,19 +1157,27 @@ def make_plots(model: VilBertVisualBertModelV2, mlm_model: MLMOnlyV2, logy=False
     # MLM model: Overall mlm, model, final loss
     # MLM model: Overall mlm acc, model acc, final acc
 
-    model_losses = mlm_model.mlm_loss_hist[0] + mlm_model.mlm_loss_hist[1] + mlm_model.mlm_loss_hist[2] + mlm_model.mlm_loss_hist[3] + mlm_model.mlm_loss_hist[4]
+    model_losses = mlm_model.mlm_loss_hist[0] + mlm_model.mlm_loss_hist[1] + mlm_model.mlm_loss_hist[2] + mlm_model.mlm_loss_hist[3]
     x = list(range(len(mlm_model.mlm_loss_hist[0])))
-    model_losses_x = x + x + x + x + x
-    model_losses_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x)) + (["Combined"] * len(x))
+    model_losses_x = x + x + x + x
+    model_losses_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x))
     losses = pd.DataFrame({"batch": model_losses_x, "mlm_loss": model_losses, "mlm_source": model_losses_hues})
     make_plot("MLM Loss by model", data=losses, x="batch", y="mlm_loss", hue="mlm_source")
 
-    model_losses = mlm_model.mlm_accuracy_hist[0] + mlm_model.mlm_accuracy_hist[1] + mlm_model.mlm_accuracy_hist[2] + mlm_model.mlm_accuracy_hist[3] + mlm_model.mlm_accuracy_hist[4]
+    model_losses = mlm_model.mlm_accuracy_hist[0] + mlm_model.mlm_accuracy_hist[1] + mlm_model.mlm_accuracy_hist[2] + mlm_model.mlm_accuracy_hist[3]
     x = list(range(len(mlm_model.mlm_accuracy_hist[0])))
-    model_losses_x = x + x + x + x + x
-    model_losses_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x)) + (["Combined"] * len(x))
+    model_losses_x = x + x + x + x
+    model_losses_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x))
     losses = pd.DataFrame({"batch": model_losses_x, "mlm_accuracy": model_losses, "mlm_source": model_losses_hues})
     make_plot("MLM Accuracy by model", data=losses, x="batch", y="mlm_accuracy", hue="mlm_source")
+
+    # MLM Combined Loss and Acc
+    model_losses = mlm_model.mlm_loss_hist[4] + mlm_model.mlm_accuracy_hist[4]
+    x = list(range(len(mlm_model.mlm_loss_hist[4]))) + list(range(len(mlm_model.mlm_accuracy_hist[4])))
+    model_losses_hues = (["Loss"] * len(mlm_model.mlm_loss_hist[4])) + (["Accuracy"] * len(mlm_model.mlm_accuracy_hist[4]))
+    losses = pd.DataFrame({"batch": x, "MLM": model_losses, "Loss/Accuracy": model_losses_hues})
+    make_plot("MLM Loss/Accuracy Overall", data=losses, x="batch", y="MLM", hue="Loss/Accuracy")
+
 
     model_losses = mlm_model.mlm_overall_loss_hist + mlm_model.model_loss_hist + mlm_model.overall_loss_hist
     x = list(range(len(mlm_model.overall_loss_hist)))
