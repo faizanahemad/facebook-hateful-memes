@@ -68,8 +68,23 @@ class VilBertVisualBertModelV2(nn.Module):
         self.bbox_deletes = kwargs.pop("bbox_deletes", 0)
         self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
         self.view_transforms = kwargs.pop("view_transforms", list())
-        self.target_loss_hist = list()
-        self.target_accuracy_hist = list()
+        self.view_loss_weight = kwargs.pop("view_loss_weight", 0.5)
+
+        self.logit_loss_hist = list()
+        self.pre_logit_loss_hist = list()
+        self.pooled_logit_loss_hist = list()
+        self.full_loss_hist = list()
+        self.view_loss_hist = list()
+
+        self.vilbert_accuracy_hist = list()
+        self.mmbt_region_accuracy_hist = list()
+        self.visual_bert_accuracy_hist = list()
+        self.lxmert_accuracy_hist = list()
+
+        self.full_accuracy_hist = list()
+        self.logit_accuracy_hist = list()
+        self.pre_logit_accuracy_hist = list()
+        self.pooled_logit_accuracy_hist = list()
         assert type(model_name) == dict
         for k, v in model_name.items():
             dp = FeatureDropout(v["dropout"] if "dropout" in v else 0.0)
@@ -462,6 +477,10 @@ class VilBertVisualBertModelV2(nn.Module):
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
         mixup = sampleList.mixup
 
+        actual_labels = np.array(labels.tolist())
+        indices = actual_labels != self.label_not_present
+        actual_labels = actual_labels[indices]
+
         textSampleList = self.get_tokens(texts)
         textSampleList.id = sampleList.id
         del sampleList
@@ -482,29 +501,38 @@ class VilBertVisualBertModelV2(nn.Module):
         pool = self.model_regularizers["vilbert"](pool) if "vilbert" in self.model_regularizers else pool
         pooled_output.append(pool)
         logit.append(out["logits"])
-        del out
-        clean_memory()
+
+        predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.vilbert_accuracy_hist.append(accuracy)
 
         out = self.mmbt_region_forward(sl, labels)
         seq, pool = out["sequence_output"], out["pooled_output"]
         seq = self.model_regularizers["mmbt_region"](seq) if "mmbt_region" in self.model_regularizers else seq
         pool = self.model_regularizers["mmbt_region"](pool) if "mmbt_region" in self.model_regularizers else pool
         logit.append(out["logits"])
-        del out
         sequence_output.append(seq)
         pooled_output.append(pool)
-        clean_memory()
+
+        predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.mmbt_region_accuracy_hist.append(accuracy)
 
         out = self.visual_bert_forward(sl, labels)
         seq, pool = out["sequence_output"], out["pooled_output"]
         seq = self.model_regularizers["visual_bert"](seq) if "visual_bert" in self.model_regularizers else seq
         pool = self.model_regularizers["visual_bert"](pool) if "visual_bert" in self.model_regularizers else pool
         logit.append(out["logits"])
-        del out
         sequence_output.append(seq)
         pooled_output.append(pool)
-        del sl
-        clean_memory()
+
+        predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.visual_bert_accuracy_hist.append(accuracy)
+
         out = self.lxmert_forward(image, textSampleList, labels, mixup)
         seq, pool = out["seq"], out["pooled"]
         seq = self.model_regularizers["lxmert"](seq) if "lxmert" in self.model_regularizers else seq
@@ -512,11 +540,17 @@ class VilBertVisualBertModelV2(nn.Module):
         logit.append(out["logits"])
         pooled_output.append(pool)
         sequence_output.append(seq)
-        del out
+
+        predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.lxmert_accuracy_hist.append(accuracy)
+
         logits = torch.stack(logit).mean(0)
 
         del image
         del textSampleList
+        del out
 
         pooled_output = torch.cat(pooled_output, 1)
         # sequence_output = torch.stack(sequence_output).mean(0)
@@ -555,24 +589,45 @@ class VilBertVisualBertModelV2(nn.Module):
                     view_loss += (((pl1 - pl2) ** 2).mean())
         pooled_logits = torch.stack(pooled_logits).mean(0)
         view_loss += (((logits - pre_logits)**2).mean())
+        view_loss = self.view_loss_weight * view_loss
+        self.view_loss_hist.append(view_loss.detach().cpu().item())
 
         logits, loss1 = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+        self.logit_loss_hist.append(loss1.detach().cpu().item())
         pooled_logits, loss2 = loss_calculator(pooled_logits, labels if self.training else None, self.task, self.loss)
+        self.pooled_logit_loss_hist.append(loss2.cpu().detach().item())
         pre_logits, loss3 = loss_calculator(pre_logits, labels if self.training else None, self.task, self.loss)
+        self.pre_logit_loss_hist.append(loss3.detach().cpu().item())
+
+        actual_labels = np.array(labels.tolist())
+        indices = actual_labels != self.label_not_present
+        actual_labels = actual_labels[indices]
+
+        predicted_labels = np.array(pre_logits.max(dim=1).indices.tolist())
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.pre_logit_accuracy_hist.append(accuracy)
+
+        predicted_labels = np.array(logits.max(dim=1).indices.tolist())
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.logit_accuracy_hist.append(accuracy)
+
+        predicted_labels = np.array(pooled_logits.max(dim=1).indices.tolist())
+        predicted_labels = predicted_labels[indices]
+        accuracy = accuracy_score(actual_labels, predicted_labels)
+        self.pooled_logit_accuracy_hist.append(accuracy)
 
         logits = (0.7 * logits + 0.2 * pooled_logits + 0.1 * pre_logits)
         logits, full_loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
+        self.full_loss_hist.append(full_loss.detach().cpu().item())
 
-        self.target_loss_hist.append(full_loss)
-        actual_labels = np.array(labels.tolist())
         predicted_labels = np.array(logits.max(dim=1).indices.tolist())
-        indices = actual_labels != self.label_not_present
-        actual_labels = actual_labels[indices]
         predicted_labels = predicted_labels[indices]
         accuracy = accuracy_score(actual_labels, predicted_labels)
-        self.target_accuracy_hist.append(accuracy)
+        self.full_accuracy_hist.append(accuracy)
 
-        loss = full_loss + 0.5 * view_loss
+        loss = full_loss + view_loss
         if self.training:
             loss += self.auc_dice_loss(logits, labels)
         return logits, pooled_outputs, sequence_outputs, loss
@@ -916,15 +971,16 @@ class MLMOnlyV2(MLMPretraining):
     def __init__(self, model: VilBertVisualBertModelV2, dropout,
                  label_to_word: dict,
                  augment_1: Callable,
-                 temperature=0.1, low_memory=False):
+                 mlm_loss_weight=0.1, low_memory=False):
         super(MLMOnlyV2, self).__init__(model, None, 768, "relu", 0, True)
         hidden_size = 768
+        mlm_hidden_size = 128
         self.aug_1 = augment_1
         self.model = model
         self.aug_time = []
         self.model_time = []
         self.low_memory = low_memory
-        self.temperature = temperature
+        self.mlm_loss_weight = mlm_loss_weight
         self.label_to_word = label_to_word
         self.label_not_present = -1  # If label not present then we will mask.
 
@@ -933,26 +989,29 @@ class MLMOnlyV2(MLMPretraining):
         self.mask_token = self.model.text_processor._tokenizer.mask_token
         self.tokenizer = tokenizer
         self.n_tokens_in = n_tokens_in
-        self.mlms = nn.ModuleList()
-        self.num_seqs = 4 * ((len(model.view_transforms) + 1)) + 1
-        for i in range(self.num_seqs):
-            mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=True)
-            if i == self.num_seqs - 1:
-                mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=True)
-            self.mlms.append(mlm)
+        self.mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
+
+        self.mlm_transforms = nn.ModuleList()
+        for i in range(5):
+            fc = nn.Linear(hidden_size, mlm_hidden_size)
+            init_fc(fc, "linear")
+            self.mlm_transforms.append(fc)
 
         self.loss = nn.CrossEntropyLoss()
         self.mlm_accuracy_hist = defaultdict(list)
         self.mlm_loss_hist = defaultdict(list)
+
+        self.mlm_overall_loss_hist = list()
+        self.model_loss_hist = list()
+        self.overall_loss_hist = list()
 
         self.mlm_overall_accuracy_hist = list()
         self.target_accuracy_hist = list()
         self.model_accuracy_hist = list()
 
     def mlm_one_sequence(self, seq1, input_ids_1, attention_mask_1, midx):
-        mlm = self.mlms[midx]
         batch_size = input_ids_1.size(0)
-        loss, accuracy, input_ids_1, predictions_1 = mlm(seq1, input_ids_1, attention_mask_1)
+        loss, accuracy, input_ids_1, predictions_1 = self.mlm(seq1, input_ids_1, attention_mask_1)
         predictions_1 = predictions_1.view(batch_size, -1)
         predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
         predictions_1 = [p.split() for p in predictions_1]
@@ -1003,24 +1062,30 @@ class MLMOnlyV2(MLMPretraining):
 
         predicted_labels = []
         bad_mlm_indices = None
-        for midx, seq1 in enumerate(list(seq1)):
-            p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, midx)
+        for midx, sequence in enumerate(list(seq1)):
+            transform_idx = midx % 4
+            sequence = self.mlm_transforms[transform_idx](sequence)
+            p1s, mlm_loss = self.mlm_one_sequence(sequence, input_ids_1, attention_mask_1, transform_idx)
             bad_mlm_index = p1s == self.label_not_present
             if bad_mlm_indices is not None:
                 bad_mlm_indices = torch.logical_or(bad_mlm_indices, bad_mlm_index)
             else:
                 bad_mlm_indices = bad_mlm_index
             predicted_labels.extend([p1s])
-            mlm_losses += (0.2 * mlm_loss)
+            mlm_losses += (0.25 * mlm_loss)
 
-        predicted_labels = torch.stack(predicted_labels).type(torch.float).mean(0)
-        seq1 = torch.stack(x1[2]).mean(0)
-        p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, midx+1)
-        mlm_losses += mlm_loss
+        seq1 = self.mlm_transforms[-1](torch.stack(x1[2]).mean(0))
+        p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, 4)
         bad_mlm_indices = torch.logical_or(bad_mlm_indices, p1s == self.label_not_present)
-        loss = loss + mlm_losses
+        mlm_losses += mlm_loss
+        mlm_losses = self.mlm_loss_weight * mlm_losses
 
-        predicted_labels = torch.stack([p1s.type(torch.float), predicted_labels]).mean(0)
+        self.mlm_overall_loss_hist.append(mlm_losses.detach().cpu().item())
+        self.model_loss_hist.append(loss.detach().cpu().item())
+        loss = loss + mlm_losses
+        self.overall_loss_hist.append(loss.detach().cpu().item())
+
+        predicted_labels = torch.stack([p1s.type(torch.float)]+[pl.type(torch.float) for pl in predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
         predicted_labels = predicted_labels.to(get_device())
         predicted_indices = torch.logical_not(bad_mlm_indices).to(get_device())
@@ -1042,6 +1107,84 @@ class MLMOnlyV2(MLMPretraining):
         self.target_accuracy_hist.append(accuracy)
         return logits, pool1, seq1, loss
 
+
+def make_plots(model: VilBertVisualBertModelV2, mlm_model: MLMOnlyV2, logy=False, exclude_from_start=0, smoothing=0):
+    import pandas as pd
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    def make_plot(title, data, x, y, hue=None):
+        if smoothing > 1:
+            def agg_fn(df):
+                df[y] = df[y].rolling(smoothing, center=False, min_periods=1).mean()
+                return df
+
+            data = data.groupby([hue], group_keys=False).apply(agg_fn)
+        plt.figure(figsize=(10, 6))
+        sns.lineplot(data=data, x=x, y=y, hue=hue)
+        plt.title(title)
+        if logy:
+            plt.semilogy()
+        if exclude_from_start > 0:
+            plt.xlim(exclude_from_start, plt.xlim()[1])
+        plt.show()
+
+    model_losses = model.pre_logit_loss_hist + model.pooled_logit_loss_hist + model.logit_loss_hist + model.full_loss_hist + model.view_loss_hist
+    x = list(range(len(model.pre_logit_loss_hist)))
+    model_losses_x = x + x + x + x + x
+    model_losses_hues = (["pre_logit"] * len(x)) + (["pooled_logit"] * len(x)) + (["logit"] * len(x)) + (["full"] * len(x)) + (["view"] * len(x))
+    losses = pd.DataFrame({"batch": model_losses_x, "loss": model_losses, "logit_source": model_losses_hues})
+    make_plot("Different Logits Loss", data=losses, x="batch", y="loss", hue="logit_source")
+
+    model_acc = model.pre_logit_accuracy_hist + model.pooled_logit_accuracy_hist + model.logit_accuracy_hist + model.full_accuracy_hist
+    x = list(range(len(model.pre_logit_accuracy_hist)))
+    model_acc_x = x + x + x + x
+    model_acc_hues = (["pre_logit"] * len(x)) + (["pooled_logit"] * len(x)) + (["logit"] * len(x)) + (["full"] * len(x))
+    acc = pd.DataFrame({"batch": model_acc_x, "accuracy": model_acc, "logit_source": model_acc_hues})
+    make_plot("Different Logits Accuracy", data=acc, x="batch", y="accuracy", hue="logit_source")
+
+    model_acc = model.vilbert_accuracy_hist + model.mmbt_region_accuracy_hist + model.visual_bert_accuracy_hist + model.lxmert_accuracy_hist
+    x = list(range(len(model.vilbert_accuracy_hist)))
+    model_acc_x = x + x + x + x
+    model_acc_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x))
+    acc = pd.DataFrame({"batch": model_acc_x, "accuracy": model_acc, "model": model_acc_hues})
+    make_plot("Different Models Accuracy", data=acc, x="batch", y="accuracy", hue="model")
+
+    # MLM model
+    if mlm_model is None:
+        return
+
+    # MLM model: Per model MLM accuracy and loss
+    # MLM model: Overall mlm, model, final loss
+    # MLM model: Overall mlm acc, model acc, final acc
+
+    model_losses = mlm_model.mlm_loss_hist[0] + mlm_model.mlm_loss_hist[1] + mlm_model.mlm_loss_hist[2] + mlm_model.mlm_loss_hist[3] + mlm_model.mlm_loss_hist[4]
+    x = list(range(len(mlm_model.mlm_loss_hist[0])))
+    model_losses_x = x + x + x + x + x
+    model_losses_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x)) + (["Combined"] * len(x))
+    losses = pd.DataFrame({"batch": model_losses_x, "mlm_loss": model_losses, "mlm_source": model_losses_hues})
+    make_plot("MLM Loss by model", data=losses, x="batch", y="mlm_loss", hue="mlm_source")
+
+    model_losses = mlm_model.mlm_accuracy_hist[0] + mlm_model.mlm_accuracy_hist[1] + mlm_model.mlm_accuracy_hist[2] + mlm_model.mlm_accuracy_hist[3] + mlm_model.mlm_accuracy_hist[4]
+    x = list(range(len(mlm_model.mlm_accuracy_hist[0])))
+    model_losses_x = x + x + x + x + x
+    model_losses_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x)) + (["Combined"] * len(x))
+    losses = pd.DataFrame({"batch": model_losses_x, "mlm_accuracy": model_losses, "mlm_source": model_losses_hues})
+    make_plot("MLM Accuracy by model", data=losses, x="batch", y="mlm_accuracy", hue="mlm_source")
+
+    model_losses = mlm_model.mlm_overall_loss_hist + mlm_model.model_loss_hist + mlm_model.overall_loss_hist
+    x = list(range(len(mlm_model.overall_loss_hist)))
+    model_losses_x = x + x + x
+    model_losses_hues = (["MLM"] * len(x)) + (["Model"] * len(x)) + (["Total"] * len(x))
+    losses = pd.DataFrame({"batch": model_losses_x, "Losses": model_losses, "Source": model_losses_hues})
+    make_plot("Overall Losses", data=losses, x="batch", y="Losses", hue="Source")
+
+    model_losses = mlm_model.mlm_overall_accuracy_hist + mlm_model.model_accuracy_hist + mlm_model.target_accuracy_hist
+    x = list(range(len(mlm_model.overall_loss_hist)))
+    model_losses_x = x + x + x
+    model_losses_hues = (["MLM"] * len(x)) + (["Model"] * len(x)) + (["Total"] * len(x))
+    losses = pd.DataFrame({"batch": model_losses_x, "Accuracy": model_losses, "Source": model_losses_hues})
+    make_plot("Overall Accuracy", data=losses, x="batch", y="Accuracy", hue="Source")
 
 
 
