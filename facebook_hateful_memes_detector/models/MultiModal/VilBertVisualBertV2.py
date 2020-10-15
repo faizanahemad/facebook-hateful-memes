@@ -1119,7 +1119,7 @@ def make_plots(model: VilBertVisualBertModelV2, mlm_model: MLMOnlyV2, logy=False
                 return df
 
             data = data.groupby([hue], group_keys=False).apply(agg_fn)
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 10))
         sns.lineplot(data=data, x=x, y=y, hue=hue)
         plt.title(title)
         if logy:
