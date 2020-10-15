@@ -2,7 +2,7 @@ import gc
 import os
 import sys
 from collections import defaultdict, Counter
-from random import random
+from random import random, shuffle
 from time import sleep
 from typing import List, Callable
 
@@ -21,10 +21,19 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{DIR}/vqa-maskrcnn-benchmark')
 
 
-def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, cache_allow_writes=True, retries=5) -> Callable:
+def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None,
+                          cache_dirs=None, cache_allow_writes=True, retries=2) -> Callable:
     wait_time = 0.25
     random_time = 0.25
-    cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
+
+    try:
+        cache_dirs = get_global("cache_dirs") if cache_dirs is None else cache_dirs
+    except:
+        if cache_dirs is None:
+            cache_dir = get_global("cache_dir") if cache_dir is None else cache_dir
+            cache_dirs = [cache_dir]
+
+
     try:
         cache_allow_writes = get_global("cache_allow_writes")
     except:
@@ -35,6 +44,9 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
     except:
         cache_stats = defaultdict(Counter)
         set_global("cache_stats", cache_stats)
+
+    cache_stats["count_cache_dirs"] = len(set(cache_dirs))
+    cache_stats["cache_dirs"] = set(cache_dirs)
 
     from diskcache import Cache
     import joblib
@@ -49,6 +61,8 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
             os.mkdir(cache_dir)
     args = dict(eviction_policy='none', sqlite_cache_size=2 ** 16, sqlite_mmap_size=2 ** 28, disk_min_file_size=2 ** 18)
     cache = Cache(cache_dir, **args)
+    caches = [Cache(cd, **args) for cd in cache_dirs]
+    shuffle(caches)
     try:
         import inspect
         fnh = joblib.hashing.hash(name, 'sha1') + joblib.hashing.hash(inspect.getsourcelines(fn)[0], 'sha1') + joblib.hashing.hash(fn.__name__, 'sha1')
@@ -65,22 +79,43 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
         return hsh
 
     def read_hash(hsh):
+        kes = [0] * len(caches)
         for retry in range(retries):
-            try:
-                r = cache[hsh]
-                cache_stats[name]["hit"] += 1
-                return r
-            except KeyError as ke:
-                cache_stats[name]["key_error"] += 1
-                sleep(wait_time + random() * random_time)
-                return "ke"
-            except Exception as e:
-                sleep(wait_time * (retry + 1) + random() * random_time)
-                cache_stats[name]["read_exception"] += 1
-                cache_stats[name]["read_retries"] += 1
+            for cidx, cache in enumerate(caches):
+                if kes[cidx] == 1:
+                    continue
+                try:
+                    r = cache[hsh]
+                    cache_stats[name]["hit"] += 1
+                    return r
+                except KeyError:
+                    cache_stats[name]["key_error"] += 1
+                    kes[cidx] = 1
+                except Exception as e:
+                    cache_stats[name]["read_exception"] += 1
+                    cache_stats[name]["read_retries"] += 1
+                    sleep(wait_time * (retry + 1) + random() * random_time)
+            sleep(wait_time * (retry + 1) + random() * random_time)
         cache_stats[name]["read-return-none"] += 1
+        if sum(kes) >= 1:
+            return "ke", kes
         return None
 
+    def write_hsh(hsh, r, kes):
+        if cache_allow_writes:
+            for retry in range(retries):
+                for cidx, cache in enumerate(caches):
+                    if kes[cidx] != 1:
+                        continue
+                    try:
+                        cache[hsh] = r
+                        cache_stats[name]["writes"] += 1
+                        return r
+                    except:
+                        cache_stats[name]["write_exception"] += 1
+                        sleep(wait_time * (retry + 1) + random() * random_time)
+                        cache_stats[name]["write_retries"] += 1
+                sleep(wait_time * (retry + 1) + random() * random_time)
 
     def cfn(*args, **kwargs):
         ignore_cache = kwargs.pop("ignore_cache", False)
@@ -92,28 +127,19 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None, ca
         cache_stats[name]["called"] += 1
 
         r = read_hash(hsh)
-        if r is not None and r != "ke":
-            return r
+        if r is not None:
+            if not isinstance(r, tuple) or (isinstance(r, tuple) and r[0] != "ke"):
+                return r
 
         if r is None:
             r = fn(*args, **kwargs)
             cache_stats[name]["re-compute"] += 1
             cache_stats[name]["re-compute-cache-busy-no-write"] += 1
             return r
-
+        kes = r[1]
         r = fn(*args, **kwargs)  # r is not None and there was key-error so we need to calculate the key and put in cache
-        cache_stats[name]["re-compute"] += 1
-        if cache_allow_writes:
-            for retry in range(retries * 2):
-                try:
-                    sleep(wait_time + random() * random_time)
-                    cache[hsh] = r
-                    cache_stats[name]["writes"] += 1
-                    return r
-                except:
-                    cache_stats[name]["write_exception"] += 1
-                    sleep(wait_time * (retry + 1) + random() * random_time)
-                    cache_stats[name]["write_retries"] += 1
+        cache_stats[name]["compute"] += 1
+        write_hsh(hsh, r, kes)
         return r
 
     return cfn

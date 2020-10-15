@@ -562,7 +562,6 @@ class VilBertVisualBertModelV2(nn.Module):
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList, device=get_device())
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
-        sample_weights = sampleList.sample_weight
         views = [sampleList] + [t(sampleList) for t in self.view_transforms]
         pre_logits, pooled_logits, pooled_outputs, sequence_outputs = [], [], [], []
         for view in views:
