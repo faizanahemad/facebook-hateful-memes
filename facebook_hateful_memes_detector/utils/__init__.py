@@ -1367,8 +1367,8 @@ class BertLMPredictionHead(nn.Module):
         masked_lm_loss = 0.0
         if self.training:
             masked_lm_loss = self.loss_fct(hidden_states, input_ids)
-            # attention_mask = attention_mask.view(-1)
-            # masked_lm_loss = attention_mask * masked_lm_loss
+            attention_mask = attention_mask.view(-1)
+            masked_lm_loss = attention_mask * masked_lm_loss
             masked_lm_loss = masked_lm_loss.mean()
 
         predictions = hidden_states.max(dim=1).indices

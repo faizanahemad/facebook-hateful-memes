@@ -1,4 +1,5 @@
 import operator
+import os
 import time
 from collections import defaultdict
 
@@ -67,6 +68,8 @@ class VilBertVisualBertModelV2(nn.Module):
         self.bbox_copies = kwargs.pop("bbox_copies", 0)
         self.bbox_deletes = kwargs.pop("bbox_deletes", 0)
         self.bbox_gaussian_noise = GaussianNoise(kwargs.pop("bbox_gaussian_noise", 0.0))
+        self.bbox_dropout = nn.Dropout(kwargs.pop("bbox_dropout", 0.0))
+        self.bbox_feature_dropout = FeatureDropout(kwargs.pop("bbox_feature_dropout", 0.0))
         self.view_transforms = kwargs.pop("view_transforms", list())
         self.view_loss_weight = kwargs.pop("view_loss_weight", 0.1)
 
@@ -182,24 +185,29 @@ class VilBertVisualBertModelV2(nn.Module):
         samples = [Sample(dict(feats=pad_tensor(feats, 36),
                                boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
                                masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
-        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_deletes, self.bbox_gaussian_noise, "lxmert") for s in samples]
+        samples = [self.bbox_aug(s, "lxmert") for s in samples]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
         sl.segment_ids = textSampleList.segment_ids
         return sl
 
-    def bbox_aug(self, sample, swaps=0, copies=0, deletes=0, gaussian_noise=identity,
+    def bbox_aug(self, sample,
                  extractor_type="vilbert_visual_bert"):
 
         # TODO: Do manual inspection
         if not self.training:
             return sample
+        swaps = self.bbox_swaps
+        copies = self.bbox_copies
+        deletes = self.bbox_deletes
         if extractor_type == "vilbert_visual_bert":
-            imf = gaussian_noise(sample["image_feature_0"])
+            imf = self.bbox_gaussian_noise(sample["image_feature_0"])
+            imf = self.bbox_dropout(imf)
+            imf = self.bbox_feature_dropout(imf)
             imi = sample["image_info_0"]
-            bbox = gaussian_noise(imi["bbox"])
-            cls_prob = gaussian_noise(imi["cls_prob"])
+            bbox = self.bbox_gaussian_noise(imi["bbox"])
+            cls_prob = self.bbox_gaussian_noise(imi["cls_prob"])
             changes = [imf, bbox, cls_prob]
 
             for i in range(swaps):
@@ -220,10 +228,16 @@ class VilBertVisualBertModelV2(nn.Module):
                     v[copi[0]] = v[copi[1]]
 
         elif extractor_type == "lxmert":
+            for k, v in sample.items():
+                if k == "feats" or k == "boxes":
+                    v = self.bbox_gaussian_noise(v)
+                    if k == "feats":
+                        v = self.bbox_dropout(v)
+                        v = self.bbox_feature_dropout(v)
+                    sample[k] = v
             for i in range(swaps):
                 swap = random.sample(range(36), 2)
                 for k, v in sample.items():
-                    v = gaussian_noise(v)
                     t = v[swap[1]]
                     v[swap[1]] = v[swap[0]]
                     v[swap[0]] = t
@@ -248,7 +262,7 @@ class VilBertVisualBertModelV2(nn.Module):
         # Copy one bbox to another and erase the 2nd one entirely
         imgfs = [self.get_img_details(im, ignore_cache=ignore_cache) for im, ignore_cache in zip(orig_image, mixup)]
         samples = [Sample(dict(image_feature_0=feat_list, image_info_0=info_list)) for feat_list, info_list in imgfs]
-        samples = [self.bbox_aug(s, self.bbox_swaps, self.bbox_copies, self.bbox_deletes, self.bbox_gaussian_noise, "vilbert_visual_bert") for s in samples]
+        samples = [self.bbox_aug(s, "vilbert_visual_bert") for s in samples]
         sl = SampleList(samples)
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
@@ -970,8 +984,23 @@ class MLMOnlyV2(MLMPretraining):
     def __init__(self, model: VilBertVisualBertModelV2, dropout,
                  label_to_word: dict,
                  augment_1: Callable,
-                 mlm_loss_weight=0.01, low_memory=False):
+                 mlm_loss_weight=0.01,
+                 add_caption=False,
+                 add_detected_objects=False,
+                 add_before=True,
+                 caption_object_file=None,
+                 low_memory=False):
         super(MLMOnlyV2, self).__init__(model, None, 768, "relu", 0, True)
+        self.add_caption = add_caption
+        self.add_detected_objects = add_detected_objects
+        self.add_before = add_before
+        if caption_object_file is not None and (add_caption or add_detected_objects):
+            assert os.path.exists(caption_object_file)
+            import pandas as pd
+            df = pd.read_csv(caption_object_file)
+            id2_caption_objects = {row["id"]: dict(row) for r_id, row in df.iterrows()}
+            self.id2_caption_objects = id2_caption_objects
+
         hidden_size = 768
         mlm_hidden_size = 128
         self.aug_1 = augment_1
@@ -984,10 +1013,11 @@ class MLMOnlyV2(MLMPretraining):
         self.label_not_present = -1  # If label not present then we will mask.
 
         n_tokens_in = model.max_seq_length
+        self.n_tokens_in = n_tokens_in
         tokenizer = model.text_processor._tokenizer
         self.mask_token = self.model.text_processor._tokenizer.mask_token
+        self.sep_token = self.model.text_processor._tokenizer.sep_token
         self.tokenizer = tokenizer
-        self.n_tokens_in = n_tokens_in
         self.mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
 
         self.mlm_transforms = nn.ModuleList()
@@ -1044,13 +1074,28 @@ class MLMOnlyV2(MLMPretraining):
         sampleList["text"] = texts
         return sampleList
 
-    def forward(self, x):
-        x1 = self.aug_1(x.copy()) if self.aug_1 is not None else x
-        x1 = self.add_label(x1)
-        input_ids_1, attention_mask_1 = self.tokenise(x1["text"])
-        # "[SEP]"
+    def add_objects_caption(self, sampleList):
+        id2text = list(zip(sampleList["id"], sampleList["text"]))
+        final_texts = sampleList["text"]
+        if self.add_caption:
+            final_texts = [text + f" {self.sep_token} " + self.id2_caption_objects[t_id]["caption"] for t_id, text in id2text]
+        if self.add_detected_objects:
+            final_texts = [text + f" {self.sep_token} " + self.id2_caption_objects[t_id]["objects"] for t_id, text in id2text]
+        sampleList["text"] = final_texts
+        return sampleList
 
+    def forward(self, x):
+        x1 = x
+        x1 = self.add_label(x1)
+        if self.add_before:
+            x1 = self.add_objects_caption(x1)
+
+        # "[SEP]"
+        x = x1
         x1 = self.model(x1)
+        if not self.add_before:
+            x = self.add_objects_caption(x)
+        input_ids_1, attention_mask_1 = self.tokenise(x["text"])
 
         seq1 = x1[2]
         pool1 = x1[1]
