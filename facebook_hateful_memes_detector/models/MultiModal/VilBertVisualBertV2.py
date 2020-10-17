@@ -64,6 +64,9 @@ class VilBertVisualBertModelV2(nn.Module):
         model_name = [model_name] if type(model_name) == str else model_name
         self.model_regularizers = nn.ModuleDict()
         self.model_heads = nn.ModuleDict()
+
+        self.devices = defaultdict(lambda x: get_device(), kwargs.pop("devices", dict()))
+
         self.bbox_swaps = kwargs.pop("bbox_swaps", 0)
         self.bbox_copies = kwargs.pop("bbox_copies", 0)
         self.bbox_deletes = kwargs.pop("bbox_deletes", 0)
@@ -90,7 +93,9 @@ class VilBertVisualBertModelV2(nn.Module):
             dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
             fdp = FeatureDropout(v["feature_dropout"] if "feature_dropout" in v else 0.0)
             gn = GaussianNoise(v["gaussian_noise"] if "gaussian_noise" in v else 0.0)
-            self.model_regularizers[k] = nn.Sequential(fdp, gn, dp)
+            regs = nn.Sequential(fdp, gn, dp)
+            regs = regs.to(self.devices[k])
+            self.model_regularizers[k] = regs
 
         self.model_name = model_name
         self.vilbert = get_vilbert(get_device())
@@ -100,6 +105,8 @@ class VilBertVisualBertModelV2(nn.Module):
         lin = nn.Linear(1024, num_classes)
         init_fc(lin, "linear")
         self.model_heads["vilbert"] = lin
+        self.vilbert = self.vilbert.to(self.devices["vilbert"])
+        self.model_heads["vilbert"] = self.model_heads["vilbert"].to(self.devices["vilbert"])
 
         self.visual_bert = get_visual_bert(get_device())
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
@@ -108,6 +115,8 @@ class VilBertVisualBertModelV2(nn.Module):
         lin = nn.Linear(768, num_classes)
         init_fc(lin, "linear")
         self.model_heads["visual_bert"] = lin
+        self.visual_bert = self.visual_bert.to(self.devices["visual_bert"])
+        self.model_heads["visual_bert"] = self.model_heads["visual_bert"].to(self.devices["visual_bert"])
 
         self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
@@ -117,6 +126,8 @@ class VilBertVisualBertModelV2(nn.Module):
         lin = nn.Linear(768, num_classes)
         init_fc(lin, "linear")
         self.model_heads["lxmert"] = lin
+        self.lxmert = self.lxmert.to(self.devices["lxmert"])
+        self.model_heads["lxmert"] = self.model_heads["lxmert"].to(self.devices["lxmert"])
 
 
         self.mmbt_region = get_mmbt_region(get_device())
@@ -126,6 +137,8 @@ class VilBertVisualBertModelV2(nn.Module):
         lin = nn.Linear(768, num_classes)
         init_fc(lin, "linear")
         self.model_heads["mmbt_region"] = lin
+        self.mmbt_region = self.mmbt_region.to(self.devices["mmbt_region"])
+        self.model_heads["mmbt_region"] = self.model_heads["mmbt_region"].to(self.devices["mmbt_region"])
 
         if len(set(model_name.keys()) - {"vilbert", "visual_bert", "lxmert", "mmbt_region"}) > 0:
             raise NotImplementedError()
@@ -144,6 +157,7 @@ class VilBertVisualBertModelV2(nn.Module):
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
         self.one_view_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
+        self.one_view_layer = self.one_view_layer.to(self.devices["main"])
 
         self.pooled_dims = pooled_dims * (len(self.view_transforms) + 1)
         lin0 = nn.Linear(self.pooled_dims, pooled_dims)
@@ -158,8 +172,11 @@ class VilBertVisualBertModelV2(nn.Module):
         self.final_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
                                          lin01, nn.LeakyReLU(), dp,
                                          lin1, nn.LeakyReLU(), lin)
+        self.final_layer = self.final_layer.to(self.devices["main"])
+
         uda = kwargs.pop("uda", False)
         self.loss = get_loss_by_task(loss, num_classes if uda else None)
+        self.loss = self.loss.to(self.devices["main"])
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.word_masking = WordMasking(tokenizer=self.text_processor._tokenizer, **kwargs)
@@ -179,7 +196,7 @@ class VilBertVisualBertModelV2(nn.Module):
         return texts
 
     def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
-        imgfs = [self.get_lxmert_details(im, ignore_cache=False) for im, ignore_cache in orig_image]
+        imgfs = [self.get_lxmert_details(im, ignore_cache=False) for im in orig_image]
         samples = [Sample(dict(feats=pad_tensor(feats, 36),
                                boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
                                masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
@@ -188,6 +205,7 @@ class VilBertVisualBertModelV2(nn.Module):
         sl.input_ids = textSampleList.input_ids
         sl.input_mask = textSampleList.input_mask
         sl.segment_ids = textSampleList.segment_ids
+        sl = sl.to(self.devices["lxmert"])
         return sl
 
     def bbox_aug(self, sample,
@@ -255,10 +273,10 @@ class VilBertVisualBertModelV2(nn.Module):
             raise NotImplementedError
         return sample
 
-    def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList, mixup: List[bool]):
+    def build_vilbert_visual_bert_sample_list(self, orig_image, textSampleList: SampleList):
         # Rank swap higher and lower ranked boxes+features
         # Copy one bbox to another and erase the 2nd one entirely
-        imgfs = [self.get_img_details(im, ignore_cache=ignore_cache) for im, ignore_cache in zip(orig_image, mixup)]
+        imgfs = [self.get_img_details(im, ignore_cache=False) for im in orig_image]
         samples = [Sample(dict(image_feature_0=feat_list, image_info_0=info_list)) for feat_list, info_list in imgfs]
         samples = [self.bbox_aug(s, "vilbert_visual_bert") for s in samples]
         sl = SampleList(samples)
@@ -335,6 +353,7 @@ class VilBertVisualBertModelV2(nn.Module):
         return params
 
     def vilbert_processor(self, sample_list: SampleList):
+        sample_list = sample_list.to(self.devices["vilbert"])
         params = self.__vilbert_preprocessing__(sample_list)
         clean_memory()
         # GPUtil.showUtilization()
@@ -444,6 +463,7 @@ class VilBertVisualBertModelV2(nn.Module):
         return output_dict
 
     def visual_bert_forward(self, sl: SampleList):
+        sl = sl.to(self.devices["visual_bert"])
         params = self.__visual_bert_preprocessing__(sl)
         del sl
         out = self.visual_bert_processor(params)
@@ -471,7 +491,7 @@ class VilBertVisualBertModelV2(nn.Module):
         return dict(seq=seq, pooled=pooled, logits=logits)
 
     def mmbt_region_forward(self, sl: SampleList):
-        sl = sl.to(get_device())
+        sl = sl.to(self.devices["mmbt_region"])
         sl.image_feature_0 = sl.image_feature_0.type(torch.float)
         module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
@@ -504,14 +524,13 @@ class VilBertVisualBertModelV2(nn.Module):
         sequence_output = []
         logit = []
 
-        sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList, mixup)
+        sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList)
 
         out = self.vilbert_processor(sl)
         seq = out["sequence_output"]
-        sequence_output.append(seq)
-        pool = out["pooled_output"]
-        pooled_output.append(pool)
-        logit.append(out["logits"])
+        sequence_output.append(seq.to(self.devices["main"]))
+        pooled_output.append(out["pooled_output"].to(self.devices["main"]))
+        logit.append(out["logits"].to(self.devices["main"]))
 
         predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
         predicted_labels = predicted_labels[indices]
@@ -520,9 +539,9 @@ class VilBertVisualBertModelV2(nn.Module):
 
         out = self.mmbt_region_forward(sl)
         seq, pool = out["sequence_output"], out["pooled_output"]
-        logit.append(out["logits"])
-        sequence_output.append(seq)
-        pooled_output.append(pool)
+        logit.append(out["logits"].to(self.devices["main"]))
+        sequence_output.append(seq.to(self.devices["main"]))
+        pooled_output.append(pool.to(self.devices["main"]))
 
         predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
         predicted_labels = predicted_labels[indices]
@@ -531,9 +550,9 @@ class VilBertVisualBertModelV2(nn.Module):
 
         out = self.visual_bert_forward(sl)
         seq, pool = out["sequence_output"], out["pooled_output"]
-        logit.append(out["logits"])
-        sequence_output.append(seq)
-        pooled_output.append(pool)
+        logit.append(out["logits"].to(self.devices["main"]))
+        sequence_output.append(seq.to(self.devices["main"]))
+        pooled_output.append(pool.to(self.devices["main"]))
 
         predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
         predicted_labels = predicted_labels[indices]
@@ -542,9 +561,9 @@ class VilBertVisualBertModelV2(nn.Module):
 
         out = self.lxmert_forward(image, textSampleList)
         seq, pool = out["seq"], out["pooled"]
-        logit.append(out["logits"])
-        pooled_output.append(pool)
-        sequence_output.append(seq)
+        logit.append(out["logits"].to(self.devices["main"]))
+        pooled_output.append(pool.to(self.devices["main"]))
+        sequence_output.append(seq.to(self.devices["main"]))
 
         predicted_labels = np.array(out["logits"].max(dim=1).indices.tolist())
         predicted_labels = predicted_labels[indices]
@@ -566,8 +585,8 @@ class VilBertVisualBertModelV2(nn.Module):
         return logits, pooled_logits, pooled_output, sequence_output
 
     def forward(self, sampleList: SampleList):
-        sampleList = dict2sampleList(sampleList, device=get_device())
-        labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
+        sampleList = dict2sampleList(sampleList)
+        labels = torch.tensor(sampleList.label, dtype=float).to(self.devices["main"])
         views = [sampleList] + [t(sampleList) for t in self.view_transforms]
         pre_logits, pooled_logits, pooled_outputs, sequence_outputs = [], [], [], []
         for view in views:
@@ -1007,14 +1026,16 @@ class MLMOnlyV2(MLMPretraining):
         self.sep_token = self.model.text_processor._tokenizer.sep_token
         self.tokenizer = tokenizer
         self.mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
-
+        self.mlm = self.mlm.to(get_device())
         self.mlm_transforms = nn.ModuleList()
         for i in range(5):
             fc = nn.Linear(hidden_size, mlm_hidden_size)
             init_fc(fc, "linear")
             self.mlm_transforms.append(fc)
+        self.mlm_transforms = self.mlm_transforms.to(get_device())
 
         self.loss = nn.CrossEntropyLoss()
+        self.loss = self.loss.to(get_device())
         self.mlm_accuracy_hist = defaultdict(list)
         self.mlm_loss_hist = defaultdict(list)
 
