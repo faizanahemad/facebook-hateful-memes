@@ -65,7 +65,7 @@ class VilBertVisualBertModelV2(nn.Module):
         self.model_regularizers = nn.ModuleDict()
         self.model_heads = nn.ModuleDict()
 
-        self.devices = defaultdict(lambda x: get_device(), kwargs.pop("devices", dict()))
+        self.devices = defaultdict(lambda: get_device(), kwargs.pop("devices", dict()))
 
         self.bbox_swaps = kwargs.pop("bbox_swaps", 0)
         self.bbox_copies = kwargs.pop("bbox_copies", 0)
