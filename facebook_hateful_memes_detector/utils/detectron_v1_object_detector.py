@@ -60,7 +60,6 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None,
         else:
             os.mkdir(cache_dir)
     args = dict(eviction_policy='none', sqlite_cache_size=2 ** 16, sqlite_mmap_size=2 ** 28, disk_min_file_size=2 ** 18)
-    cache = Cache(cache_dir, **args)
     caches = [Cache(cd, **args) for cd in cache_dirs]
     shuffle(caches)
     try:

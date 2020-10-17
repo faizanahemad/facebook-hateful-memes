@@ -178,8 +178,8 @@ class VilBertVisualBertModelV2(nn.Module):
             texts[k] = texts[k].to(get_device())
         return texts
 
-    def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList, mixup: List[bool]):
-        imgfs = [self.get_lxmert_details(im, ignore_cache=ignore_cache) for im, ignore_cache in zip(orig_image, mixup)]
+    def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
+        imgfs = [self.get_lxmert_details(im, ignore_cache=False) for im, ignore_cache in orig_image]
         samples = [Sample(dict(feats=pad_tensor(feats, 36),
                                boxes=pad_tensor(boxes.pred_boxes.tensor, 36),
                                masks=torch.tensor(([1] * len(feats)) + ([0] * (36 - len(feats)))).long())) for boxes, feats in imgfs]
@@ -334,7 +334,7 @@ class VilBertVisualBertModelV2(nn.Module):
         params = {k: v.to(get_device()) if type(v) == torch.Tensor else v for k, v in params.items()}
         return params
 
-    def vilbert_processor(self, sample_list: SampleList, labels):
+    def vilbert_processor(self, sample_list: SampleList):
         params = self.__vilbert_preprocessing__(sample_list)
         clean_memory()
         # GPUtil.showUtilization()
@@ -443,7 +443,7 @@ class VilBertVisualBertModelV2(nn.Module):
         del params
         return output_dict
 
-    def visual_bert_forward(self, sl: SampleList, labels):
+    def visual_bert_forward(self, sl: SampleList):
         params = self.__visual_bert_preprocessing__(sl)
         del sl
         out = self.visual_bert_processor(params)
@@ -455,8 +455,8 @@ class VilBertVisualBertModelV2(nn.Module):
         out["logits"] = logits
         return out
 
-    def lxmert_forward(self, orig_image, textSampleList, labels, mixup: List[bool]):
-        lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList, mixup)
+    def lxmert_forward(self, orig_image, textSampleList):
+        lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
         for k, v in lx_sl.items():
             if type(v) == torch.Tensor:
                 lx_sl[k] = v.to(get_device())
@@ -470,14 +470,13 @@ class VilBertVisualBertModelV2(nn.Module):
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         return dict(seq=seq, pooled=pooled, logits=logits)
 
-    def mmbt_region_forward(self, sl: SampleList, labels):
+    def mmbt_region_forward(self, sl: SampleList):
         sl = sl.to(get_device())
         sl.image_feature_0 = sl.image_feature_0.type(torch.float)
         module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
         output = {}
         seq = self.model_regularizers["mmbt_region"](module_output[0]) if "mmbt_region" in self.model_regularizers else seq
-        pooled_output = self.model_regularizers["mmbt_region"](pooled_output) if "mmbt_region" in self.model_regularizers else pooled_output
         output["sequence_output"] = seq
         output["pooled_output"] = pooled_output
         logits = self.model_heads["mmbt_region"](pooled_output)
@@ -507,7 +506,7 @@ class VilBertVisualBertModelV2(nn.Module):
 
         sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList, mixup)
 
-        out = self.vilbert_processor(sl, labels)
+        out = self.vilbert_processor(sl)
         seq = out["sequence_output"]
         sequence_output.append(seq)
         pool = out["pooled_output"]
@@ -519,7 +518,7 @@ class VilBertVisualBertModelV2(nn.Module):
         accuracy = accuracy_score(actual_labels, predicted_labels)
         self.vilbert_accuracy_hist.append(accuracy)
 
-        out = self.mmbt_region_forward(sl, labels)
+        out = self.mmbt_region_forward(sl)
         seq, pool = out["sequence_output"], out["pooled_output"]
         logit.append(out["logits"])
         sequence_output.append(seq)
@@ -530,7 +529,7 @@ class VilBertVisualBertModelV2(nn.Module):
         accuracy = accuracy_score(actual_labels, predicted_labels)
         self.mmbt_region_accuracy_hist.append(accuracy)
 
-        out = self.visual_bert_forward(sl, labels)
+        out = self.visual_bert_forward(sl)
         seq, pool = out["sequence_output"], out["pooled_output"]
         logit.append(out["logits"])
         sequence_output.append(seq)
@@ -541,7 +540,7 @@ class VilBertVisualBertModelV2(nn.Module):
         accuracy = accuracy_score(actual_labels, predicted_labels)
         self.visual_bert_accuracy_hist.append(accuracy)
 
-        out = self.lxmert_forward(image, textSampleList, labels, mixup)
+        out = self.lxmert_forward(image, textSampleList)
         seq, pool = out["seq"], out["pooled"]
         logit.append(out["logits"])
         pooled_output.append(pool)
@@ -1177,9 +1176,9 @@ def make_plots(model: VilBertVisualBertModelV2, mlm_model: MLMOnlyV2, logy=False
     make_plot("Different Logits Accuracy", data=acc, x="batch", y="accuracy", hue="logit_source")
 
     model_acc = model.vilbert_accuracy_hist + model.mmbt_region_accuracy_hist + model.visual_bert_accuracy_hist + model.lxmert_accuracy_hist
-    x = list(range(len(model.vilbert_accuracy_hist)))
-    model_acc_x = x + x + x + x
-    model_acc_hues = (["vilbert"] * len(x)) + (["mmbt_region"] * len(x)) + (["visual_bert"] * len(x)) + (["lxmert"] * len(x))
+    x = list(range(len(model.vilbert_accuracy_hist))) + list(range(len(model.mmbt_region_accuracy_hist))) + list(range(len(model.visual_bert_accuracy_hist))) + list(range(len(model.lxmert_accuracy_hist)))
+    model_acc_x = x
+    model_acc_hues = (["vilbert"] * len(model.vilbert_accuracy_hist)) + (["mmbt_region"] * len(model.mmbt_region_accuracy_hist)) + (["visual_bert"] * len(model.visual_bert_accuracy_hist)) + (["lxmert"] * len(model.lxmert_accuracy_hist))
     acc = pd.DataFrame({"batch": model_acc_x, "accuracy": model_acc, "model": model_acc_hues})
     make_plot("Different Models Accuracy", data=acc, x="batch", y="accuracy", hue="model")
 
