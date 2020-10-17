@@ -73,9 +73,6 @@ class VilBertVisualBertModelV2(nn.Module):
         self.view_transforms = kwargs.pop("view_transforms", list())
         self.view_loss_weight = kwargs.pop("view_loss_weight", 0.1)
 
-        self.logit_loss_hist = list()
-        self.pre_logit_loss_hist = list()
-        self.pooled_logit_loss_hist = list()
         self.full_loss_hist = list()
         self.view_loss_hist = list()
 
@@ -90,9 +87,10 @@ class VilBertVisualBertModelV2(nn.Module):
         self.pooled_logit_accuracy_hist = list()
         assert type(model_name) == dict
         for k, v in model_name.items():
-            dp = FeatureDropout(v["dropout"] if "dropout" in v else 0.0)
+            dp = nn.Dropout(v["dropout"] if "dropout" in v else 0.0)
+            fdp = FeatureDropout(v["feature_dropout"] if "feature_dropout" in v else 0.0)
             gn = GaussianNoise(v["gaussian_noise"] if "gaussian_noise" in v else 0.0)
-            self.model_regularizers[k] = nn.Sequential(dp, gn)
+            self.model_regularizers[k] = nn.Sequential(fdp, gn, dp)
 
         self.model_name = model_name
         self.vilbert = get_vilbert(get_device())
@@ -365,13 +363,14 @@ class VilBertVisualBertModelV2(nn.Module):
             pooled_output = self.vilbert.model.dropout(pooled_output_t * pooled_output_v)
         else:
             raise AssertionError
+        pooled_output = self.model_regularizers["vilbert"](pooled_output) if "vilbert" in self.model_regularizers else pooled_output
+        sequence_output_v = sequence_output_v[:, :, :sequence_output_t.size(-1)]
+        seq = torch.cat([sequence_output_v, sequence_output_t], 1)
+        seq = self.model_regularizers["vilbert"](seq) if "vilbert" in self.model_regularizers else seq
 
         logits = self.model_heads["vilbert"](pooled_output)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
-        output = dict(sequence_output_t=sequence_output_t,
-                      sequence_output_v=sequence_output_v,
-                      pooled_output_t=pooled_output_t,
-                      pooled_output_v=pooled_output_v,
+        output = dict(sequence_output=seq,
                       pooled_output=pooled_output,
                       logits=logits)
         return output
@@ -443,14 +442,15 @@ class VilBertVisualBertModelV2(nn.Module):
         output_dict["sequence_output"] = sequence_output
         output_dict["pooled_output"] = pooled_output
         del params
-        clean_memory()
         return output_dict
 
     def visual_bert_forward(self, sl: SampleList, labels):
         params = self.__visual_bert_preprocessing__(sl)
         del sl
-        clean_memory()
         out = self.visual_bert_processor(params)
+        out["sequence_output"] = self.model_regularizers["visual_bert"](out["sequence_output"]) if "visual_bert" in self.model_regularizers else out["sequence_output"]
+        out["pooled_output"] = self.model_regularizers["visual_bert"](out["pooled_output"]) if "visual_bert" in self.model_regularizers else out["pooled_output"]
+
         logits = self.model_heads["visual_bert"](out["pooled_output"])
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         out["logits"] = logits
@@ -464,10 +464,12 @@ class VilBertVisualBertModelV2(nn.Module):
         feat_seq, pooled = self.lxmert((lx_sl.input_ids, lx_sl.input_mask, lx_sl.segment_ids,), (lx_sl.feats, lx_sl.boxes), lx_sl.masks)
 
         del lx_sl
-        clean_memory()
+        seq = torch.cat(feat_seq, 1)
+        seq = self.model_regularizers["lxmert"](seq) if "lxmert" in self.model_regularizers else seq
+        pooled = self.model_regularizers["lxmert"](pooled) if "lxmert" in self.model_regularizers else pooled
         logits = self.model_heads["lxmert"](pooled)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
-        return dict(seq=torch.cat(feat_seq, 1), pooled=pooled, logits=logits)
+        return dict(seq=seq, pooled=pooled, logits=logits)
 
     def mmbt_region_forward(self, sl: SampleList, labels):
         sl = sl.to(get_device())
@@ -475,13 +477,14 @@ class VilBertVisualBertModelV2(nn.Module):
         module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
         output = {}
-        output["sequence_output"] = module_output[0]
+        seq = self.model_regularizers["mmbt_region"](module_output[0]) if "mmbt_region" in self.model_regularizers else seq
+        pooled_output = self.model_regularizers["mmbt_region"](pooled_output) if "mmbt_region" in self.model_regularizers else pooled_output
+        output["sequence_output"] = seq
         output["pooled_output"] = pooled_output
         logits = self.model_heads["mmbt_region"](pooled_output)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         output["logits"] = logits
         del sl
-        clean_memory()
         return output
 
     def get_vectors(self, sampleList: SampleList):
@@ -498,7 +501,6 @@ class VilBertVisualBertModelV2(nn.Module):
         textSampleList = self.get_tokens(texts)
         textSampleList.id = sampleList.id
         del sampleList
-        clean_memory()
         # GPUtil.showUtilization()
         pooled_output = []
         sequence_output = []
@@ -507,12 +509,9 @@ class VilBertVisualBertModelV2(nn.Module):
         sl = self.build_vilbert_visual_bert_sample_list(image, textSampleList, mixup)
 
         out = self.vilbert_processor(sl, labels)
-        out["sequence_output_v"] = out["sequence_output_v"][:, :, :out["sequence_output_t"].size(-1)]
-        seq = torch.cat([out["sequence_output_v"], out["sequence_output_t"]], 1)
-        seq = self.model_regularizers["vilbert"](seq) if "vilbert" in self.model_regularizers else seq
+        seq = out["sequence_output"]
         sequence_output.append(seq)
         pool = out["pooled_output"]
-        pool = self.model_regularizers["vilbert"](pool) if "vilbert" in self.model_regularizers else pool
         pooled_output.append(pool)
         logit.append(out["logits"])
 
@@ -523,8 +522,6 @@ class VilBertVisualBertModelV2(nn.Module):
 
         out = self.mmbt_region_forward(sl, labels)
         seq, pool = out["sequence_output"], out["pooled_output"]
-        seq = self.model_regularizers["mmbt_region"](seq) if "mmbt_region" in self.model_regularizers else seq
-        pool = self.model_regularizers["mmbt_region"](pool) if "mmbt_region" in self.model_regularizers else pool
         logit.append(out["logits"])
         sequence_output.append(seq)
         pooled_output.append(pool)
@@ -536,8 +533,6 @@ class VilBertVisualBertModelV2(nn.Module):
 
         out = self.visual_bert_forward(sl, labels)
         seq, pool = out["sequence_output"], out["pooled_output"]
-        seq = self.model_regularizers["visual_bert"](seq) if "visual_bert" in self.model_regularizers else seq
-        pool = self.model_regularizers["visual_bert"](pool) if "visual_bert" in self.model_regularizers else pool
         logit.append(out["logits"])
         sequence_output.append(seq)
         pooled_output.append(pool)
@@ -549,8 +544,6 @@ class VilBertVisualBertModelV2(nn.Module):
 
         out = self.lxmert_forward(image, textSampleList, labels, mixup)
         seq, pool = out["seq"], out["pooled"]
-        seq = self.model_regularizers["lxmert"](seq) if "lxmert" in self.model_regularizers else seq
-        pool = self.model_regularizers["lxmert"](pool) if "lxmert" in self.model_regularizers else pool
         logit.append(out["logits"])
         pooled_output.append(pool)
         sequence_output.append(seq)
@@ -561,6 +554,7 @@ class VilBertVisualBertModelV2(nn.Module):
         self.lxmert_accuracy_hist.append(accuracy)
 
         logits = torch.stack(logit).mean(0)
+        logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
 
         del image
         del textSampleList
@@ -585,11 +579,11 @@ class VilBertVisualBertModelV2(nn.Module):
             pooled_logits.append(pooled_logit)
             sequence_outputs.extend([seq[:, :self.n_tokens_out] for seq in sequence_output])
         del sampleList
-        clean_memory()
 
         pooled_outputs = torch.cat(pooled_outputs, 1)
         # sequence_outputs = torch.stack(sequence_outputs).mean(0)
         pre_logits = torch.stack(pre_logits).mean(0)
+        pre_logits = pre_logits / pre_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
 
         logits = self.final_layer(pooled_outputs)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
@@ -601,16 +595,12 @@ class VilBertVisualBertModelV2(nn.Module):
                 for pl2 in pooled_logits:
                     view_loss += (((pl1 - pl2) ** 2).mean())
         pooled_logits = torch.stack(pooled_logits).mean(0)
+        pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
+
         view_loss += (((logits - pre_logits)**2).mean())
+        view_loss += (((logits - pooled_logits) ** 2).mean())
         view_loss = self.view_loss_weight * view_loss
         self.view_loss_hist.append(view_loss.detach().cpu().item())
-
-        logits, loss1 = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
-        self.logit_loss_hist.append(loss1.detach().cpu().item())
-        pooled_logits, loss2 = loss_calculator(pooled_logits, labels if self.training else None, self.task, self.loss)
-        self.pooled_logit_loss_hist.append(loss2.cpu().detach().item())
-        pre_logits, loss3 = loss_calculator(pre_logits, labels if self.training else None, self.task, self.loss)
-        self.pre_logit_loss_hist.append(loss3.detach().cpu().item())
 
         actual_labels = np.array(labels.tolist())
         indices = actual_labels != self.label_not_present
@@ -1173,12 +1163,12 @@ def make_plots(model: VilBertVisualBertModelV2, mlm_model: MLMOnlyV2, logy=False
             plt.xlim(exclude_from_start, plt.xlim()[1])
         plt.show()
 
-    model_losses = model.pre_logit_loss_hist + model.pooled_logit_loss_hist + model.logit_loss_hist + model.full_loss_hist + model.view_loss_hist
-    x = list(range(len(model.pre_logit_loss_hist)))
-    model_losses_x = x + x + x + x + x
-    model_losses_hues = (["pre_logit"] * len(x)) + (["pooled_logit"] * len(x)) + (["logit"] * len(x)) + (["full"] * len(x)) + (["view"] * len(x))
-    losses = pd.DataFrame({"batch": model_losses_x, "loss": model_losses, "logit_source": model_losses_hues})
-    make_plot("Different Logits Loss", data=losses, x="batch", y="loss", hue="logit_source")
+    model_losses = model.full_loss_hist + model.view_loss_hist
+    x = list(range(len(model.full_loss_hist)))
+    model_losses_x = x + x
+    model_losses_hues = (["full"] * len(x)) + (["view"] * len(x))
+    losses = pd.DataFrame({"batch": model_losses_x, "loss": model_losses, "loss_source": model_losses_hues})
+    make_plot("Full Loss vs View Loss", data=losses, x="batch", y="loss", hue="loss_source")
 
     model_acc = model.pre_logit_accuracy_hist + model.pooled_logit_accuracy_hist + model.logit_accuracy_hist + model.full_accuracy_hist
     x = list(range(len(model.pre_logit_accuracy_hist)))
