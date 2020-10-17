@@ -363,7 +363,6 @@ class VilBertVisualBertModelV2(nn.Module):
             pooled_output = self.vilbert.model.dropout(pooled_output_t * pooled_output_v)
         else:
             raise AssertionError
-        pooled_output = self.model_regularizers["vilbert"](pooled_output) if "vilbert" in self.model_regularizers else pooled_output
         sequence_output_v = sequence_output_v[:, :, :sequence_output_t.size(-1)]
         seq = torch.cat([sequence_output_v, sequence_output_t], 1)
         seq = self.model_regularizers["vilbert"](seq) if "vilbert" in self.model_regularizers else seq
