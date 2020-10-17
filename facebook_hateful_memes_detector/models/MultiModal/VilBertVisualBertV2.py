@@ -493,6 +493,11 @@ class VilBertVisualBertModelV2(nn.Module):
     def mmbt_region_forward(self, sl: SampleList):
         sl = sl.to(self.devices["mmbt_region"])
         sl.image_feature_0 = sl.image_feature_0.type(torch.float).to(self.devices["mmbt_region"])
+        if next(self.mmbt_region.parameters()).device != self.devices["mmbt_region"]:
+            print("Correcting MMBT Device, Actual =", next(self.mmbt_region.parameters()).device, "Expected =", self.devices["mmbt_region"])
+            self.mmbt_region = self.mmbt_region.to(self.devices["mmbt_region"])
+            self.mmbt_region.bert = self.mmbt_region.bert.to(self.devices["mmbt_region"])
+
         module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
         output = {}
