@@ -293,9 +293,7 @@ class VilBertVisualBertModelV2(nn.Module):
 
         image_info = getattr(sample_list, "image_info_0", {})
         image_dim_variable = torch.tensor(getattr(image_info, "max_features", None))
-        image_dim_variable = image_dim_variable.to(get_device())
         image_feature_variable = getattr(sample_list, "image_feature_0", None)
-        image_feature_variable = image_feature_variable.to(get_device())
         image_label_variable = getattr(sample_list, "image_labels", None)
         if image_label_variable is not None:
             image_label_variable = torch.tensor(
@@ -329,7 +327,6 @@ class VilBertVisualBertModelV2(nn.Module):
         cls_prob = getattr(image_info, "cls_prob", None)
         image_target = np.array(cls_prob, dtype=np.float32)
         image_target_variable = torch.tensor(image_target, dtype=torch.float)
-        image_feature_variable = image_feature_variable.to(get_device())
         params = {"input_ids": bert_input_ids, "attention_mask": bert_input_mask, "token_type_ids": bert_input_type_ids, "image_dim": image_dim_variable,
                   "image_feature": image_feature_variable, "image_location": image_location_variable, "image_target": image_target_variable,
                   "image_label": image_label_variable, "masked_lm_labels": getattr(sample_list, "lm_label_ids", None)}
@@ -349,7 +346,7 @@ class VilBertVisualBertModelV2(nn.Module):
         params = {"input_ids": params["input_ids"], "image_feature": params["image_feature"], "image_location": params["image_location"],
                   "token_type_ids": params["token_type_ids"], "attention_mask": params["attention_mask"], "image_attention_mask": params["image_attention_mask"]}
         clean_memory()
-        params = {k: v.to(get_device()) if type(v) == torch.Tensor else v for k, v in params.items()}
+        params = {k: v.to(self.devices["vilbert"]) if type(v) == torch.Tensor else v for k, v in params.items()}
         return params
 
     def vilbert_processor(self, sample_list: SampleList):
@@ -399,9 +396,9 @@ class VilBertVisualBertModelV2(nn.Module):
         bert_input_type_ids = sample_list.segment_ids
         image_info = getattr(sample_list, "image_info_0", {})
         image_dim_variable = torch.tensor(getattr(image_info, "max_features", None))
-        image_dim_variable = image_dim_variable.to(get_device())
+        image_dim_variable = image_dim_variable
         image_feat_variable = getattr(sample_list, "image_feature_0", None)
-        image_feat_variable = image_feat_variable.to(get_device())
+        image_feat_variable = image_feat_variable
 
         sample_list.visual_embeddings = image_feat_variable
         sample_list.image_dim = image_dim_variable
@@ -411,7 +408,6 @@ class VilBertVisualBertModelV2(nn.Module):
 
         visual_embeddings = getattr(sample_list, "visual_embeddings", None)
         image_dim = getattr(sample_list, "image_dim", None)
-        image_dim = image_dim.to(get_device())
         # pretraining labels
         sample_list.masked_lm_labels = getattr(sample_list, "lm_label_ids", None)
         # image_feat_variable = batch x ( num_choice x ) image_feature_length x dim
@@ -431,19 +427,20 @@ class VilBertVisualBertModelV2(nn.Module):
 
         sample_list.position_embeddings_visual = None
 
-        sample_list.image_mask = sample_list.image_mask.to(get_device())
-        sample_list.input_mask = sample_list.input_mask.to(get_device())
+        sample_list.image_mask = sample_list.image_mask
+        sample_list.input_mask = sample_list.input_mask
         sample_list = self.visual_bert.flatten_for_bert(sample_list)
 
-        sample_list.input_ids = sample_list.input_ids.to(get_device())
-        sample_list.attention_mask = sample_list.attention_mask.to(get_device())
-        sample_list.token_type_ids = sample_list.token_type_ids.to(get_device())
-        sample_list.visual_embeddings = sample_list.visual_embeddings.to(get_device())
-        sample_list.visual_embeddings_type = sample_list.visual_embeddings_type.to(get_device())
+        sample_list.input_ids = sample_list.input_ids
+        sample_list.attention_mask = sample_list.attention_mask
+        sample_list.token_type_ids = sample_list.token_type_ids
+        sample_list.visual_embeddings = sample_list.visual_embeddings
+        sample_list.visual_embeddings_type = sample_list.visual_embeddings_type
         params = {"input_ids": sample_list.input_ids, "attention_mask": sample_list.attention_mask, "token_type_ids": sample_list.token_type_ids,
                   "visual_embeddings": sample_list.visual_embeddings, "position_embeddings_visual": sample_list.position_embeddings_visual,
                   "visual_embeddings_type": sample_list.visual_embeddings_type,
-                  "image_text_alignment": sample_list.image_text_alignment,}
+                  "image_text_alignment": sample_list.image_text_alignment}
+        params = {k: v.to(self.devices["visual_bert"]) if type(v) == torch.Tensor else v for k, v in params.items()}
         return params
 
     def visual_bert_processor(self, params: Dict):
@@ -479,7 +476,7 @@ class VilBertVisualBertModelV2(nn.Module):
         lx_sl = self.build_lxmert_sample_list(orig_image, textSampleList)
         for k, v in lx_sl.items():
             if type(v) == torch.Tensor:
-                lx_sl[k] = v.to(get_device())
+                lx_sl[k] = v.to(self.devices["lxmert"])
         feat_seq, pooled = self.lxmert((lx_sl.input_ids, lx_sl.input_mask, lx_sl.segment_ids,), (lx_sl.feats, lx_sl.boxes), lx_sl.masks)
 
         del lx_sl
@@ -493,11 +490,12 @@ class VilBertVisualBertModelV2(nn.Module):
     def mmbt_region_forward(self, sl: SampleList):
         sl = sl.to(self.devices["mmbt_region"])
         sl.image_feature_0 = sl.image_feature_0.type(torch.float).to(self.devices["mmbt_region"])
-        # if next(self.mmbt_region.parameters()).device != self.devices["mmbt_region"]:
-        #     print("Correcting MMBT Device, Actual =", next(self.mmbt_region.parameters()).device, "Expected =", self.devices["mmbt_region"])
-        #     self.mmbt_region = self.mmbt_region.to(self.devices["mmbt_region"])
-        #     self.mmbt_region.model = self.mmbt_region.model.to(self.devices["mmbt_region"])
-        #     self.mmbt_region.model.bert = self.mmbt_region.model.bert.to(self.devices["mmbt_region"])
+        if next(self.mmbt_region.parameters()).device != self.devices["mmbt_region"]:
+            print("Correcting MMBT Device, Actual =", next(self.mmbt_region.parameters()).device, "Expected =", self.devices["mmbt_region"])
+            self.mmbt_region = self.mmbt_region.to(self.devices["mmbt_region"])
+            self.mmbt_region.model = self.mmbt_region.model.to(self.devices["mmbt_region"])
+            self.mmbt_region.model.bert = self.mmbt_region.model.bert.to(self.devices["mmbt_region"])
+            self.mmbt_region.model.classifier = self.mmbt_region.model.classifier.to(self.devices["mmbt_region"])
 
         module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
