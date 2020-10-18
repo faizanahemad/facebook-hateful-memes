@@ -426,6 +426,7 @@ class VilBertVisualBertModelV2(nn.Module):
 
         sample_list.image_mask = sample_list.image_mask
         sample_list.input_mask = sample_list.input_mask
+        sample_list = sample_list.to(self.devices["visual_bert"])
         sample_list = self.visual_bert.flatten_for_bert(sample_list)
 
         sample_list.input_ids = sample_list.input_ids
