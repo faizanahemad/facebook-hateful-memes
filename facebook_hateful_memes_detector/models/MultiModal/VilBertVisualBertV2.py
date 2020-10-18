@@ -150,18 +150,22 @@ class VilBertVisualBertModelV2(nn.Module):
         self.featurizer_type = featurizer
 
         self.num_classes = num_classes
-        lin0 = nn.Linear(pooled_dims, 512)
-        init_fc(lin0, "leaky_relu")
-        lin = nn.Linear(512, num_classes)
-        init_fc(lin, "linear")
+
         dp = nn.Dropout(dropout)
-        self.one_view_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), nn.LayerNorm(512), lin)
+        lin0 = nn.Linear(pooled_dims, 768)
+        init_fc(lin0, "leaky_relu")
+        self.one_view_reducer = nn.Sequential(dp, lin0, nn.LeakyReLU(), nn.LayerNorm(768))
+        self.one_view_reducer = self.one_view_reducer.to(self.devices["main"])
+
+        lin = nn.Linear(768, num_classes)
+        init_fc(lin, "linear")
+        self.one_view_layer = lin
         self.one_view_layer = self.one_view_layer.to(self.devices["main"])
 
-        self.pooled_dims = pooled_dims * (len(self.view_transforms) + 1)
-        lin0 = nn.Linear(self.pooled_dims, pooled_dims)
+        self.pooled_dims = 768 * (len(self.view_transforms) + 1)
+        lin0 = nn.Linear(self.pooled_dims, 2048)
         init_fc(lin0, "leaky_relu")
-        lin01 = nn.Linear(pooled_dims, 768)
+        lin01 = nn.Linear(2048, 768)
         init_fc(lin01, "leaky_relu")
         lin1 = nn.Linear(768, 768)
         init_fc(lin1, "leaky_relu")
@@ -581,6 +585,7 @@ class VilBertVisualBertModelV2(nn.Module):
 
         pooled_output = torch.cat(pooled_output, 1)
         # sequence_output = torch.stack(sequence_output).mean(0)
+        pooled_output = self.one_view_reducer(pooled_output)
         pooled_logits = self.one_view_layer(pooled_output)
         pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         clean_memory()
