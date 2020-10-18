@@ -98,7 +98,7 @@ class VilBertVisualBertModelV2(nn.Module):
             self.model_regularizers[k] = regs
 
         self.model_name = model_name
-        self.vilbert = get_vilbert(get_device())
+        self.vilbert = get_vilbert(self.devices["vilbert"])
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 1024
         for p in self.vilbert.parameters():
             p.requires_grad = False
@@ -108,7 +108,7 @@ class VilBertVisualBertModelV2(nn.Module):
         self.vilbert = self.vilbert.to(self.devices["vilbert"])
         self.model_heads["vilbert"] = self.model_heads["vilbert"].to(self.devices["vilbert"])
 
-        self.visual_bert = get_visual_bert(get_device())
+        self.visual_bert = get_visual_bert(self.devices["visual_bert"])
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 100 + max_seq_length, 768, pooled_dims + 768
         for p in self.visual_bert.parameters():
             p.requires_grad = False
@@ -120,7 +120,6 @@ class VilBertVisualBertModelV2(nn.Module):
 
         self.lxmert = get_lxrt_model("20", pretokenized=True, max_seq_len=max_seq_length)
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + max_seq_length + 36, 768, pooled_dims + 768
-        self.lxmert.to(get_device())
         for p in self.lxmert.parameters():
             p.requires_grad = False
         lin = nn.Linear(768, num_classes)
@@ -130,7 +129,7 @@ class VilBertVisualBertModelV2(nn.Module):
         self.model_heads["lxmert"] = self.model_heads["lxmert"].to(self.devices["lxmert"])
 
 
-        self.mmbt_region = get_mmbt_region(get_device())
+        self.mmbt_region = get_mmbt_region(self.devices["mmbt_region"])
         n_tokens_in, embedding_dims, pooled_dims = n_tokens_in + 102 + max_seq_length, 768, pooled_dims + 768
         for p in self.mmbt_region.parameters():
             p.requires_grad = False
@@ -191,8 +190,6 @@ class VilBertVisualBertModelV2(nn.Module):
         texts = self.word_masking(texts)
         texts = [self.text_processor({"text": t}) for t in texts]
         texts = SampleList([Sample({k: t[k] for k in keys}) for t in texts])
-        for k in keys:
-            texts[k] = texts[k].to(get_device())
         return texts
 
     def build_lxmert_sample_list(self, orig_image, textSampleList: SampleList):
@@ -321,7 +318,7 @@ class VilBertVisualBertModelV2(nn.Module):
         image_location[:, :, 2] = image_location[:, :, 2] / image_w[:, None]
         image_location[:, :, 3] = image_location[:, :, 3] / image_h[:, None]
         image_location_variable = torch.tensor(
-            image_location, dtype=torch.float, device=get_device()
+            image_location, dtype=torch.float
         )
 
         cls_prob = getattr(image_info, "cls_prob", None)
@@ -334,7 +331,7 @@ class VilBertVisualBertModelV2(nn.Module):
 
         # Prepare Mask
         if params["image_feature"] is not None and params["image_dim"] is not None:
-            image_mask = (torch.arange(params["image_feature"].size(-2), device=get_device()).expand(*params["image_feature"].size()[:-1]))
+            image_mask = (torch.arange(params["image_feature"].size(-2)).expand(*params["image_feature"].size()[:-1]))
             if len(params["image_dim"].size()) < len(image_mask.size()):
                 params["image_dim"] = params["image_dim"].unsqueeze(-1)
                 assert len(params["image_dim"].size()) == len(image_mask.size())
@@ -414,7 +411,7 @@ class VilBertVisualBertModelV2(nn.Module):
         # Prepare Mask
         if visual_embeddings is not None and image_dim is not None:
             image_mask = (
-                torch.arange(visual_embeddings.size(-2), device=get_device())
+                torch.arange(visual_embeddings.size(-2))
                     .expand(*visual_embeddings.size()[:-1])
             )
             if len(image_dim.size()) < len(image_mask.size()):
@@ -510,7 +507,7 @@ class VilBertVisualBertModelV2(nn.Module):
         return output
 
     def get_vectors(self, sampleList: SampleList):
-        sampleList = dict2sampleList(sampleList, device=get_device())
+        sampleList = dict2sampleList(sampleList)
         texts = sampleList.text
         image = sampleList.image  # orig_image = sampleList.original_image
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
