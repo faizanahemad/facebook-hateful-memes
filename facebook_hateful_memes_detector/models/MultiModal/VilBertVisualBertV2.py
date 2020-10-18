@@ -516,7 +516,6 @@ class VilBertVisualBertModelV2(nn.Module):
         texts = sampleList.text
         image = sampleList.image  # orig_image = sampleList.original_image
         labels = torch.tensor(sampleList.label, dtype=float).to(get_device())
-        mixup = sampleList.mixup
 
         actual_labels = np.array(labels.tolist())
         indices = actual_labels != self.label_not_present
@@ -594,7 +593,13 @@ class VilBertVisualBertModelV2(nn.Module):
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList)
         labels = torch.tensor(sampleList.label, dtype=float).to(self.devices["main"])
-        views = [sampleList] + [t(sampleList) for t in self.view_transforms]
+        views = [sampleList]
+        for i in range(1, 9):
+            if hasattr(sampleList, "text_view_%s" % i):
+                vw = sampleList.copy()
+                vw["text"] = sampleList["text_view_%s" % i]
+                vw["image"] = sampleList["image_view_%s" % i]
+                views.append(vw)
         pre_logits, pooled_logits, pooled_outputs, sequence_outputs = [], [], [], []
         for view in views:
             pre_logit, pooled_logit, pooled_output, sequence_output = self.get_vectors(view)

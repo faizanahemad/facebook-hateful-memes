@@ -1119,7 +1119,7 @@ class TextImageDataset(Dataset):
                  torchvision_pre_image_transform=identity, numeric_regularizer: Callable = identity,
                  mixup_config=None,
                  keep_original_text: bool = False, keep_original_image: bool = False,
-                 keep_processed_image: bool = False, keep_torchvision_image: bool = False):
+                 keep_processed_image: bool = False, keep_torchvision_image: bool = False, additional_processors=tuple()):
         self.texts = list(texts)
         self.identifiers = list(identifiers)
         self.image_locations = image_locations
@@ -1153,6 +1153,7 @@ class TextImageDataset(Dataset):
         self.keep_processed_image = keep_processed_image
         self.keep_torchvision_image = keep_torchvision_image
         self.mixup_config = mixup_config
+        self.additional_processors = additional_processors
 
     def item_getter(self, item):
         text = self.texts[item]
@@ -1231,7 +1232,10 @@ class TextImageDataset(Dataset):
                 sample = self.mixup(sample)
                 sample.mixup = True
 
-        return self.process_example(sample)
+        sample = self.process_example(sample)
+        for p in self.additional_processors:
+            p(sample)
+        return sample
 
     def __len__(self):
         return len(self.texts)
