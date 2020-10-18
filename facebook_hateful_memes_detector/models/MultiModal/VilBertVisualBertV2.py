@@ -155,7 +155,7 @@ class VilBertVisualBertModelV2(nn.Module):
         lin = nn.Linear(512, num_classes)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.one_view_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
+        self.one_view_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), nn.LayerNorm(512), lin)
         self.one_view_layer = self.one_view_layer.to(self.devices["main"])
 
         self.pooled_dims = pooled_dims * (len(self.view_transforms) + 1)
@@ -169,7 +169,7 @@ class VilBertVisualBertModelV2(nn.Module):
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
         self.final_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                         lin01, nn.LeakyReLU(), dp,
+                                         lin01, nn.LeakyReLU(), nn.LayerNorm(pooled_dims), dp,
                                          lin1, nn.LeakyReLU(), lin)
         self.final_layer = self.final_layer.to(self.devices["main"])
 
