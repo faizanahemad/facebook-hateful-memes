@@ -1,6 +1,7 @@
 import gc
 import os
 import sys
+import time
 from collections import defaultdict, Counter
 from random import random, shuffle
 from time import sleep
@@ -42,7 +43,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None,
     try:
         cache_stats = get_global("cache_stats")
     except:
-        cache_stats = defaultdict(Counter)
+        cache_stats = defaultdict(lambda:defaultdict(float))
         set_global("cache_stats", cache_stats)
 
     cache_stats["count_cache_dirs"] = len(set(cache_dirs))
@@ -78,6 +79,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None,
         return hsh
 
     def read_hash(hsh):
+        ts = time.time()
         kes = [0] * len(caches)
         for retry in range(retries):
             for cidx, cache in enumerate(caches):
@@ -86,6 +88,8 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None,
                 try:
                     r = cache[hsh]
                     cache_stats[name]["hit"] += 1
+                    te = time.time() - ts
+                    cache_stats[name]["read_time"] = 0.9 * cache_stats[name]["read_time"] + 0.1 * te
                     return r
                 except KeyError:
                     cache_stats[name]["key_error"] += 1
@@ -101,6 +105,7 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None,
         return None
 
     def write_hsh(hsh, r, kes):
+        ts = time.time()
         if cache_allow_writes:
             for retry in range(retries):
                 for cidx, cache in enumerate(caches):
@@ -109,6 +114,8 @@ def persistent_caching_fn(fn, name, check_cache_exists=False, cache_dir=None,
                     try:
                         cache[hsh] = r
                         cache_stats[name]["writes"] += 1
+                        te = time.time() - ts
+                        cache_stats[name]["write_time"] = 0.9 * cache_stats[name]["write_time"] + 0.1 * te
                         return r
                     except:
                         cache_stats[name]["write_exception"] += 1
