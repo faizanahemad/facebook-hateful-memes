@@ -1,11 +1,12 @@
 import os
+import time
 from typing import List, Dict, Callable
 
 import numpy as np
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-from ..utils.globals import get_global
+from ..utils.globals import get_global, set_global
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import re
@@ -21,7 +22,7 @@ from torch.utils.data import Subset
 from ..utils.sample import *
 from transformers import optimization
 from .model_params import group_wise_lr, group_wise_finetune
-from collections import Counter
+from collections import Counter, defaultdict
 from IPython.display import display
 
 
@@ -460,6 +461,13 @@ def train(model, optimizer, scheduler_init_fn,
           "Num Batches = ", len(train_loader), "Accumulation steps = ", accumulation_steps)
     if len(train_loader) % accumulation_steps != 0:
         print("[WARN]: Number of training batches not divisible by accumulation steps, some training batches will be wasted due to this.")
+    try:
+        train_stats = get_global("train_stats")
+    except:
+        train_stats = defaultdict(float)
+        set_global("train_stats", train_stats)
+    train_stats["batch_time"] = 0
+
     with trange(epochs) as epo:
         for epoc in epo:
             _ = model.train()
@@ -469,8 +477,10 @@ def train(model, optimizer, scheduler_init_fn,
             clean_memory()
             train_losses_cur_epoch = []
             loss_monitor = 0.0
+            ts = time.time()
             with tqdm(train_loader, "Batches") as data_batch:
                 for batch_idx, batch in enumerate(data_batch):
+                    train_stats["batch_time"] = 0.9 * train_stats["batch_time"] + (0.1 * (time.time() - ts))
                     batch_count += 1
                     if save_every is not None and model_save_key is not None and batch_count % save_every == 0:
                         global_dir = get_global("models_dir")
@@ -513,7 +523,7 @@ def train(model, optimizer, scheduler_init_fn,
                     if update_in_batch:
                         scheduler.step()
                     train_losses_cur_epoch.append(float(loss.cpu().detach().item()) * accumulation_steps)
-                    clean_memory()
+                    ts = time.time()
             print("Epoch = ", epoc + 1, "Loss = %.6f" % np.mean(train_losses_cur_epoch), "LR = %.8f" % optimizer.param_groups[0]['lr'])
             if validation_strategy is not None:
                 if (epoc + 1) in validation_strategy["validation_epochs"]:
