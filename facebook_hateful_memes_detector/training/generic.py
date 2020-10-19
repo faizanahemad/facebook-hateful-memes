@@ -467,6 +467,7 @@ def train(model, optimizer, scheduler_init_fn,
         train_stats = defaultdict(float)
         set_global("train_stats", train_stats)
     train_stats["batch_time"] = 0
+    train_stats["model_time"] = 0
 
     with trange(epochs) as epo:
         for epoc in epo:
@@ -488,9 +489,11 @@ def train(model, optimizer, scheduler_init_fn,
 
                     if model_call_back is not None:
                         model_call_back(model, batch_idx, len(train_loader), epoc, epochs)
+                    tms = time.time()
                     if use_autocast:
                         with autocast():
                             res = model(batch)
+                            tme = time.time() - tms
                             loss = res[-1]
                             assert not torch.isnan(loss).any()
                             loss = loss / accumulation_steps
@@ -505,6 +508,7 @@ def train(model, optimizer, scheduler_init_fn,
 
                     else:
                         res = model(batch)
+                        tme = time.time() - tms
                         loss = res[-1]
                         assert not torch.isnan(loss).any()
                         loss = loss / accumulation_steps
@@ -515,6 +519,7 @@ def train(model, optimizer, scheduler_init_fn,
                                 torch.nn.utils.clip_grad_norm_(list(filter(lambda p: p.requires_grad, model.parameters())), gradient_clipping)
                             optimizer.step()
 
+                    train_stats["model_time"] = 0.9 * train_stats["model_time"] + 0.1 * tme
                     if (batch_idx + 1) % accumulation_steps == 0:
                         train_losses.append(float(loss_monitor))
                         learning_rates.append(float(optimizer.param_groups[0]['lr']))
