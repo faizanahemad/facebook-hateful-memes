@@ -1021,7 +1021,7 @@ class MLMOnlyV2(MLMPretraining):
             self.id2_caption_objects = id2_caption_objects
 
         hidden_size = 768
-        mlm_hidden_size = 128
+        mlm_hidden_size = 256
         self.aug_1 = augment_1
         self.model = model
         self.aug_time = []
@@ -1041,9 +1041,11 @@ class MLMOnlyV2(MLMPretraining):
         self.mlm = self.mlm.to(get_device())
         self.mlm_transforms = nn.ModuleList()
         for i in range(5):
-            fc = nn.Linear(hidden_size, mlm_hidden_size)
-            init_fc(fc, "linear")
-            self.mlm_transforms.append(fc)
+            fc = nn.Linear(hidden_size, hidden_size)
+            init_fc(fc, "leaky_relu")
+            fc2 = nn.Linear(hidden_size, mlm_hidden_size)
+            init_fc(fc2, "linear")
+            self.mlm_transforms.append(nn.Sequential(fc, nn.LeakyReLU(), nn.LayerNorm(hidden_size), fc2))
         self.mlm_transforms = self.mlm_transforms.to(get_device())
 
         self.loss = nn.CrossEntropyLoss()
