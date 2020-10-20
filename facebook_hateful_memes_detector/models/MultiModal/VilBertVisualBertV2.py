@@ -162,19 +162,13 @@ class VilBertVisualBertModelV2(nn.Module):
         self.one_view_layer = lin
         self.one_view_layer = self.one_view_layer.to(self.devices["main"])
 
-        self.pooled_dims = 768 * (len(self.view_transforms) + 1)
-        lin0 = nn.Linear(self.pooled_dims, 2048)
+        lin0 = nn.Linear(768, 768)
         init_fc(lin0, "leaky_relu")
-        lin01 = nn.Linear(2048, 768)
-        init_fc(lin01, "leaky_relu")
-        lin1 = nn.Linear(768, 768)
-        init_fc(lin1, "leaky_relu")
         lin = nn.Linear(768, num_classes)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.final_layer = nn.Sequential(lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                         lin01, nn.LeakyReLU(), nn.LayerNorm(768), dp,
-                                         lin1, nn.LeakyReLU(), lin)
+        self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
+                                         nn.LayerNorm(768), lin)
         self.final_layer = self.final_layer.to(self.devices["main"])
 
         uda = kwargs.pop("uda", False)
@@ -609,7 +603,7 @@ class VilBertVisualBertModelV2(nn.Module):
             sequence_outputs.extend([seq[:, :self.n_tokens_out] for seq in sequence_output])
         del sampleList
 
-        pooled_outputs = torch.cat(pooled_outputs, 1)
+        pooled_outputs = torch.stack(pooled_outputs).mean(0)
         # sequence_outputs = torch.stack(sequence_outputs).mean(0)
         pre_logits = torch.stack(pre_logits).mean(0)
         pre_logits = pre_logits / pre_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
