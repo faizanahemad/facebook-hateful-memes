@@ -1047,13 +1047,15 @@ class MLMOnlyV2(MLMPretraining):
 
         self.mlm_transforms = nn.ModuleList()
         for i in range(5):
-            fc = nn.Linear(hidden_size, hidden_size)
-            init_fc(fc, "leaky_relu")
             if mlm_separately:
+                fc = nn.Linear(hidden_size, mlm_hidden_size)
+                init_fc(fc, "leaky_relu")
                 self.mlm_transforms.append(nn.Sequential(fc, nn.LeakyReLU(), nn.LayerNorm(hidden_size)))
                 mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "leaky_relu", n_tokens_in, low_memory=low_memory)
                 self.mlm.append(mlm)
             else:
+                fc = nn.Linear(hidden_size, hidden_size)
+                init_fc(fc, "leaky_relu")
                 fc2 = nn.Linear(hidden_size, mlm_hidden_size)
                 init_fc(fc2, "linear")
                 self.mlm_transforms.append(nn.Sequential(fc, nn.LeakyReLU(), nn.LayerNorm(hidden_size), fc2))
