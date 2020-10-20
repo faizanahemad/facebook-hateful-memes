@@ -1008,6 +1008,7 @@ class MLMOnlyV2(MLMPretraining):
                  add_detected_objects=False,
                  add_before=True,
                  caption_object_file=None,
+                 mlm_separately=True,
                  low_memory=False):
         super(MLMOnlyV2, self).__init__(model, None, 768, "relu", 0, True)
         self.add_caption = add_caption
@@ -1037,17 +1038,27 @@ class MLMOnlyV2(MLMPretraining):
         self.mask_token = self.model.text_processor._tokenizer.mask_token
         self.sep_token = self.model.text_processor._tokenizer.sep_token
         self.tokenizer = tokenizer
-        self.mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
-        self.mlm = self.mlm.to(get_device())
+
+        if mlm_separately:
+            self.mlm = nn.ModuleList()
+        else:
+            mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "leaky_relu", n_tokens_in, low_memory=low_memory)
+            self.mlm = nn.ModuleList([mlm] * 5)
+
         self.mlm_transforms = nn.ModuleList()
         for i in range(5):
             fc = nn.Linear(hidden_size, hidden_size)
             init_fc(fc, "leaky_relu")
-            fc2 = nn.Linear(hidden_size, mlm_hidden_size)
-            init_fc(fc2, "linear")
-            self.mlm_transforms.append(nn.Sequential(fc, nn.LeakyReLU(), nn.LayerNorm(hidden_size), fc2))
+            if mlm_separately:
+                self.mlm_transforms.append(nn.Sequential(fc, nn.LeakyReLU(), nn.LayerNorm(hidden_size)))
+                mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "leaky_relu", n_tokens_in, low_memory=low_memory)
+                self.mlm.append(mlm)
+            else:
+                fc2 = nn.Linear(hidden_size, mlm_hidden_size)
+                init_fc(fc2, "linear")
+                self.mlm_transforms.append(nn.Sequential(fc, nn.LeakyReLU(), nn.LayerNorm(hidden_size), fc2))
         self.mlm_transforms = self.mlm_transforms.to(get_device())
-
+        self.mlm = self.mlm.to(get_device())
         self.loss = nn.CrossEntropyLoss()
         self.loss = self.loss.to(get_device())
         self.mlm_accuracy_hist = defaultdict(list)
@@ -1063,7 +1074,7 @@ class MLMOnlyV2(MLMPretraining):
 
     def mlm_one_sequence(self, seq1, input_ids_1, attention_mask_1, midx):
         batch_size = input_ids_1.size(0)
-        loss, accuracy, input_ids_1, predictions_1 = self.mlm(seq1, input_ids_1, attention_mask_1)
+        loss, accuracy, input_ids_1, predictions_1 = self.mlm[midx](seq1, input_ids_1, attention_mask_1)
         predictions_1 = predictions_1.view(batch_size, -1)
         predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
         predictions_1 = [p.split() for p in predictions_1]

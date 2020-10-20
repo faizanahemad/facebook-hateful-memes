@@ -1317,9 +1317,19 @@ class BertPredictionHeadTransform(nn.Module):
         super().__init__()
         self.dense = nn.Linear(hidden_size, (hidden_size // 8) if low_memory else hidden_size)
         init_fc(self.dense, hidden_act)
+        from transformers.activations import ACT2FN
+        activations = {
+            "relu": F.relu,
+            "swish": ACT2FN["swish"],
+            "gelu": ACT2FN["gelu"],
+            "tanh": torch.tanh,
+            "gelu_new": ACT2FN["gelu_new"],
+            "gelu_fast": ACT2FN["gelu_fast"],
+            "leaky_relu": F.leaky_relu,
+        }
         if isinstance(hidden_act, str):
-            from transformers.activations import ACT2FN
-            self.transform_act_fn = ACT2FN[hidden_act]
+
+            self.transform_act_fn = activations[hidden_act]
         else:
             self.transform_act_fn = hidden_act
         self.LayerNorm = nn.LayerNorm((hidden_size // 8) if low_memory else hidden_size)
