@@ -665,14 +665,14 @@ class VilBertVisualBertModelV2(nn.Module):
         return logits, pooled_outputs, sequence_outputs, loss
 
 
-positive = ["positive", "great", "nice",
+positive = ["positive", "ok", "nice",
             # "practical", "useful", "awesome", "accurate", "impartial",
             # "optimistic", "effective", "hopeful",  "fortunate",
             # "helpful", "beneficial", "enjoyable", "welcome", "kind",
             # "pleasant", "agreeable", "delightful", "acceptable",
             "good", "neutral"]
 
-negative = ["bad", "nasty", "terrible", "offensive",
+negative = ["bad", "negative", "offense",
             #"grim", "disagreeable", "unpleasant", "unwelcome",
             #"unacceptable", "upsetting", "unkind", "inferior",  "hateful", "hurtful",
             #"cruel", "hostility", "dislike", "resentment", "adverse", "awful",
