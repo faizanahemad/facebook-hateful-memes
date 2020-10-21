@@ -291,6 +291,7 @@ def isnumber(text):
             pass
     return False
 
+
 class TextAugment:
     def __init__(self, count_proba: List[float], choice_probas: Dict[str, float],
                  fasttext_file: str = None, idf_file: str = None,
@@ -715,7 +716,8 @@ class TextAugment:
                     text = self.word_masking(text)
                 elif aug == "dab":
                     identifier = int(kwargs["identifier"])
-                    text = random.sample(self.dab_store[identifier], 1)[0]
+                    if len(self.dab_store[identifier]) > 0:
+                        text = random.sample(self.dab_store[identifier], 1)[0]
                 elif aug in ["glove_twitter", "glove_wiki", "word2vec"]:
                     text = self.__w2v_replace__(self.augments[aug], self.indexes[aug], text)
                 elif callable(self.augments[aug]):
@@ -725,8 +727,8 @@ class TextAugment:
                 else:
                     raise ValueError()
             except Exception as e:
-                print("Exception for: ", aug, "|", "Original Text", original_text, "Final Text", text, "|", augs, e)
-                return original_text
+                print("Exception for: ", aug, "|", "[Original Text]:", original_text, "[Final Text]:", text, "\n[Augs]:", augs, e)
+                return original_text if text is None or not isinstance(text, str) or len(text.split()) < 3 or len(text) < 8 else text
         return text
 
 
