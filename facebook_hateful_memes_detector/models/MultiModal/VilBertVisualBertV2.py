@@ -863,142 +863,6 @@ class MLMSimCLR(MLMPretraining):
         return logits, (pool1 + pool2)/2, (seq1+seq2)/2, loss
 
 
-class MLMOnly(MLMPretraining):
-    def __init__(self, model: VilBertVisualBertModelV2, dropout,
-                 label_to_word: dict,
-                 augment_1: Callable, augment_2: Callable,
-                 temperature=0.1, low_memory=False):
-        super(MLMOnly, self).__init__(model, None, 768, "relu", 0, True)
-        hidden_size = 768
-        self.aug_1 = augment_1
-        self.aug_2 = augment_2
-        self.model = model
-        self.aug_time = []
-        self.model_time = []
-        self.low_memory = low_memory
-        self.temperature = temperature
-        self.label_to_word = label_to_word
-        self.label_not_present = -1  # If label not present then we will mask.
-
-        n_tokens_in = model.max_seq_length
-        tokenizer = model.text_processor._tokenizer
-        self.mask_token = self.model.text_processor._tokenizer.mask_token
-        self.tokenizer = tokenizer
-        self.n_tokens_in = n_tokens_in
-        self.mlms = nn.ModuleList()
-        self.num_seqs = 4 * ((len(model.view_transforms) + 1)) + 1
-        for i in range(self.num_seqs):
-            mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
-            if i == self.num_seqs - 1:
-                mlm = BertLMPredictionHead(hidden_size, tokenizer.vocab_size, "relu", n_tokens_in, low_memory=False)
-            self.mlms.append(mlm)
-
-        self.loss = nn.CrossEntropyLoss()
-        self.mlm_accuracy_hist = defaultdict(list)
-        self.mlm_loss_hist = defaultdict(list)
-        self.target_accuracy_hist = defaultdict(list)
-        self.target_loss_hist = defaultdict(list)
-
-    def mlm_one_sequence(self, seq1, seq2,
-                             input_ids_1, attention_mask_1,
-                             input_ids_2, attention_mask_2,
-                             midx):
-        mlm = self.mlms[midx]
-        batch_size = input_ids_1.size(0)
-        loss_1, accuracy_1, input_ids_1, predictions_1 = mlm(seq1, input_ids_1, attention_mask_1)
-        loss_2, accuracy_2, input_ids_2, predictions_2 = mlm(seq2, input_ids_2, attention_mask_2)
-        accuracy = (accuracy_1 + accuracy_2)/2
-        loss = (loss_1 + loss_2)/2
-        predictions_1 = predictions_1.view(batch_size, -1)
-        predictions_2 = predictions_2.view(batch_size, -1)
-
-        predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
-        predictions_2 = self.tokenizer.batch_decode(predictions_2.tolist(), skip_special_tokens=True)
-        predictions_1 = [p.split()[0] for p in predictions_1]
-        predictions_2 = [p.split()[0] for p in predictions_2]
-
-        p1s = []
-        for p in predictions_1:
-            found = False
-            for k, v in self.label_to_word.items():
-                if p in v:
-                    p1s.append(k)
-                    found = True
-            if not found:
-                p1s.append(self.label_not_present)
-
-        p2s = []
-        for p in predictions_2:
-            found = False
-            for k, v in self.label_to_word.items():
-                if p in v:
-                    p2s.append(k)
-                    found = True
-            if not found:
-                p2s.append(self.label_not_present)
-
-        p1s = torch.tensor(p1s, dtype=torch.long)
-        p2s = torch.tensor(p2s, dtype=torch.long)
-
-        self.mlm_accuracy_hist[midx].append(accuracy)
-        self.mlm_loss_hist[midx].append(float(loss.cpu().detach()))
-        return [p1s, p2s, loss]
-
-    def add_label(self, sampleList):
-        texts = []
-        for text, label in zip(sampleList["text"], sampleList["label"]):
-            if label != self.label_not_present:
-                lt = random.sample(self.label_to_word[label], k=1)[0]
-            else:
-                lt = self.mask_token
-
-            texts.append(lt + " " + str(text))
-        sampleList["text"] = texts
-        return sampleList
-
-    def forward(self, x):
-        x1 = self.aug_1(x.copy())
-        x2 = self.aug_2(x.copy())
-
-        x1 = self.add_label(x1)
-        x2 = self.add_label(x2)
-
-        input_ids_1, attention_mask_1 = self.tokenise(x1["text"])
-        input_ids_2, attention_mask_2 = self.tokenise(x2["text"])
-
-        x1 = self.model(x1)
-        x2 = self.model(x2)
-
-        seq1 = x1[2]
-        seq2 = x2[2]
-        pool1 = x1[1]
-        pool2 = x2[1]
-        logits1 = x1[0]
-        logits2 = x2[0]
-        loss = (x1[3] + x2[3]) / 2
-
-        mlm_losses = 0.0
-
-        predicted_labels = []
-        for midx, (seq1, seq2) in enumerate(zip(list(seq1), list(seq2))):
-            p1s, p2s, mlm_loss = self.mlm_one_sequence(seq1, seq2, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2, midx)
-            predicted_labels.extend([p1s, p2s])
-            mlm_losses += (0.2 * mlm_loss)
-
-        predicted_labels = torch.stack(predicted_labels).type(torch.float).mean(0)
-        seq1 = torch.stack(x1[2]).mean(0)
-        seq2 = torch.stack(x2[2]).mean(0)
-        p1s, p2s, mlm_loss = self.mlm_one_sequence(seq1, seq2, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2, midx+1)
-        mlm_losses += mlm_loss
-
-        loss = loss + mlm_losses + ((logits1 - logits2)**2).mean()
-        predicted_labels = torch.stack([p1s.type(torch.float), p2s.type(torch.float), predicted_labels]).mean(0)
-        predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
-        logits = (logits1 + logits2 + predicted_labels.to(get_device())) / 3
-
-        return logits, (pool1 + pool2)/2, (seq1+seq2)/2, loss
-
-
 class MLMOnlyV2(MLMPretraining):
     def __init__(self, model: VilBertVisualBertModelV2, dropout,
                  label_to_word: dict,
@@ -1130,7 +994,13 @@ class MLMOnlyV2(MLMPretraining):
         x1 = self.model(x1)
         if not self.add_before:
             x = self.add_objects_caption(x)
-        input_ids_1, attention_mask_1 = self.tokenise(x["text"])
+
+        views = defaultdict(dict)
+        views[0]["input_ids"], views[0]["attention_mask"] = self.tokenise(x["text"])
+        for i in range(1, 9):
+            if hasattr(x, "text_view_%s" % i):
+                views[i]["input_ids"], views[i]["attention_mask"] = self.tokenise(x["text_view_%s" % i])
+
 
         seq1 = x1[2]
         pool1 = x1[1]
@@ -1142,9 +1012,10 @@ class MLMOnlyV2(MLMPretraining):
         predicted_labels = []
         bad_mlm_indices = None
         for midx, sequence in enumerate(list(seq1)):
-            transform_idx = midx % 4
-            sequence = self.mlm_transforms[transform_idx](sequence)
-            p1s, mlm_loss = self.mlm_one_sequence(sequence, input_ids_1, attention_mask_1, transform_idx)
+            model_idx = midx % 4
+            view_idx = midx // 4
+            sequence = self.mlm_transforms[model_idx](sequence)
+            p1s, mlm_loss = self.mlm_one_sequence(sequence, views[view_idx]["input_ids"], views[view_idx]["attention_mask"], model_idx)
             bad_mlm_index = p1s == self.label_not_present
             if bad_mlm_indices is not None:
                 bad_mlm_indices = torch.logical_or(bad_mlm_indices, bad_mlm_index)
@@ -1155,8 +1026,9 @@ class MLMOnlyV2(MLMPretraining):
 
         predicted_labels_2 = []
         for i in range(0, len(seq1), 4):
+            view_idx = i // 4
             sequence = self.mlm_transforms[-1](torch.stack(x1[2][i:i+4]).mean(0))
-            p1s, mlm_loss = self.mlm_one_sequence(sequence, input_ids_1, attention_mask_1, 4)
+            p1s, mlm_loss = self.mlm_one_sequence(sequence, views[view_idx]["input_ids"], views[view_idx]["attention_mask"], 4)
             bad_mlm_indices = torch.logical_or(bad_mlm_indices, p1s == self.label_not_present)
             mlm_losses += mlm_loss
             predicted_labels_2.extend([p1s])
