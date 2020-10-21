@@ -1126,7 +1126,6 @@ class MLMOnlyV2(MLMPretraining):
         if self.add_before:
             x1 = self.add_objects_caption(x1)
 
-        # "[SEP]"
         x = x1
         x1 = self.model(x1)
         if not self.add_before:
@@ -1154,10 +1153,13 @@ class MLMOnlyV2(MLMPretraining):
             predicted_labels.extend([p1s])
             mlm_losses += (0.25 * mlm_loss)
 
-        seq1 = self.mlm_transforms[-1](torch.stack(x1[2]).mean(0))
-        p1s, mlm_loss = self.mlm_one_sequence(seq1, input_ids_1, attention_mask_1, 4)
-        bad_mlm_indices = torch.logical_or(bad_mlm_indices, p1s == self.label_not_present)
-        mlm_losses += mlm_loss
+        predicted_labels_2 = []
+        for i in range(0, len(seq1), 4):
+            sequence = self.mlm_transforms[-1](torch.stack(x1[2][i:i+4]).mean(0))
+            p1s, mlm_loss = self.mlm_one_sequence(sequence, input_ids_1, attention_mask_1, 4)
+            bad_mlm_indices = torch.logical_or(bad_mlm_indices, p1s == self.label_not_present)
+            mlm_losses += mlm_loss
+            predicted_labels_2.extend([p1s])
         mlm_losses = self.mlm_loss_weight * mlm_losses
 
         self.mlm_overall_loss_hist.append(float(mlm_losses))
@@ -1165,7 +1167,7 @@ class MLMOnlyV2(MLMPretraining):
         loss = loss + mlm_losses
         self.overall_loss_hist.append(float(loss))
 
-        predicted_labels = torch.stack([p1s.type(torch.float)]+[pl.type(torch.float) for pl in predicted_labels]).mean(0)
+        predicted_labels = torch.stack([pl.type(torch.float) for pl in predicted_labels_2]+[pl.type(torch.float) for pl in predicted_labels]).mean(0)
         predicted_labels = torch.cat((predicted_labels.unsqueeze(1), (1 - predicted_labels).unsqueeze(1)), 1)
         predicted_labels = predicted_labels.to(get_device())
         predicted_indices = torch.logical_not(bad_mlm_indices).to(get_device())
