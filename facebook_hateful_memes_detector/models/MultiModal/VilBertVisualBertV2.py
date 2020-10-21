@@ -522,6 +522,7 @@ class VilBertVisualBertModelV2(nn.Module):
         actual_labels = actual_labels[indices]
 
         textSampleList = self.get_tokens(texts)
+        seq_length = textSampleList["input_ids"].size(1)
         textSampleList.id = sampleList.id
         del sampleList
         # GPUtil.showUtilization()
@@ -588,6 +589,7 @@ class VilBertVisualBertModelV2(nn.Module):
         pooled_logits = self.one_view_layer(pooled_output)
         pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         clean_memory()
+        sequence_output = [seq[:, :seq_length].contiguous() for seq in sequence_output]
         return logits, pooled_logits, pooled_output, sequence_output
 
     def forward(self, sampleList: SampleList):
