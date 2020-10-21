@@ -1370,6 +1370,8 @@ class BertLMPredictionHead(nn.Module):
 
     def forward(self, hidden_states, input_ids, attention_mask):
         hidden_states = hidden_states[:, :self.n_tokens_in]
+        input_ids = input_ids[:, :hidden_states.size(1)]
+        attention_mask = attention_mask[:, :hidden_states.size(1)]
         hidden_states = self.transform(hidden_states)
         hidden_states = self.decoder(hidden_states)
         hidden_states = hidden_states.contiguous().view(-1, self.vocab_size)
