@@ -430,7 +430,7 @@ class TextAugment:
             words = text.split()
             idx = random.randint(0, len(words) - 1)
             sw = random.sample(punctuation_list, 1)[0]
-            words = words[:idx] + ([sw] * random.randint(1, 3)) + words[idx:]
+            words = words[:idx] + ["".join([sw] * random.randint(1, 3))] + words[idx:]
             return " ".join(words)
 
         def punctuation_continue(text):
@@ -472,7 +472,7 @@ class TextAugment:
                     continue
                 if c in punctuation_list and not chars[i-1].isnumeric() and not chars[i+1].isnumeric():
                     if random.random() < 0.5:
-                        chars[i] = " "
+                        chars[i] = ""
             text = "".join(chars)
             text = " ".join([w.strip() for w in text.split()])
             return text
