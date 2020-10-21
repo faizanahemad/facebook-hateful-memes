@@ -496,7 +496,7 @@ class TextAugment:
         assert len(set(list(choice_probas.keys())) - set(self.augs)) == 0
         self.augments = dict()
         self.indexes = dict()
-        if not choice_probas.keys().isdisjoint(["glove_wiki", "glove_twitter", "word2vec", "fasttext", "word_cutout"]):
+        if not choice_probas.keys().isdisjoint(["glove_wiki", "glove_twitter", "word2vec", "fasttext", "word_cutout", "word_masking"]):
             assert idf_file is not None
             tfidf = pd.read_csv(idf_file)
             tfidf['token'] = tfidf['token'].apply(lambda x: x.lower() if isinstance(x, str) else x)
