@@ -870,22 +870,9 @@ class MLMOnlyV2(MLMPretraining):
                  label_to_word: dict,
                  augment_1: Callable,
                  mlm_loss_weight=0.01,
-                 add_caption=False,
-                 add_detected_objects=False,
-                 add_before=True,
-                 caption_object_file=None,
                  mlm_separately=True,
                  low_memory=False):
         super(MLMOnlyV2, self).__init__(model, None, 768, "relu", 0, True)
-        self.add_caption = add_caption
-        self.add_detected_objects = add_detected_objects
-        self.add_before = add_before
-        if caption_object_file is not None and (add_caption or add_detected_objects):
-            assert os.path.exists(caption_object_file)
-            import pandas as pd
-            df = pd.read_csv(caption_object_file)
-            id2_caption_objects = {row["id"]: dict(row) for r_id, row in df.iterrows()}
-            self.id2_caption_objects = id2_caption_objects
 
         hidden_size = 768
         mlm_hidden_size = 256
@@ -964,7 +951,7 @@ class MLMOnlyV2(MLMPretraining):
         self.mlm_loss_hist[midx].append(float(loss))
         return [p1s, loss]
 
-    def add_label(self, sampleList, view_idx):
+    def add_label(self, sampleList, view_idx, masking_rate=0.9):
         if view_idx == 0:
             text_column = "text"
         else:
@@ -973,7 +960,10 @@ class MLMOnlyV2(MLMPretraining):
         texts = []
         for text, label in zip(sampleList[text_column], sampleList["label"]):
             if label != self.label_not_present:
-                lt = random.sample(self.label_to_word[label], k=1)[0]
+                if random.random() >= masking_rate and self.training:
+                    lt = random.sample(self.label_to_word[label], k=1)[0]
+                else:
+                    lt = self.mask_token
             else:
                 lt = self.mask_token
 
@@ -981,28 +971,16 @@ class MLMOnlyV2(MLMPretraining):
         sampleList[text_column] = texts
         return sampleList
 
-    def add_objects_caption(self, sampleList):
-        id2text = list(zip(sampleList["id"], sampleList["text"]))
-        final_texts = sampleList["text"]
-        if self.add_caption:
-            final_texts = [text + f" {self.sep_token} " + self.id2_caption_objects[t_id]["caption"] for t_id, text in id2text]
-        if self.add_detected_objects:
-            final_texts = [text + f" {self.sep_token} " + self.id2_caption_objects[t_id]["objects"] for t_id, text in id2text]
-        sampleList["text"] = final_texts
-        return sampleList
+    def forward(self, x: SampleList):
+        x1 = x.copy()
+        for i in range(0, 9):
+            if hasattr(x1, "text_view_%s" % i) or i == 0:
+                x1 = self.add_label(x1, i, 0.9)
+        x1 = self.model(x1)
 
-    def forward(self, x):
-        x1 = x
         for i in range(0, 9):
             if hasattr(x, "text_view_%s" % i) or i == 0:
-                x1 = self.add_label(x1, i)
-        if self.add_before:
-            x1 = self.add_objects_caption(x1)
-
-        x = x1
-        x1 = self.model(x1)
-        if not self.add_before:
-            x = self.add_objects_caption(x)
+                x = self.add_label(x, i, 0.0)
 
         views = defaultdict(dict)
         views[0]["input_ids"], views[0]["attention_mask"] = self.tokenise(x["text"])
