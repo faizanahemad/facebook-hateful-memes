@@ -962,16 +962,21 @@ class MLMOnlyV2(MLMPretraining):
         self.mlm_loss_hist[midx].append(float(loss))
         return [p1s, loss]
 
-    def add_label(self, sampleList):
+    def add_label(self, sampleList, view_idx):
+        if view_idx == 0:
+            text_column = "text"
+        else:
+            text_column = "text_view_%s" % view_idx
+
         texts = []
-        for text, label in zip(sampleList["text"], sampleList["label"]):
+        for text, label in zip(sampleList[text_column], sampleList["label"]):
             if label != self.label_not_present:
                 lt = random.sample(self.label_to_word[label], k=1)[0]
             else:
                 lt = self.mask_token
 
             texts.append(lt + " " + str(text))
-        sampleList["text"] = texts
+        sampleList[text_column] = texts
         return sampleList
 
     def add_objects_caption(self, sampleList):
@@ -986,7 +991,9 @@ class MLMOnlyV2(MLMPretraining):
 
     def forward(self, x):
         x1 = x
-        x1 = self.add_label(x1)
+        for i in range(0, 9):
+            if hasattr(x, "text_view_%s" % i) or i == 0:
+                x1 = self.add_label(x1, i)
         if self.add_before:
             x1 = self.add_objects_caption(x1)
 
