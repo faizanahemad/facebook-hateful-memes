@@ -293,7 +293,8 @@ def isnumber(text):
 
 class TextAugment:
     def __init__(self, count_proba: List[float], choice_probas: Dict[str, float],
-                 fasttext_file: str = None, idf_file: str = None, dab_file: str = None):
+                 fasttext_file: str = None, idf_file: str = None,
+                 dab_file: str = None, tokenizer="bert-base-uncased"):
         self.count_proba = count_proba
         assert 1 - 1e-6 <= sum(count_proba) <= 1 + 1e-6
         assert len(count_proba) >= 1
@@ -386,7 +387,7 @@ class TextAugment:
 
         def part_select(text, sp=0.6, lp=0.9):
             splits = text.split()
-            if len(splits) <= 2:
+            if len(splits) <= 4:
                 return text
             actual_len = random.randint(int(len(splits) * sp), int(len(splits) * lp))
             if actual_len == len(splits):
@@ -487,7 +488,7 @@ class TextAugment:
             return " ".join(words)
 
         self.augs = ["keyboard", "ocr", "char_insert", "char_substitute", "char_swap", "char_delete",
-                     "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate",
+                     "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate", "word_masking",
                      "stopword_insert", "word_join", "word_cutout", "first_part_select", "number_modify",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
                      "synonym", "split", "sentence_shuffle", "one_third_cut", "half_cut", "part_select",
@@ -511,6 +512,11 @@ class TextAugment:
         for k, v in choice_probas.items():
             if v <= 0:
                 continue
+            if k == "word_masking":
+                assert tokenizer is not None and isinstance(tokenizer, str)
+                from transformers import AutoTokenizer
+                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
+                self.augments["word_masking"] = v
             if k == "number_modify":
                 self.augments["number_modify"] = number_modify
             if k == "first_part_select":
@@ -634,11 +640,26 @@ class TextAugment:
         proba = self.idf_proba(text)
         # np.mean(list(proba.values()))
         probas = [(1 / np.sqrt(len(w))) * p for w, (ws, p) in zip(words, proba)]
-        if len(words) <= 3:
+        if len(words) <= 4:
             return text
 
         cut_idx = random.choices(range(len(words)), probas)[0]
         words = words[:cut_idx] + words[cut_idx + 1:]
+        return " ".join(words)
+
+    def word_masking(self, text):
+        tkz = self.tokenizer
+        mask_token = tkz.mask_token
+        words = text.split()
+        proba = self.idf_proba(text)
+        # np.mean(list(proba.values()))
+        probas = [(1 / np.sqrt(len(w))) * p for w, (ws, p) in zip(words, proba)]
+        if len(words) <= 5:
+            return text
+
+        cut_idx = random.choices(range(len(words)), probas)[0: 2]
+        cut_idx = min(cut_idx), max(cut_idx)
+        words = words[:cut_idx[0]] + ([mask_token] * len(tkz.tokenize(words[cut_idx[0]]))) + words[cut_idx[0] + 1:cut_idx[1]] + ([mask_token] * len(tkz.tokenize(words[cut_idx[1]]))) + words[cut_idx[1] + 1:]
         return " ".join(words)
 
     def __fasttext_replace__(self, tm, indexer, text):
@@ -690,6 +711,8 @@ class TextAugment:
                     text = self.__fasttext_replace__(self.augments[aug], self.indexes[aug], text)
                 elif aug == "word_cutout":
                     text = self.word_cutout(text)
+                elif aug == "word_masking":
+                    text = self.word_masking(text)
                 elif aug == "dab":
                     identifier = int(kwargs["identifier"])
                     text = random.sample(self.dab_store[identifier], 1)[0]
