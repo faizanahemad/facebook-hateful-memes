@@ -770,7 +770,7 @@ def generate_predictions(model, batch_size, dataset,
         clean_memory()
         logits_all = []
 
-        for i in range(prediction_iters):
+        for i in trange(prediction_iters):
             labels_list = []
             logits_list = []
             with tqdm(test_loader, "Generate Predictions") as test_loader:
