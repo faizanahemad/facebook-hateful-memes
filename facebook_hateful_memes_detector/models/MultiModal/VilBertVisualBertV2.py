@@ -155,7 +155,7 @@ class VilBertVisualBertModelV2(nn.Module):
         self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
         self.final_layer = self.final_layer.to(self.devices["main"])
 
-        self.loss = get_loss_by_task(loss)
+        self.loss = get_loss_by_task(loss, num_classes)
         self.loss = self.loss.to(self.devices["main"])
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
