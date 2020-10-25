@@ -612,32 +612,29 @@ class VilBertVisualBertModelV2(nn.Module):
 
         pooled_outputs = torch.stack(pooled_outputs).mean(0)
         # sequence_outputs = torch.stack(sequence_outputs).mean(0)
+        unlabelled_indices = labels == -1
 
         logits = self.final_layer(pooled_outputs)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         view_loss = 0.0
-        if self.view_loss_weight > 0:
-            for pl in pre_logits:
-                view_loss += (((logits - pl) ** 2).mean())
+        if self.view_loss_weight > 0 and self.training:
             if len(pooled_logits) > 1:
                 for pl1 in pre_logits:
                     for pl2 in pre_logits:
-                        view_loss += (((pl1 - pl2) ** 2).mean())
-            for pl in pooled_logits:
-                view_loss += (((logits - pl)**2).mean())
+                        view_loss += (((pl1[unlabelled_indices] - pl2[unlabelled_indices]) ** 2).mean())
             if len(pooled_logits) > 1:
                 for pl1 in pooled_logits:
                     for pl2 in pooled_logits:
-                        view_loss += (((pl1 - pl2) ** 2).mean())
+                        view_loss += (((pl1[unlabelled_indices] - pl2[unlabelled_indices]) ** 2).mean())
 
         pooled_logits = torch.stack(pooled_logits).mean(0)
         pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         pre_logits = torch.stack(pre_logits).mean(0)
         pre_logits = pre_logits / pre_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
 
-        if self.view_loss_weight > 0:
-            view_loss += (((logits - pre_logits)**2).mean())
-            view_loss += (((logits - pooled_logits) ** 2).mean())
+        if self.view_loss_weight > 0 and self.training:
+            view_loss += (((logits[unlabelled_indices] - pre_logits[unlabelled_indices])**2).mean())
+            view_loss += (((logits[unlabelled_indices] - pooled_logits[unlabelled_indices]) ** 2).mean())
             view_loss = self.view_loss_weight * view_loss
             self.view_loss_hist.append(view_loss.detach().cpu().item())
         else:
