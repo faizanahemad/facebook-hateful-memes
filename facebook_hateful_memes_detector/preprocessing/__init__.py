@@ -379,6 +379,18 @@ class TextAugment:
             splits = list(map(change_number, text.split()))
             return " ".join(splits)
 
+        vowels = ["a", "e", "i", "o", "u"]
+        vowel_replacements = [" ", "*", " * ", "*"]
+
+        def vowel_replace(text, p=0.25):
+            txt = []
+            for i in text:
+                if i in vowels and random.random() <= p:
+                    txt.append(random.sample(vowel_replacements, 1)[0])
+                else:
+                    txt.append(i)
+            return "".join(txt)
+
         def gibberish_insert(text):
             words = text.split()
             idx = random.randint(0, len(words) - 1)
@@ -488,7 +500,7 @@ class TextAugment:
             words = words[:idx] + [w1] + words[idx + 2:]
             return " ".join(words)
 
-        self.augs = ["keyboard", "ocr", "char_insert", "char_substitute", "char_swap", "char_delete",
+        self.augs = ["keyboard", "ocr", "char_insert", "char_substitute", "char_swap", "char_delete", "vowel_replace",
                      "word_insert", "word_substitute", "w2v_insert", "w2v_substitute", "text_rotate", "word_masking",
                      "stopword_insert", "word_join", "word_cutout", "first_part_select", "number_modify",
                      "fasttext", "glove_twitter", "glove_wiki", "word2vec", "gibberish_insert",
@@ -520,6 +532,8 @@ class TextAugment:
                 self.augments["word_masking"] = v
             if k == "number_modify":
                 self.augments["number_modify"] = number_modify
+            if k == "vowel_replace":
+                self.augments["vowel_replace"] = vowel_replace
             if k == "first_part_select":
                 self.augments["first_part_select"] = first_part_select
             if k == "part_select":
