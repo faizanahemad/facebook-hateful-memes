@@ -65,7 +65,7 @@ class HalfSwap:
 
 
 class QuadrantCut:
-    def __call__(self, image):
+    def __call__(self, image, **kwargs):
         arr = np.array(image)  # H, W, C PIL image
         mean = 110  # mean = np.mean(arr)
         shape = arr.shape
@@ -77,7 +77,7 @@ class QuadrantCut:
         x_2third = shape[0] - x_third
         y_2third = shape[1] - y_third
 
-        choice = random.randint(1, 11)
+        choice = kwargs.pop("choice", random.randint(1, 7))
         if choice == 1:
             arr[:x_half, :y_half] = mean
         if choice == 2:
@@ -768,7 +768,7 @@ def get_transforms_for_multiview():
              DefinedRotation(15),
              DefinedAffine(0, translate=(0.1, 0.0)),
              DefinedAffine(0, translate=(0.0, 0.1)),
-             # QuadrantCut(),
+             QuadrantCut(),
              identity]
     return trans
 
