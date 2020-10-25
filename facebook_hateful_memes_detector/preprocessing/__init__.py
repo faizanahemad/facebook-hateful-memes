@@ -774,7 +774,7 @@ def get_transforms_for_multiview():
 
 
 def get_transforms_for_bbox_methods():
-    transforms_for_bbox_methods = transforms.RandomChoice(get_transforms_for_multiview)
+    transforms_for_bbox_methods = transforms.RandomChoice(get_transforms_for_multiview())
     return transforms_for_bbox_methods
 
 
