@@ -97,6 +97,42 @@ class QuadrantCut:
         return Image.fromarray(arr)
 
 
+class OneThirdCut:
+    def __call__(self, image, **kwargs):
+        arr = np.array(image)  # H, W, C PIL image
+        mean = 110  # mean = np.mean(arr)
+        shape = arr.shape
+
+        x_third = shape[0] // 3
+        y_third = shape[1] // 3
+        x_2third = shape[0] - x_third
+        y_2third = shape[1] - y_third
+
+        choice = kwargs.pop("choice", random.randint(1, 9))
+        if choice == 1:
+            arr[:x_third, :y_third] = mean
+        if choice == 2:
+            arr[:x_third, y_third:y_2third] = mean
+        if choice == 3:
+            arr[:x_third, y_2third:] = mean
+
+        if choice == 4:
+            arr[x_third:x_2third, :y_third] = mean
+        if choice == 5:
+            arr[x_third:x_2third, y_third:y_2third] = mean
+        if choice == 6:
+            arr[x_third:x_2third, y_2third:] = mean
+
+        if choice == 7:
+            arr[x_2third:, :y_third] = mean
+        if choice == 8:
+            arr[x_2third:, y_third:y_2third] = mean
+        if choice == 9:
+            arr[x_2third:, y_2third:] = mean
+
+        return Image.fromarray(arr)
+
+
 class DefinedColorJitter(torchvision.transforms.ColorJitter):
     def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
         super().__init__(brightness, contrast, saturation, hue)
@@ -768,7 +804,10 @@ def get_transforms_for_multiview():
              DefinedRotation(15),
              DefinedAffine(0, translate=(0.1, 0.0)),
              DefinedAffine(0, translate=(0.0, 0.1)),
-             QuadrantCut(),
+             get_alb(alb.transforms.GridDropout(ratio=0.5,
+                                                holes_number_x=16, holes_number_y=16,
+                                                random_offset=False, p=1.0)),
+             OneThirdCut(),
              identity]
     return trans
 
