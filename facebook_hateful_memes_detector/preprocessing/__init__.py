@@ -1067,6 +1067,7 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
 
     submission_format = pd.read_csv(joiner("submission_format.csv"))
     submission_format_phase_2 = pd.read_csv(joiner("submission_format_phase_2.csv"))
+    train = train[~train["id"].isin(set(dev["id"]))]
     train = pd.concat((train, dev))
     if not test_dev:
         train = pd.concat((train, dev_unseen))
