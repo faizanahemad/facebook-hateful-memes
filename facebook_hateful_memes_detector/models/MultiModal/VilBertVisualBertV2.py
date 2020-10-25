@@ -883,6 +883,7 @@ class MLMOnlyV2(MLMPretraining):
 
         hidden_size = 768
         mlm_hidden_size = 256
+        self.mlm_hidden_size = mlm_hidden_size
         self.aug_1 = augment_1
         self.model = model
         self.aug_time = []
@@ -935,6 +936,7 @@ class MLMOnlyV2(MLMPretraining):
 
     def mlm_one_sequence(self, seq1, input_ids_1, attention_mask_1, midx):
         batch_size = input_ids_1.size(0)
+        seq1 = seq1[:, :, :self.mlm_hidden_size]
         loss, accuracy, input_ids_1, predictions_1 = self.mlm[midx](seq1, input_ids_1, attention_mask_1)
         predictions_1 = predictions_1.view(batch_size, -1)
         predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
