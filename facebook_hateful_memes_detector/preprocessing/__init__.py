@@ -1031,6 +1031,8 @@ def get_datasets(data_dir, train_text_transform=None, train_image_transform=None
     train = pd.concat((train, dev))
     if not test_dev:
         train = pd.concat((train, dev_unseen))
+    else:
+        train = train[~train["id"].isin(set(dev_unseen["id"]))]
     if use_dev:
         train = dev
 
