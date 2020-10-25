@@ -750,7 +750,11 @@ def get_transforms_for_multiview():
              transforms.Grayscale(num_output_channels=3),
              get_alb(alb.transforms.GridDropout(ratio=0.35,
                                                 holes_number_x=32, holes_number_y=32,
-                                                random_offset=False, p=1.0))]
+                                                random_offset=False, p=1.0)),
+             DefinedRotation(15),
+             DefinedAffine(0, translate=(0.1, 0.0)),
+             DefinedAffine(0, translate=(0.0, 0.1)),
+             identity]
     return trans
 
 

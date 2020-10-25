@@ -965,11 +965,8 @@ class MLMOnlyV2(MLMPretraining):
 
         texts = []
         for text, label in zip(sampleList[text_column], sampleList["label"]):
-            if label != self.label_not_present:
-                if random.random() >= masking_rate and self.training:
-                    lt = random.sample(self.label_to_word[label], k=1)[0]
-                else:
-                    lt = self.mask_token
+            if label != self.label_not_present and random.random() >= masking_rate and self.training:
+                lt = random.sample(self.label_to_word[label], k=1)[0]
             else:
                 lt = self.mask_token
 
