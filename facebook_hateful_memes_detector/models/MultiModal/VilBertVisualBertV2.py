@@ -167,8 +167,7 @@ class VilBertVisualBertModelV2(nn.Module):
         lin = nn.Linear(768, num_classes)
         init_fc(lin, "linear")
         dp = nn.Dropout(dropout)
-        self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), GaussianNoise(gaussian_noise),
-                                         nn.LayerNorm(768), lin)
+        self.final_layer = nn.Sequential(dp, lin0, nn.LeakyReLU(), lin)
         self.final_layer = self.final_layer.to(self.devices["main"])
 
         uda = kwargs.pop("uda", False)
@@ -617,28 +616,32 @@ class VilBertVisualBertModelV2(nn.Module):
         logits = self.final_layer(pooled_outputs)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         view_loss = 0.0
-        for pl in pre_logits:
-            view_loss += (((logits - pl) ** 2).mean())
-        if len(pooled_logits) > 1:
-            for pl1 in pre_logits:
-                for pl2 in pre_logits:
-                    view_loss += (((pl1 - pl2) ** 2).mean())
-        for pl in pooled_logits:
-            view_loss += (((logits - pl)**2).mean())
-        if len(pooled_logits) > 1:
-            for pl1 in pooled_logits:
-                for pl2 in pooled_logits:
-                    view_loss += (((pl1 - pl2) ** 2).mean())
+        if self.view_loss_weight > 0:
+            for pl in pre_logits:
+                view_loss += (((logits - pl) ** 2).mean())
+            if len(pooled_logits) > 1:
+                for pl1 in pre_logits:
+                    for pl2 in pre_logits:
+                        view_loss += (((pl1 - pl2) ** 2).mean())
+            for pl in pooled_logits:
+                view_loss += (((logits - pl)**2).mean())
+            if len(pooled_logits) > 1:
+                for pl1 in pooled_logits:
+                    for pl2 in pooled_logits:
+                        view_loss += (((pl1 - pl2) ** 2).mean())
 
         pooled_logits = torch.stack(pooled_logits).mean(0)
         pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         pre_logits = torch.stack(pre_logits).mean(0)
         pre_logits = pre_logits / pre_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
 
-        view_loss += (((logits - pre_logits)**2).mean())
-        view_loss += (((logits - pooled_logits) ** 2).mean())
-        view_loss = self.view_loss_weight * view_loss
-        self.view_loss_hist.append(view_loss.detach().cpu().item())
+        if self.view_loss_weight > 0:
+            view_loss += (((logits - pre_logits)**2).mean())
+            view_loss += (((logits - pooled_logits) ** 2).mean())
+            view_loss = self.view_loss_weight * view_loss
+            self.view_loss_hist.append(view_loss.detach().cpu().item())
+        else:
+            self.view_loss_hist.append(0.0)
 
         actual_labels = np.array(labels.tolist())
         indices = actual_labels != self.label_not_present
@@ -909,9 +912,7 @@ class MLMOnlyV2(MLMPretraining):
         self.mlm_transforms = nn.ModuleList()
         for i in range(5):
             if mlm_separately:
-                fc = nn.Linear(hidden_size, mlm_hidden_size)
-                init_fc(fc, "leaky_relu")
-                self.mlm_transforms.append(nn.Sequential(fc, nn.LeakyReLU(), nn.LayerNorm(mlm_hidden_size)))
+                self.mlm_transforms.append(nn.Identity())
                 mlm = BertLMPredictionHead(mlm_hidden_size, tokenizer.vocab_size, "leaky_relu", n_tokens_in, low_memory=low_memory)
                 self.mlm.append(mlm)
             else:
