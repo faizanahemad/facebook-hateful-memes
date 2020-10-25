@@ -674,19 +674,19 @@ class VilBertVisualBertModelV2(nn.Module):
         return logits, pooled_outputs, sequence_outputs, loss
 
 
-positive = ["positive", "ok", "nice",
+positive = ["positive", "nice",
             # "practical", "useful", "awesome", "accurate", "impartial",
             # "optimistic", "effective", "hopeful",  "fortunate",
             # "helpful", "beneficial", "enjoyable", "welcome", "kind",
-            # "pleasant", "agreeable", "delightful", "acceptable",
-            "good", "neutral"]
+            # "pleasant", "agreeable", "delightful", "acceptable", "neutral",
+            "good",]
 
-negative = ["bad", "negative", "offense",
+negative = ["bad", "negative",
             #"grim", "disagreeable", "unpleasant", "unwelcome",
             #"unacceptable", "upsetting", "unkind", "inferior",  "hateful", "hurtful",
             #"cruel", "hostility", "dislike", "resentment", "adverse", "awful",
             #"vile", "vicious", "repulsive", "disgusting", "prejudice",
-            "hate", "bias", "hostile"]
+            "hate"]
 
 
 class MLMSimCLR(MLMPretraining):
