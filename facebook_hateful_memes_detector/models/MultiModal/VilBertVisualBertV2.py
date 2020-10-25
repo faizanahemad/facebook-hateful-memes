@@ -381,7 +381,7 @@ class VilBertVisualBertModelV2(nn.Module):
         else:
             raise AssertionError
         sequence_output_v = sequence_output_v[:, :, :sequence_output_t.size(-1)]
-        seq = torch.cat([sequence_output_v, sequence_output_t], 1)
+        seq = torch.cat([sequence_output_t, sequence_output_v], 1)
         seq = self.model_regularizers["vilbert"](seq) if "vilbert" in self.model_regularizers else seq
 
         logits = self.model_heads["vilbert"](pooled_output)
@@ -576,8 +576,6 @@ class VilBertVisualBertModelV2(nn.Module):
         accuracy = accuracy_score(actual_labels, predicted_labels)
         self.lxmert_accuracy_hist.append(accuracy)
 
-        logits = torch.stack(logit).mean(0)
-        logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
 
         del image
         del textSampleList
@@ -590,7 +588,7 @@ class VilBertVisualBertModelV2(nn.Module):
         pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         clean_memory()
         sequence_output = [seq[:, :seq_length].contiguous() for seq in sequence_output]
-        return logits, pooled_logits, pooled_output, sequence_output
+        return logit, pooled_logits, pooled_output, sequence_output
 
     def forward(self, sampleList: SampleList):
         sampleList = dict2sampleList(sampleList)
@@ -605,28 +603,37 @@ class VilBertVisualBertModelV2(nn.Module):
         pre_logits, pooled_logits, pooled_outputs, sequence_outputs = [], [], [], []
         for view in views:
             pre_logit, pooled_logit, pooled_output, sequence_output = self.get_vectors(view)
-            pre_logits.append(pre_logit)
+            pre_logits.extend(pre_logit)
             pooled_outputs.append(pooled_output)
             pooled_logits.append(pooled_logit)
             sequence_outputs.extend([seq[:, :self.n_tokens_out] for seq in sequence_output])
         del sampleList
 
+
+
         pooled_outputs = torch.stack(pooled_outputs).mean(0)
         # sequence_outputs = torch.stack(sequence_outputs).mean(0)
-        pre_logits = torch.stack(pre_logits).mean(0)
-        pre_logits = pre_logits / pre_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
 
         logits = self.final_layer(pooled_outputs)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         view_loss = 0.0
+        for pl in pre_logits:
+            view_loss += (((logits - pl) ** 2).mean())
+        if len(pooled_logits) > 1:
+            for pl1 in pre_logits:
+                for pl2 in pre_logits:
+                    view_loss += (((pl1 - pl2) ** 2).mean())
         for pl in pooled_logits:
             view_loss += (((logits - pl)**2).mean())
         if len(pooled_logits) > 1:
             for pl1 in pooled_logits:
                 for pl2 in pooled_logits:
                     view_loss += (((pl1 - pl2) ** 2).mean())
+
         pooled_logits = torch.stack(pooled_logits).mean(0)
         pooled_logits = pooled_logits / pooled_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
+        pre_logits = torch.stack(pre_logits).mean(0)
+        pre_logits = pre_logits / pre_logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
 
         view_loss += (((logits - pre_logits)**2).mean())
         view_loss += (((logits - pooled_logits) ** 2).mean())
@@ -652,7 +659,7 @@ class VilBertVisualBertModelV2(nn.Module):
         accuracy = accuracy_score(actual_labels, predicted_labels)
         self.pooled_logit_accuracy_hist.append(accuracy)
 
-        logits = (0.7 * logits + 0.2 * pooled_logits + 0.1 * pre_logits)
+        logits = (0.8 * logits + 0.1 * pooled_logits + 0.1 * pre_logits)
         logits, full_loss = loss_calculator(logits, labels if self.training else None, self.task, self.loss)
         self.full_loss_hist.append(full_loss.detach().cpu().item())
 
@@ -891,6 +898,7 @@ class MLMOnlyV2(MLMPretraining):
         self.mask_token = self.model.text_processor._tokenizer.mask_token
         self.sep_token = self.model.text_processor._tokenizer.sep_token
         self.tokenizer = tokenizer
+        self.diagnose = False
 
         if mlm_separately:
             self.mlm = nn.ModuleList()
@@ -1032,6 +1040,8 @@ class MLMOnlyV2(MLMPretraining):
         predicted_indices = torch.logical_not(bad_mlm_indices).to(get_device())
         logits = logits1
         logits[predicted_indices] = (logits1[predicted_indices] + predicted_labels[predicted_indices]) / 2
+        if self.diagnose:
+            print(len(predicted_indices), len(logits))
 
         actual_labels = np.array(x["label"])
         predicted_labels = predicted_labels.max(dim=1).indices.cpu().numpy()
