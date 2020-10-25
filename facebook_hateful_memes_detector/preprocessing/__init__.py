@@ -768,26 +768,13 @@ def get_transforms_for_multiview():
              DefinedRotation(15),
              DefinedAffine(0, translate=(0.1, 0.0)),
              DefinedAffine(0, translate=(0.0, 0.1)),
+             # QuadrantCut(),
              identity]
     return trans
 
 
 def get_transforms_for_bbox_methods():
-    def get_alb(aug):
-        def augment(image):
-            return Image.fromarray(aug(image=np.array(image, dtype=np.uint8))['image'])
-        return augment
-
-    transforms_for_bbox_methods = transforms.RandomChoice([DefinedRotation(15),  # 2
-                                                           # HalfSwap(),
-                                                           # QuadrantCut(),  # 8
-                                                           # transforms.RandomAffine(0, scale=(0.75, 0.75)),  # 2
-                                                           # DefinedAffine(0, translate=(0.1, 0.0)),  # 8
-                                                           # DefinedAffine(0, translate=(0.0, 0.1)),
-                                                           # transforms.RandomAffine(0, scale=(1.25, 1.25)),  # 1
-                                                           # transforms.RandomHorizontalFlip(p=1.0),
-                                                           identity,
-                                                           ])
+    transforms_for_bbox_methods = transforms.RandomChoice(get_transforms_for_multiview)
     return transforms_for_bbox_methods
 
 
