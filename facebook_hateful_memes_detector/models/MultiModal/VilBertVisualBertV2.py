@@ -875,6 +875,7 @@ class MLMOnlyV2(MLMPretraining):
         self.sep_token = self.model.text_processor._tokenizer.sep_token
         self.tokenizer = tokenizer
         self.diagnose = False
+        self.dropout = nn.Dropout(dropout)
 
         if mlm_separately:
             self.mlm = nn.ModuleList()
@@ -911,7 +912,7 @@ class MLMOnlyV2(MLMPretraining):
 
     def mlm_one_sequence(self, seq1, input_ids_1, attention_mask_1, midx):
         batch_size = input_ids_1.size(0)
-        seq1 = seq1[:, :, :self.mlm_hidden_size]
+        seq1 = self.dropout(seq1[:, :, :self.mlm_hidden_size])
         loss, accuracy, input_ids_1, predictions_1 = self.mlm[midx](seq1, input_ids_1, attention_mask_1)
         predictions_1 = predictions_1.view(batch_size, -1)
         predictions_1 = self.tokenizer.batch_decode(predictions_1.tolist(), skip_special_tokens=True)
