@@ -60,7 +60,6 @@ class VilBertVisualBertModelV2(nn.Module):
         self.max_seq_length = max_seq_length
         self.text_processor = get_tokenizer(max_seq_length)
         n_tokens_in, pooled_dims = 0, 0
-        self.model_regularizers = nn.ModuleDict()
         self.model_heads = nn.ModuleDict()
 
         self.devices = defaultdict(lambda: get_device(), kwargs.pop("devices", dict()))
@@ -360,7 +359,6 @@ class VilBertVisualBertModelV2(nn.Module):
             raise AssertionError
         sequence_output_v = sequence_output_v[:, :, :sequence_output_t.size(-1)]
         seq = torch.cat([sequence_output_t, sequence_output_v], 1)
-        seq = self.model_regularizers["vilbert"](seq) if "vilbert" in self.model_regularizers else seq
 
         logits = self.model_heads["vilbert"](pooled_output)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
@@ -444,8 +442,6 @@ class VilBertVisualBertModelV2(nn.Module):
         params = self.__visual_bert_preprocessing__(sl)
         del sl
         out = self.visual_bert_processor(params)
-        out["sequence_output"] = self.model_regularizers["visual_bert"](out["sequence_output"]) if "visual_bert" in self.model_regularizers else out["sequence_output"]
-        out["pooled_output"] = self.model_regularizers["visual_bert"](out["pooled_output"]) if "visual_bert" in self.model_regularizers else out["pooled_output"]
 
         logits = self.model_heads["visual_bert"](out["pooled_output"])
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
@@ -461,8 +457,6 @@ class VilBertVisualBertModelV2(nn.Module):
 
         del lx_sl
         seq = torch.cat(feat_seq, 1)
-        seq = self.model_regularizers["lxmert"](seq) if "lxmert" in self.model_regularizers else seq
-        pooled = self.model_regularizers["lxmert"](pooled) if "lxmert" in self.model_regularizers else pooled
         logits = self.model_heads["lxmert"](pooled)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
         return dict(seq=seq, pooled=pooled, logits=logits)
@@ -480,8 +474,7 @@ class VilBertVisualBertModelV2(nn.Module):
         module_output = self.mmbt_region.model.bert(sl)
         pooled_output = module_output[1]
         output = {}
-        seq = self.model_regularizers["mmbt_region"](module_output[0]) if "mmbt_region" in self.model_regularizers else seq
-        output["sequence_output"] = seq
+        output["sequence_output"] = module_output[0]
         output["pooled_output"] = pooled_output
         logits = self.model_heads["mmbt_region"](pooled_output)
         logits = logits / logits.norm(dim=1, keepdim=True).clamp(min=1e-5)
