@@ -154,6 +154,11 @@ class VilBertVisualBertModel(nn.Module):
         texts = self.word_masking(texts)
         texts = [self.text_processor({"text": t}) for t in texts]
         texts = SampleList([Sample({k: t[k] for k in keys}) for t in texts])
+        while bool(texts.input_ids[:, -4:].sum() == 0):
+            texts.input_ids = texts.input_ids[:, :-4]
+            texts.input_mask = texts.input_mask[:, :-4]
+            texts.segment_ids = texts.segment_ids[:, :-4]
+
         for k in keys:
             texts[k] = texts[k].to(get_device())
         return texts
