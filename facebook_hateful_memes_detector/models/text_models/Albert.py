@@ -31,27 +31,6 @@ class AlbertClassifer(Fasttext1DCNNModel):
                                               featurizer, final_layer_builder,
                                               n_tokens_in, n_tokens_out, True, **kwargs)
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
-        self.need_fasttext = "fasttext_vector_config" in kwargs
-        if "fasttext_vector_config" in kwargs:
-            import fasttext
-            ftvc = kwargs["fasttext_vector_config"]
-            gru_layers = ftvc.pop("gru_layers", 0)
-            fasttext_crawl = fasttext.load_model("crawl-300d-2M-subword.bin")
-            fasttext_wiki = fasttext.load_model("wiki-news-300d-1M-subword.bin")
-            bpe = BPEmb(dim=200)
-            cngram = CharNGram()
-            self.word_vectorizers = dict(fasttext_crawl=fasttext_crawl, fasttext_wiki=fasttext_wiki, bpe=bpe, cngram=cngram)
-            crawl_nn = ExpandContract(900, embedding_dims, dropout,
-                                      use_layer_norm=True, unit_norm=False, groups=(4, 4))
-            self.crawl_nn = crawl_nn
-            n_tokens_in = n_tokens_in + (8 * int(self.n_tokens_in/(8*1.375) + 1))
-            if gru_layers > 0:
-                lstm = nn.Sequential(GaussianNoise(gaussian_noise),
-                                     nn.GRU(embedding_dims, int(embedding_dims / 2), gru_layers, batch_first=True, bidirectional=True, dropout=dropout))
-                pre_query_layer = nn.Sequential(lstm, LambdaLayer(lambda x: x[0]), nn.LayerNorm(embedding_dims))
-            else:
-                pre_query_layer = nn.LayerNorm(embedding_dims)
-            self.pre_query_layer = pre_query_layer
 
         if not use_as_super:
             model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
@@ -87,26 +66,17 @@ class AlbertClassifer(Fasttext1DCNNModel):
         self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)
         self.reg_layers = get_regularization_layers(self)
 
-    def fasttext_vectors(self, texts: List[str]):
-        word_vectors = self.get_fasttext_vectors(texts, 8 * int(self.n_tokens_in/(8*1.375) + 1), **self.word_vectorizers)
-        word_vectors = self.crawl_nn(word_vectors)
-        word_vectors = self.pre_query_layer(word_vectors)
-        return word_vectors
-
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
         n_tokens_in = self.n_tokens_in
         texts = self.word_masking(texts)
         converted_texts = tokenizer.batch_encode_plus(texts, add_special_tokens=True, pad_to_max_length=True, max_length=n_tokens_in, truncation=True)
         input_ids, attention_mask = converted_texts["input_ids"], converted_texts["attention_mask"]
-        return torch.tensor(input_ids).to(get_device()), torch.tensor(attention_mask).to(get_device())
+        return torch.tensor(input_ids).to(self.device), torch.tensor(attention_mask).to(self.device)
 
     def get_word_vectors(self, texts: List[str]):
         input_ids, attention_mask = self.tokenise(texts)
         outputs = self.model(input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs[0]
-        if self.need_fasttext:
-            fasttext_vectors = self.fasttext_vectors(texts)
-            last_hidden_states = torch.cat((last_hidden_states, fasttext_vectors), 1)
         pooled_output = outputs[1]
         return last_hidden_states
