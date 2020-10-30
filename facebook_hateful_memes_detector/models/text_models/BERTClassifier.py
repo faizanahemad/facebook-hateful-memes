@@ -23,7 +23,7 @@ class BERTClassifier(nn.Module):
     def __init__(self, classifier_dims, num_classes,
                  gaussian_noise, dropout,
                  internal_dims, n_layers,
-                 featurizer,
+                 device,
                  n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False, **kwargs):
         embedding_dims = 768
@@ -37,31 +37,20 @@ class BERTClassifier(nn.Module):
             self.tokenizer = AutoTokenizer.from_pretrained(model)
             self.model = AutoModel.from_pretrained(model)
             print("Pick stored Model", model, "Model Class = ", type(self.model), "Tokenizer Class = ", type(self.tokenizer))
-            if featurizer == "cnn":
-                self.featurizer = CNN1DFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
-                                                  classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
-            elif featurizer == "gru":
-                self.featurizer = GRUFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims,
-                                                internal_dims, n_layers, gaussian_noise, dropout)
-            elif featurizer == "basic":
-                self.featurizer = BasicFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
-                                                  classifier_dims,
-                                                  internal_dims, n_layers, gaussian_noise, dropout)
-            elif featurizer == "transformer":
-                self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
-                n_encoders = kwargs.pop("n_encoders", n_layers)
-                n_decoders = kwargs.pop("n_decoders", n_layers)
-                self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
-                                                        classifier_dims,
-                                                        internal_dims, n_encoders, n_decoders,
-                                                        gaussian_noise, dropout, self.attention_drop_proba)
-            else:
-                raise NotImplementedError()
+
+            self.attention_drop_proba = kwargs["attention_drop_proba"] if "attention_drop_proba" in kwargs else 0.0
+            n_encoders = kwargs.pop("n_encoders", n_layers)
+            n_decoders = kwargs.pop("n_decoders", n_layers)
+            self.featurizer = TransformerFeaturizer(n_tokens_in, embedding_dims, n_tokens_out,
+                                                    classifier_dims,
+                                                    internal_dims, n_encoders, n_decoders,
+                                                    gaussian_noise, dropout, self.attention_drop_proba)
 
             self.final_layer = fb_1d_loss_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)
+        self.device=device
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
@@ -78,8 +67,9 @@ class BERTClassifier(nn.Module):
         pooled_output = outputs[1]
         return last_hidden_states
 
-    def forward(self, texts: List[str], labels: List[int]):
-        labels = torch.tensor(labels).to(self.device)
+    def forward(self, texts: List[str], labels: List[int] = None):
+        if labels is not None:
+            labels = torch.tensor(labels).to(self.device)
         vectors = self.get_word_vectors(texts)
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
