@@ -60,17 +60,14 @@ class BERTClassifier(nn.Module):
         input_ids, attention_mask = converted_texts["input_ids"], converted_texts["attention_mask"]
         return torch.tensor(input_ids).to(self.device), torch.tensor(attention_mask).to(self.device)
 
-    def get_word_vectors(self, texts: List[str]):
-        input_ids, attention_mask = self.tokenise(texts)
+    def get_word_vectors(self, input_ids, attention_mask):
         outputs = self.model(input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs[0]
         pooled_output = outputs[1]
         return last_hidden_states
 
-    def forward(self, texts: List[str], labels: List[int] = None):
-        if labels is not None:
-            labels = torch.tensor(labels).to(self.device)
-        vectors = self.get_word_vectors(texts)
+    def forward(self, input_ids, attention_mask, labels=None):
+        vectors = self.get_word_vectors(input_ids, attention_mask)
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
         return logits, vectors.mean(1), vectors, loss
