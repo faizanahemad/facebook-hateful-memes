@@ -19,7 +19,7 @@ import random
 import math
 
 
-class AlbertClassifer(Fasttext1DCNNModel):
+class BERTClassifier(nn.Module):
     def __init__(self, classifier_dims, num_classes,
                  gaussian_noise, dropout,
                  internal_dims, n_layers,
@@ -27,10 +27,7 @@ class AlbertClassifer(Fasttext1DCNNModel):
                  n_tokens_in=64, n_tokens_out=16,
                  use_as_super=False, **kwargs):
         embedding_dims = 768
-        super(AlbertClassifer, self).__init__(classifier_dims, num_classes, embedding_dims, gaussian_noise, dropout,
-                                              internal_dims, n_layers,
-                                              featurizer, final_layer_builder,
-                                              n_tokens_in, n_tokens_out, True, **kwargs)
+        super(BERTClassifier, self).__init__()
         self.word_masking_proba = kwargs["word_masking_proba"] if "word_masking_proba" in kwargs else 0.0
 
         if not use_as_super:
@@ -65,7 +62,6 @@ class AlbertClassifer(Fasttext1DCNNModel):
         if "stored_model" in kwargs:
             load_stored_params(self, kwargs["stored_model"])
         self.word_masking = WordMasking(tokenizer=self.tokenizer, **kwargs)
-        self.reg_layers = get_regularization_layers(self)
 
     def tokenise(self, texts: List[str]):
         tokenizer = self.tokenizer
@@ -81,3 +77,10 @@ class AlbertClassifer(Fasttext1DCNNModel):
         last_hidden_states = outputs[0]
         pooled_output = outputs[1]
         return last_hidden_states
+
+    def forward(self, texts: List[str], labels: List[int]):
+        labels = torch.tensor(labels).to(self.device)
+        vectors = self.get_word_vectors(texts)
+        vectors = self.featurizer(vectors)
+        logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
+        return logits, vectors.mean(1), vectors, loss
