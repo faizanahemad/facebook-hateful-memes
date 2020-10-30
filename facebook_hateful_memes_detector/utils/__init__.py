@@ -423,6 +423,36 @@ class ExpandContract(nn.Module):
         if self.unit_norm:
             x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
         return x
+    
+
+class ExpandContractV2(nn.Module):
+    def __init__(self, in_dims, out_dims, dropout=0.0, expansion_factor=2,
+                 use_layer_norm=True, unit_norm_input=False):
+        super().__init__()
+
+        r1 = nn.Linear(in_dims, out_dims * expansion_factor)
+        init_fc(r1, "leaky_relu")
+        r2 = nn.Linear(out_dims * expansion_factor, out_dims)
+        init_fc(r2, "linear")
+
+        layers = [r1, nn.LeakyReLU(), nn.Dropout(dropout), r2]
+        if use_layer_norm:
+            layers.append(nn.LayerNorm(out_dims))
+        self.nn = nn.Sequential(*layers)
+        self.unit_norm_input = unit_norm_input
+
+    def forward(self, x):
+        squeezed = False
+        if len(x.size()) < 3:
+            assert len(x.size()) == 2
+            x = x.unsqueeze(1)
+            squeezed = True
+        if self.unit_norm_input:
+            x = x / x.norm(dim=-1, keepdim=True).clamp(min=1e-5)
+        x = self.nn(x)
+        if squeezed:
+            x = x.squeeze()
+        return x
 
 
 def get_torchvision_classification_models(net, large_rf=True, finetune=False):

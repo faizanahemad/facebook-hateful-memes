@@ -70,4 +70,6 @@ class BERTClassifier(nn.Module):
         vectors = self.get_word_vectors(input_ids, attention_mask)
         vectors = self.featurizer(vectors)
         logits, loss = self.final_layer(vectors, labels) if self.final_layer is not None else (None, None)
-        return logits, vectors.mean(1), vectors, loss
+        logits = torch.softmax(logits, dim=1)
+        predicted_labels = logits.max(dim=1).indices
+        return logits, predicted_labels, labels, loss
