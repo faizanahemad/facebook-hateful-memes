@@ -41,24 +41,21 @@ def random_whole_word_mask(text: str, probability: float) -> str:
 
 class FasttextCNN(nn.Module):
     def __init__(self, classifier_dims, num_classes,
-                 embedding_dims,
-                 gaussian_noise, dropout,
-                 internal_dims, n_layers,
-                 device,
-                 n_tokens_in=64, n_tokens_out=16,
-                 use_as_super=False,
+                 gaussian_noise, dropout, feature_dropout,
+                 n_layers, device,
+                 n_tokens_in=512, n_tokens_out=8,
                  **kwargs):
         super(FasttextCNN, self).__init__()
         fasttext_file = kwargs.pop("fasttext_file", "crawl-300d-2M-subword.bin")  # "wiki-news-300d-1M-subword.bin"
-        fasttext_file_2 = kwargs.pop("fasttext_file", "wiki-news-300d-1M-subword.bin")  # "wiki-news-300d-1M-subword.bin"
-        fasttext_model = kwargs.pop("fasttext_model", None)
-        assert fasttext_file is not None or fasttext_model is not None or use_as_super
+        fasttext_file_2 = kwargs.pop("fasttext_file_2", "wiki-news-300d-1M-subword.bin")  # "wiki-news-300d-1M-subword.bin"
         self.num_classes = num_classes
         self.binary = num_classes == 2
         self.n_tokens_in = n_tokens_in
         self.n_tokens_out = n_tokens_out
         self.device = device
         self.word_masking_proba = kwargs.pop("word_masking_proba", 0.0)
+        embedding_dims = classifier_dims // 2
+        internal_dims = classifier_dims
 
         self.text_model = fasttext.load_model(fasttext_file)
         self.text_model_2 = fasttext.load_model(fasttext_file_2)
@@ -68,16 +65,16 @@ class FasttextCNN(nn.Module):
         else:
             ft2_dim = 512
 
-        self.ft1_nn = ExpandContractV2(300, embedding_dims, dropout)
-        self.ft2_nn = ExpandContractV2(ft2_dim, embedding_dims, dropout)
-        self.bpe_nn = ExpandContractV2(200, embedding_dims, dropout)
-        self.cngram_nn = ExpandContractV2(100, embedding_dims, dropout)
-        self.input_nn = ExpandContractV2(4 * embedding_dims, embedding_dims, dropout)
+        self.ft1_nn = ExpandContractV2(300, embedding_dims, dropout, feature_dropout)
+        self.ft2_nn = ExpandContractV2(ft2_dim, embedding_dims, dropout, feature_dropout)
+        self.bpe_nn = ExpandContractV2(300, embedding_dims, dropout, feature_dropout)
+        self.cngram_nn = ExpandContractV2(100, embedding_dims, dropout, feature_dropout)
+        self.input_nn = ExpandContractV2(4 * embedding_dims, internal_dims, dropout, feature_dropout)
 
-        self.bpe = BPEmb(dim=200)
+        self.bpe = BPEmb(dim=300)
         self.cngram = CharNGram()
 
-        self.featurizer = GRUFeaturizer(n_tokens_in, embedding_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
+        self.featurizer = GRUFeaturizer(n_tokens_in, internal_dims, n_tokens_out, classifier_dims, internal_dims, n_layers, gaussian_noise, dropout)
         self.final_layer = fb_1d_loss_builder(classifier_dims, n_tokens_out, num_classes, dropout, **kwargs)
 
         if "stored_model" in kwargs:

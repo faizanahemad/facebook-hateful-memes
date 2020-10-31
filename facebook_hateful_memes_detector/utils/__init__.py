@@ -426,7 +426,7 @@ class ExpandContract(nn.Module):
     
 
 class ExpandContractV2(nn.Module):
-    def __init__(self, in_dims, out_dims, dropout=0.0, expansion_factor=2,
+    def __init__(self, in_dims, out_dims, dropout=0.0, feature_dropout=0.0, expansion_factor=2,
                  use_layer_norm=True, unit_norm_input=False):
         super().__init__()
 
@@ -435,7 +435,7 @@ class ExpandContractV2(nn.Module):
         r2 = nn.Linear(out_dims * expansion_factor, out_dims)
         init_fc(r2, "linear")
 
-        layers = [r1, nn.LeakyReLU(), nn.Dropout(dropout), r2]
+        layers = [FeatureDropout(feature_dropout), r1, nn.LeakyReLU(), nn.Dropout(dropout), r2]
         if use_layer_norm:
             layers.append(nn.LayerNorm(out_dims))
         self.nn = nn.Sequential(*layers)
