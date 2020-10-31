@@ -32,6 +32,7 @@ class BERTClassifier(nn.Module):
         self.mlm_probability = self.word_masking_proba
         self.n_tokens_in = n_tokens_in
         self.token_cache = kwargs.pop("token_cache", None)
+        self.force_masking = False
 
         model = kwargs["model"] if "model" in kwargs else 'albert-base-v2'
         global_dir = get_global("models_dir")
@@ -99,7 +100,8 @@ class BERTClassifier(nn.Module):
             input_ids, attention_mask = zip(*[self.token_cache[id] for id in ids])
 
         input_ids, attention_mask = torch.tensor(input_ids), torch.tensor(attention_mask)
-        input_ids, _ = self.mask_tokens(input_ids)
+        if self.training or self.force_masking:
+            input_ids, _ = self.mask_tokens(input_ids)
         return input_ids.to(self.device), attention_mask.to(self.device)
 
 
