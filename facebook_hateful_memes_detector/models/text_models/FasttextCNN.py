@@ -126,19 +126,19 @@ class FasttextCNN(nn.Module):
         result = []
 
         res0 = stack_and_pad_tensors([self.get_one_sentence_vector(self.text_model, text) for text in texts], n_tokens_in)
-        res0 = res0 / res0.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+        # res0 = res0 / res0.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         result.append(res0)
 
         res1 = stack_and_pad_tensors([self.get_one_sentence_vector(self.text_model_2, text) for text in texts], n_tokens_in)
-        res1 = res1 / res1.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
+        # res1 = res1 / res1.norm(dim=2, keepdim=True).clamp(min=1e-5)  # Normalize in word dimension
         result.append(res1)
 
         res2 = stack_and_pad_tensors([self.get_one_sentence_vector(self.bpe, text) for text in texts], n_tokens_in)
-        res2 = res2 / res2.norm(dim=2, keepdim=True).clamp(min=1e-5)
+        # res2 = res2 / res2.norm(dim=2, keepdim=True).clamp(min=1e-5)
         result.append(res2)
 
         res3 = stack_and_pad_tensors([self.get_one_sentence_vector(self.cngram, text) for text in texts], n_tokens_in)
-        res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
+        # res3 = res3 / res3.norm(dim=2, keepdim=True).clamp(min=1e-5)
         result.append(res3)
         result = [r.to(self.device) for r in result]
 
