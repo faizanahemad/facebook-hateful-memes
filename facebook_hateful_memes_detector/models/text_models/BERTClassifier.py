@@ -108,7 +108,6 @@ class BERTClassifier(nn.Module):
     def get_word_vectors(self, input_ids, attention_mask):
         outputs = self.model(input_ids, attention_mask=attention_mask)
         last_hidden_states = outputs[0]
-        pooled_output = outputs[1]
         return last_hidden_states
 
     def forward(self, input_ids, attention_mask, labels=None):
