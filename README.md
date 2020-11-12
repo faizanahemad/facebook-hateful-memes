@@ -17,13 +17,13 @@ conda install -y -c anaconda openjdk
 conda install python=3.8
 pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cu101/torch_nightly.html
 pip install fasttext
-# pip install torch torchvision 
+pip install torch torchvision 
 # pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html 
 # pip install torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 # pip install https://download.pytorch.org/whl/nightly/cu101/torch-1.6.0.dev20200625%2Bcu101-cp37-cp37m-linux_x86_64.whl
 
 
-pip install transformers==3.0.2  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git@old' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git' nlp imgaug albumentations timm imagecorruptions langdetect datasets
+pip install transformers==3.0.2  more-itertools nltk pydot spacy statsmodels tabulate Cython dill flair gensim nltk pydot graphviz scipy pandas seaborn matplotlib bidict contractions pytorch-nlp spacy-transformers stanza demjson omegaconf torchtext textblob rake-nltk nlpaug annoy torch_optimizer vaderSentiment maxfw pytextrank pycontractions yacs jsonlines lmdb editdistance fastBPE regex requests sacremoses subword_nmt mosestokenizer diskcache "pytorch-pretrained-bert>=0.6.1" gpustat gputil gdown fvcore opencv-python git+https://github.com/cocodataset/panopticapi.git fcache 'git+https://github.com/faizanahemad/detectron2.git@old' 'git+https://github.com/myint/language-check.git' 'git+https://github.com/LIAAD/yake' 'git+https://github.com/faizanahemad/ImageCaptioning.pytorch.git' 'git+https://github.com/ruotianluo/meshed-memory-transformer.git' nlp imgaug albumentations timm imagecorruptions langdetect datasets pycocotools
 
 
 
@@ -31,7 +31,7 @@ pip install transformers==3.0.2  more-itertools nltk pydot spacy statsmodels tab
 python -m spacy download en_core_web_sm
 python -m spacy download en_core_web_md
 python -m spacy download en_core_web_lg
-python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon');nltk.download('treebank');nltk.download('wordnet');import gensim.downloader as api;api.load(\"glove-twitter-25\");api.load(\"glove-twitter-50\");api.load(\"glove-wiki-gigaword-50\");api.load(\"word2vec-google-news-300\");api.load(\"conceptnet-numberbatch-17-06-300\");"
+python -c "import nltk;nltk.download('tagsets');nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('maxent_ne_chunker');nltk.download('words');import stanza;stanza.download('en');nltk.download('stopwords');nltk.download('vader_lexicon');nltk.download('treebank');nltk.download('wordnet');import gensim.downloader as api;api.load(\"glove-twitter-25\");api.load(\"glove-twitter-100\");api.load(\"glove-wiki-gigaword-100\");api.load(\"word2vec-google-news-300\");api.load(\"conceptnet-numberbatch-17-06-300\");"
 
 
 git clone https://github.com/huggingface/torchMoji.git && cd torchMoji && pip install --no-deps -e . && python scripts/download_weights.py

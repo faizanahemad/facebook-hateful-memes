@@ -1,6 +1,8 @@
 #! /bin/sh
 # Look here: https://github.com/faizanahemad/ImageCaptioning.pytorch.git
 # Look here: https://github.com/facebookresearch/vilbert-multi-task/blob/master/demo.ipynb
+# Detection vocab of faster-rcnn model is of visual genome and is here: https://github.com/peteanderson80/bottom-up-attention/blob/master/data/genome/1600-400-20/objects_vocab.txt
+# MS COCO labels: https://gist.githubusercontent.com/AruniRC/7b3dadd004da04c80198557db5da4bda/raw/2f10965ace1e36c4a9dca76ead19b744f5eb7e88/ms_coco_classnames.txt
 
 
 #sed -i '/from maskrcnn_benchmark import _C/c\from ._utils import _C' maskrcnn_benchmark/layers/nms.py
