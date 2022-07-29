@@ -50,7 +50,7 @@ kiwisolver==1.2.0
 langdetect==1.0.8
 MarkupSafe==1.1.1
 matplotlib==3.2.1
-mistune==0.8.4
+mistune==2.0.3
 more-itertools==8.3.0
 mpld3==0.3
 murmurhash==1.0.2
